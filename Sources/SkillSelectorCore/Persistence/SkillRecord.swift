@@ -19,6 +19,7 @@ public final class SkillRecord {
     public var modificationDate: Date?
     public var availabilityRawValue: String
     public var unavailableReason: String?
+    public var unavailableDiagnosticData: Data?
     public var sourceBinding: String?
     public var agentIDsByRootData: Data
     public var entryFilename: String
@@ -36,6 +37,7 @@ public final class SkillRecord {
         modificationDate: Date? = nil,
         availability: SkillAvailability = .available,
         unavailableReason: String? = nil,
+        unavailableDiagnosticData: Data? = nil,
         sourceBinding: String? = nil,
         agentIDsByRootData: Data = Data("{}".utf8),
         entryFilename: String,
@@ -52,6 +54,7 @@ public final class SkillRecord {
         self.modificationDate = modificationDate
         self.availabilityRawValue = availability.rawValue
         self.unavailableReason = unavailableReason
+        self.unavailableDiagnosticData = unavailableDiagnosticData
         self.sourceBinding = sourceBinding
         self.agentIDsByRootData = agentIDsByRootData
         self.entryFilename = entryFilename
@@ -77,4 +80,5 @@ public struct SkillSnapshot: Identifiable, Hashable, Sendable {
     public let rootIDs: [String]
     public let entryFilename: String
     public let parseDiagnostics: [ParseIssue]
+    public var unavailableDiagnostic: StructuredDiagnostic? = nil
 }

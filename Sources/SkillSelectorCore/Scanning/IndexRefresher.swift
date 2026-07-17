@@ -115,13 +115,17 @@ public final class IndexRefresher {
                 roots.append(contentsOf: plan.scanRoots)
                 dispositions.append(contentsOf: plan.dispositions)
             } catch {
+                let detail = String(describing: error)
+                let diagnostic = StructuredDiagnostic(
+                    code: .unableToResolveAuthorizedDirectory,
+                    arguments: [detail]
+                )
                 unresolvedRoots.append(
                     ScannedRoot(
                         id: snapshot.id,
                         url: snapshot.url,
-                        availability: .unavailable(
-                            reason: "Unable to resolve authorized directory: \(error)"
-                        )
+                        availability: .unavailable(reason: diagnostic.fallbackMessage),
+                        unavailableDiagnostic: diagnostic
                     )
                 )
             }
@@ -157,7 +161,7 @@ public final class IndexRefresher {
             guard try probeDirectory(root.url) == .directory else {
                 return unavailablePlan(
                     for: root,
-                    reason: "Authorized home directory is missing"
+                    diagnostic: StructuredDiagnostic(code: .authorizedHomeMissing)
                 )
             }
         } catch {
@@ -181,13 +185,17 @@ public final class IndexRefresher {
                         }
                     }
                 } catch {
+                    let detail = String(describing: error)
+                    let diagnostic = StructuredDiagnostic(
+                        code: .unableToInspectAuthorizedDirectory,
+                        arguments: [detail]
+                    )
                     unavailableDispositions.append(
                         ScannedRoot(
                             id: root.id,
                             url: root.url,
-                            availability: .unavailable(
-                                reason: "Unable to inspect authorized directory: \(error)"
-                            )
+                            availability: .unavailable(reason: diagnostic.fallbackMessage),
+                            unavailableDiagnostic: diagnostic
                         )
                     )
                 }
@@ -216,7 +224,7 @@ public final class IndexRefresher {
             guard try probeDirectory(root.url) == .directory else {
                 return unavailablePlan(
                     for: root,
-                    reason: "Authorized directory is missing"
+                    diagnostic: StructuredDiagnostic(code: .authorizedDirectoryMissing)
                 )
             }
         } catch {
@@ -256,7 +264,7 @@ public final class IndexRefresher {
             guard try probeDirectory(root.url) == .directory else {
                 return unavailablePlan(
                     for: root,
-                    reason: "Authorized project directory is missing"
+                    diagnostic: StructuredDiagnostic(code: .authorizedProjectMissing)
                 )
             }
         } catch {
@@ -272,15 +280,19 @@ public final class IndexRefresher {
         for root: AuthorizedRootSnapshot,
         error: Error
     ) -> ScanPlan {
-        unavailablePlan(
+        let detail = String(describing: error)
+        return unavailablePlan(
             for: root,
-            reason: "Unable to inspect authorized directory: \(error)"
+            diagnostic: StructuredDiagnostic(
+                code: .unableToInspectAuthorizedDirectory,
+                arguments: [detail]
+            )
         )
     }
 
     private func unavailablePlan(
         for root: AuthorizedRootSnapshot,
-        reason: String
+        diagnostic: StructuredDiagnostic
     ) -> ScanPlan {
         ScanPlan(
             scanRoots: [],
@@ -288,7 +300,8 @@ public final class IndexRefresher {
                 ScannedRoot(
                     id: root.id,
                     url: root.url,
-                    availability: .unavailable(reason: reason)
+                    availability: .unavailable(reason: diagnostic.fallbackMessage),
+                    unavailableDiagnostic: diagnostic
                 ),
             ]
         )
@@ -305,7 +318,8 @@ public final class IndexRefresher {
                     return ScannedRoot(
                         id: id,
                         url: unavailable.url,
-                        availability: .unavailable(reason: reason)
+                        availability: .unavailable(reason: reason),
+                        unavailableDiagnostic: unavailable.unavailableDiagnostic
                     )
                 }
                 let available = roots[0]

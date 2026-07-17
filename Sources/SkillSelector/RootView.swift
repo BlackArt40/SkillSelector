@@ -61,24 +61,10 @@ struct RootView: View {
         }
         .toolbar {
             ToolbarItemGroup {
-                Button(action: refresh) {
-                    Group {
-                        if model.refreshState == .running {
-                            ProgressView()
-                                .controlSize(.small)
-                        } else {
-                            Image(systemName: "arrow.clockwise")
-                        }
-                    }
-                    .frame(width: 18, height: 18)
-                }
-                .disabled(model.refreshState == .running)
-                .help(model.refreshState == .running
-                    ? L10n.string("Refreshing Skills")
-                    : L10n.string("Refresh Skills"))
-                .accessibilityLabel(model.refreshState == .running
-                    ? L10n.string("Refreshing Skills")
-                    : L10n.string("Refresh Skills"))
+                RefreshToolbarControl(
+                    state: model.refreshState,
+                    onRefresh: refresh
+                )
 
                 SettingsLink {
                     Image(systemName: "gearshape")
@@ -104,5 +90,52 @@ struct RootView: View {
         destination = .all
         searchText = ""
         status = .all
+    }
+}
+
+private struct RefreshToolbarControl: View {
+    let state: RefreshState
+    let onRefresh: () -> Void
+
+    @ViewBuilder
+    var body: some View {
+        if case .failed(let message) = state {
+            Menu {
+                Section {
+                    Text(verbatim: L10n.string("Refresh Failed"))
+                    Text(verbatim: message)
+                }
+                Button(L10n.string("Retry Refresh"), action: onRefresh)
+            } label: {
+                Image(systemName: "exclamationmark.arrow.triangle.2.circlepath")
+                    .foregroundStyle(.orange)
+                    .frame(width: 18, height: 18)
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .frame(width: 24, height: 24)
+            .help(L10n.string("Refresh Failed"))
+            .accessibilityLabel(L10n.string("Refresh Failed"))
+        } else {
+            Button(action: onRefresh) {
+                Group {
+                    if state == .running {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                }
+                .frame(width: 18, height: 18)
+            }
+            .disabled(state == .running)
+            .frame(width: 24, height: 24)
+            .help(state == .running
+                ? L10n.string("Refreshing Skills")
+                : L10n.string("Refresh Skills"))
+            .accessibilityLabel(state == .running
+                ? L10n.string("Refreshing Skills")
+                : L10n.string("Refresh Skills"))
+        }
     }
 }

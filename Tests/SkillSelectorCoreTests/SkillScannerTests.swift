@@ -84,6 +84,7 @@ final class SkillScannerTests: XCTestCase {
         XCTAssertTrue(scanned.document.issues.contains {
             $0.message.contains("authorized package")
         })
+        XCTAssertEqual(scanned.document.issues.first?.diagnostic?.code, .unsafeEntryFile)
     }
 
     func testMalformedSkillRemainsVisibleWithParseDiagnostics() async throws {
@@ -256,6 +257,7 @@ final class SkillScannerTests: XCTestCase {
             return XCTFail("Expected an unavailable root")
         }
         XCTAssertFalse(reason.isEmpty)
+        XCTAssertEqual(report.roots[0].unavailableDiagnostic?.code, .rootUnreadable)
     }
 }
 

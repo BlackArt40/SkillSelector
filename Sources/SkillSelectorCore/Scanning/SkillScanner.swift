@@ -59,7 +59,8 @@ public struct SkillScanner: Sendable {
                 ScannedRoot(
                     id: root.id,
                     url: root.url,
-                    availability: .unavailable(reason: "Root is missing or is not a readable directory")
+                    availability: .unavailable(reason: "Root is missing or is not a readable directory"),
+                    unavailableDiagnostic: StructuredDiagnostic(code: .rootUnreadable)
                 ),
                 []
             )
@@ -101,11 +102,16 @@ public struct SkillScanner: Sendable {
                 installations
             )
         } catch {
+            let detail = String(describing: error)
             return (
                 ScannedRoot(
                     id: root.id,
                     url: root.url,
-                    availability: .unavailable(reason: String(describing: error))
+                    availability: .unavailable(reason: detail),
+                    unavailableDiagnostic: StructuredDiagnostic(
+                        code: .scanFailed,
+                        arguments: [detail]
+                    )
                 ),
                 []
             )
@@ -329,14 +335,14 @@ public struct SkillScanner: Sendable {
         ) {
         case .absent:
             return nil
-        case .unsafe(let message):
+        case .unsafe:
             return diagnosticCandidate(
                 installationURL: installationURL,
                 resolvedTarget: resolvedTarget,
                 agentIDs: agentIDs,
                 entryFilename: entryFilename,
                 rootID: rootID,
-                message: message
+                diagnostic: StructuredDiagnostic(code: .unsafeEntryFile)
             )
         case .readable(let url):
             resolvedEntryURL = url
@@ -348,9 +354,15 @@ public struct SkillScanner: Sendable {
                 try String(contentsOf: resolvedEntryURL, encoding: .utf8)
             )
         } catch {
+            let detail = error.localizedDescription
             document = ParsedSkillDocument(
                 title: installationURL.lastPathComponent,
-                issues: [ParseIssue(message: "Unable to read \(entryFilename): \(error.localizedDescription)")]
+                issues: [
+                    ParseIssue(
+                        code: .unableToReadEntry,
+                        arguments: [entryFilename, detail]
+                    ),
+                ]
             )
         }
 
@@ -392,9 +404,7 @@ public struct SkillScanner: Sendable {
             return .absent
         }
         guard isSafelyContained, isRegularFile(resolvedEntryURL) else {
-            return .unsafe(
-                message: "Entry file must remain readable within its authorized package and root"
-            )
+            return .unsafe
         }
         return .readable(resolvedEntryURL)
     }
@@ -405,7 +415,7 @@ public struct SkillScanner: Sendable {
         agentIDs: Set<String>,
         entryFilename: String,
         rootID: String,
-        message: String
+        diagnostic: StructuredDiagnostic
     ) -> ScannedSkill {
         ScannedSkill(
             installation: SkillInstallation(
@@ -415,7 +425,12 @@ public struct SkillScanner: Sendable {
             ),
             document: ParsedSkillDocument(
                 title: installationURL.lastPathComponent,
-                issues: [ParseIssue(message: message)]
+                issues: [
+                    ParseIssue(
+                        message: diagnostic.fallbackMessage,
+                        diagnostic: diagnostic
+                    ),
+                ]
             ),
             agentIDsByRoot: [rootID: agentIDs],
             entryFilename: entryFilename
@@ -526,5 +541,5 @@ public struct SkillScanner: Sendable {
 private enum EntryInspection {
     case absent
     case readable(URL)
-    case unsafe(message: String)
+    case unsafe
 }

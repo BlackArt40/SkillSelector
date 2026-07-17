@@ -18,7 +18,7 @@ public enum FrontmatterParser {
                 )
                 bodyLines = Array(lines[(boundary + 1)...])
             } else {
-                issues.append(ParseIssue(line: 1, message: "Missing closing frontmatter boundary"))
+                issues.append(ParseIssue(line: 1, code: .missingClosingFrontmatterBoundary))
                 parseFrontmatter(
                     Array(lines.dropFirst().prefix(while: { !isMarkdownBodyLine($0) })),
                     into: &fields,
@@ -32,10 +32,12 @@ public enum FrontmatterParser {
         if hasFrontmatter {
             for requiredKey in ["name", "description"]
             where fields[requiredKey]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false {
-                issues.append(ParseIssue(message: "Missing required frontmatter field: \(requiredKey)"))
+                issues.append(
+                    ParseIssue(code: .missingRequiredFrontmatterField, arguments: [requiredKey])
+                )
             }
         } else {
-            issues.append(ParseIssue(line: 1, message: "Missing frontmatter boundary"))
+            issues.append(ParseIssue(line: 1, code: .missingFrontmatterBoundary))
         }
 
         let bodyMetadata = extractBodyMetadata(
@@ -77,14 +79,14 @@ public enum FrontmatterParser {
 
             guard line.first?.isWhitespace != true,
                   let colon = line.firstIndex(of: ":") else {
-                issues.append(ParseIssue(line: lineNumber, message: "Expected a key-value pair"))
+                issues.append(ParseIssue(line: lineNumber, code: .expectedKeyValuePair))
                 index += 1
                 continue
             }
 
             let key = String(line[..<colon]).trimmingCharacters(in: .whitespaces)
             guard isValidKey(key) else {
-                issues.append(ParseIssue(line: lineNumber, message: "Invalid frontmatter key"))
+                issues.append(ParseIssue(line: lineNumber, code: .invalidFrontmatterKey))
                 index += 1
                 continue
             }
@@ -104,10 +106,10 @@ public enum FrontmatterParser {
 
                 let block = Array(lines[blockStart..<blockEnd])
                 if block.isEmpty {
-                    issues.append(ParseIssue(line: lineNumber, message: "Block value has no indented content"))
+                    issues.append(ParseIssue(line: lineNumber, code: .blockValueHasNoContent))
                     fields[key] = ""
                 } else if block.contains(where: { !$0.isEmpty && $0.first?.isWhitespace != true }) {
-                    issues.append(ParseIssue(line: lineNumber, message: "Block value must be indented"))
+                    issues.append(ParseIssue(line: lineNumber, code: .blockValueMustBeIndented))
                 } else {
                     fields[key] = blockValue(block, folded: rawValue == ">")
                 }
@@ -119,7 +121,7 @@ public enum FrontmatterParser {
             case .success(let value):
                 fields[key] = value
             case .failure(let error):
-                issues.append(ParseIssue(line: lineNumber, message: error.message))
+                issues.append(ParseIssue(line: lineNumber, code: error.code))
             }
             index += 1
         }
@@ -136,7 +138,7 @@ public enum FrontmatterParser {
 
         if rawValue.hasPrefix("\"") {
             guard rawValue.count >= 2, rawValue.hasSuffix("\"") else {
-                return .failure(ScalarError(message: "Unterminated quoted string"))
+                return .failure(ScalarError(code: .unterminatedQuotedString))
             }
             let inner = String(rawValue.dropFirst().dropLast())
             var result = ""
@@ -149,7 +151,7 @@ public enum FrontmatterParser {
                     case "t": result.append("\t")
                     case "\"", "\\": result.append(character)
                     default:
-                        return .failure(ScalarError(message: "Unsupported escape sequence"))
+                        return .failure(ScalarError(code: .unsupportedEscapeSequence))
                     }
                     escaping = false
                 } else if character == "\\" {
@@ -159,14 +161,14 @@ public enum FrontmatterParser {
                 }
             }
             guard !escaping else {
-                return .failure(ScalarError(message: "Unterminated escape sequence"))
+                return .failure(ScalarError(code: .unterminatedEscapeSequence))
             }
             return .success(result)
         }
 
         if rawValue.hasPrefix("'") {
             guard rawValue.count >= 2, rawValue.hasSuffix("'") else {
-                return .failure(ScalarError(message: "Unterminated quoted string"))
+                return .failure(ScalarError(code: .unterminatedQuotedString))
             }
             return .success(
                 String(rawValue.dropFirst().dropLast()).replacingOccurrences(of: "''", with: "'")
@@ -174,10 +176,10 @@ public enum FrontmatterParser {
         }
 
         if rawValue.hasPrefix("[") || rawValue.hasPrefix("{") {
-            return .failure(ScalarError(message: "Collections are not supported in frontmatter"))
+            return .failure(ScalarError(code: .collectionsNotSupported))
         }
         if rawValue.hasPrefix("&") || rawValue.hasPrefix("*") || rawValue.hasPrefix("!") {
-            return .failure(ScalarError(message: "YAML tags and aliases are not supported"))
+            return .failure(ScalarError(code: .yamlTagsAndAliasesNotSupported))
         }
         return .success(rawValue)
     }
@@ -271,5 +273,5 @@ public enum FrontmatterParser {
 }
 
 private struct ScalarError: Error {
-    let message: String
+    let code: DiagnosticCode
 }

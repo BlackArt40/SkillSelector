@@ -3,10 +3,25 @@ import Foundation
 public struct ParseIssue: Codable, Hashable, Sendable {
     public let line: Int?
     public let message: String
+    public let diagnostic: StructuredDiagnostic?
 
-    public init(line: Int? = nil, message: String) {
+    public init(
+        line: Int? = nil,
+        message: String,
+        diagnostic: StructuredDiagnostic? = nil
+    ) {
         self.line = line
         self.message = message
+        self.diagnostic = diagnostic
+    }
+
+    public init(
+        line: Int? = nil,
+        code: DiagnosticCode,
+        arguments: [String] = []
+    ) {
+        let diagnostic = StructuredDiagnostic(code: code, arguments: arguments)
+        self.init(line: line, message: diagnostic.fallbackMessage, diagnostic: diagnostic)
     }
 }
 
@@ -87,17 +102,20 @@ public struct ScannedRoot: Hashable, Sendable {
     public let url: URL
     public let availability: ScanRootAvailability
     public let issues: [ScanIssue]
+    public let unavailableDiagnostic: StructuredDiagnostic?
 
     public init(
         id: String,
         url: URL,
         availability: ScanRootAvailability,
-        issues: [ScanIssue] = []
+        issues: [ScanIssue] = [],
+        unavailableDiagnostic: StructuredDiagnostic? = nil
     ) {
         self.id = id
         self.url = url.standardizedFileURL
         self.availability = availability
         self.issues = issues
+        self.unavailableDiagnostic = unavailableDiagnostic
     }
 }
 

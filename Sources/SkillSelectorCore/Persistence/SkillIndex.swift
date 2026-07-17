@@ -25,6 +25,9 @@ public final class SkillIndex {
                 guard associations[root.id] != nil else { continue }
                 record.availabilityRawValue = SkillAvailability.unavailable.rawValue
                 record.unavailableReason = reason
+                record.unavailableDiagnosticData = root.unavailableDiagnostic.flatMap {
+                    try? encoder.encode($0)
+                }
             }
         }
 
@@ -95,6 +98,7 @@ public final class SkillIndex {
         record.modificationDate = scanned.entryModificationDate
         record.availabilityRawValue = SkillAvailability.available.rawValue
         record.unavailableReason = nil
+        record.unavailableDiagnosticData = nil
         var associations = try agentIDsByRoot(for: record)
         for (rootID, agentIDs) in scanned.agentIDsByRoot {
             associations[rootID] = agentIDs
@@ -124,7 +128,10 @@ public final class SkillIndex {
             }.sorted(),
             rootIDs: associations.keys.sorted(),
             entryFilename: record.entryFilename,
-            parseDiagnostics: (try? decoder.decode([ParseIssue].self, from: record.parseDiagnosticsData)) ?? []
+            parseDiagnostics: (try? decoder.decode([ParseIssue].self, from: record.parseDiagnosticsData)) ?? [],
+            unavailableDiagnostic: record.unavailableDiagnosticData.flatMap {
+                try? decoder.decode(StructuredDiagnostic.self, from: $0)
+            }
         )
     }
 

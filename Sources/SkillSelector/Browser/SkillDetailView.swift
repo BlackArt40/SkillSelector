@@ -19,9 +19,11 @@ struct SkillDetailView: View {
                         labeledValue(
                             L10n.string("Agents"),
                             value: skill.agentIDs
+                                .filter { $0 != "system" && $0 != "custom" }
                                 .map { agentNamesByID[$0] ?? $0 }
                                 .sorted()
                                 .joined(separator: ", ")
+                                .nilIfEmpty ?? L10n.string("None")
                         )
                     }
                     detailSection(L10n.string("Locations")) {
@@ -94,7 +96,7 @@ struct SkillDetailView: View {
             .foregroundStyle(skill.availability == .available ? Color.secondary : Color.orange)
 
             if let reason = skill.unavailableReason {
-                Text(verbatim: reason)
+                Text(verbatim: skill.unavailableDiagnostic.map(L10n.diagnostic) ?? reason)
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
@@ -143,11 +145,16 @@ struct SkillDetailView: View {
     }
 
     private func diagnosticText(_ issue: ParseIssue) -> String {
-        guard let line = issue.line else { return issue.message }
+        let message = issue.diagnostic.map(L10n.diagnostic) ?? issue.message
+        guard let line = issue.line else { return message }
         return String.localizedStringWithFormat(
             L10n.string("Line %lld: %@"),
             Int64(line),
-            issue.message
+            message
         )
     }
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }

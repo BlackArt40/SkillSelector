@@ -20,10 +20,6 @@ struct SkillListView: View {
         VStack(spacing: 0) {
             controls
             Divider()
-            if case .failed(let message) = refreshState, allSkillCount > 0 {
-                failureBanner(message)
-                Divider()
-            }
             content
         }
         .navigationTitle(L10n.string("Skills"))
@@ -129,28 +125,4 @@ struct SkillListView: View {
         }
     }
 
-    private func failureBanner(_ message: String) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(verbatim: L10n.string("Refresh Failed"))
-                    .font(.caption)
-                    .fontWeight(.medium)
-                Text(verbatim: message)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 4)
-            Button(action: onRefresh) {
-                Image(systemName: "arrow.clockwise")
-            }
-            .buttonStyle(.borderless)
-            .help(L10n.string("Retry Refresh"))
-            .accessibilityLabel(L10n.string("Retry Refresh"))
-        }
-        .padding(.horizontal, 10)
-        .frame(minHeight: 42)
-    }
 }

@@ -76,6 +76,10 @@ final class IndexRefresherTests: XCTestCase {
         XCTAssertEqual(second.unavailable, 1)
         XCTAssertEqual(second.removed, 0)
         XCTAssertEqual(try index.skills().first?.availability, .unavailable)
+        XCTAssertEqual(
+            try index.skills().first?.unavailableDiagnostic?.code,
+            .authorizedProjectMissing
+        )
         XCTAssertEqual(adapter.stoppedURLs.map(\.path), [project.path, project.path])
     }
 
@@ -104,6 +108,10 @@ final class IndexRefresherTests: XCTestCase {
         XCTAssertEqual(second.unavailable, 1)
         XCTAssertEqual(second.removed, 0)
         XCTAssertEqual(try index.skills().first?.availability, .unavailable)
+        XCTAssertEqual(
+            try index.skills().first?.unavailableDiagnostic?.code,
+            .unableToInspectAuthorizedDirectory
+        )
     }
 
     func testFailedHomeBookmarkMarksPreviouslyIndexedSkillUnavailable() async throws {
@@ -126,7 +134,9 @@ final class IndexRefresherTests: XCTestCase {
 
         XCTAssertEqual(first.added, 1)
         XCTAssertEqual(second.unavailable, 1)
-        XCTAssertEqual(try index.skills().first?.availability, .unavailable)
+        let skill = try XCTUnwrap(index.skills().first)
+        XCTAssertEqual(skill.availability, .unavailable)
+        XCTAssertEqual(skill.unavailableDiagnostic?.code, .unableToResolveAuthorizedDirectory)
     }
 
     func testFailedMatchedSystemBookmarkMarksPreviouslyIndexedSkillUnavailable() async throws {

@@ -7,6 +7,7 @@ struct SkillRow: View {
 
     private var agentNames: String {
         skill.agentIDs
+            .filter { $0 != "system" && $0 != "custom" }
             .map { agentNamesByID[$0] ?? $0 }
             .sorted()
             .joined(separator: " · ")
