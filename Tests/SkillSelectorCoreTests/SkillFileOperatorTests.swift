@@ -775,6 +775,106 @@ final class SkillFileOperatorTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: destinationRoot.appending(path: "demo").path))
     }
 
+    func testRegularMoveRejectsSourceChangeDuringFinalValidation() async throws {
+        let source = try makeSkill(in: sourceRoot, name: "demo", contents: "original")
+        let live = FileOperationFileSystem.live
+        var sourceSnapshotCalls = 0
+        let changing = FileOperationFileSystem(
+            snapshot: { url in
+                guard url.standardizedFileURL == source.standardizedFileURL else {
+                    return try live.snapshot(url)
+                }
+                sourceSnapshotCalls += 1
+                if sourceSnapshotCalls == 3 {
+                    try Data("changed before move".utf8)
+                        .write(to: source.appending(path: "SKILL.md"))
+                }
+                return try live.snapshot(url)
+            },
+            contents: live.contents,
+            copy: live.copy,
+            move: live.move,
+            remove: live.remove,
+            createSymbolicLink: live.createSymbolicLink
+        )
+        let operatorUnderTest = makeOperator(fileSystem: changing)
+        let plan = try operatorUnderTest.plan(
+            request(.move, source: source, destination: destinationRoot)
+        )
+
+        await XCTAssertThrowsErrorAsync(
+            try await operatorUnderTest.execute(plan, confirmation: plan.confirmationToken)
+        ) { XCTAssertEqual($0 as? SkillFileOperatorError, .sourceChanged) }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destinationRoot.appending(path: "demo").path))
+    }
+
+    func testRegularMoveRejectsDestinationChangeDuringFinalValidation() async throws {
+        let source = try makeSkill(in: sourceRoot, name: "demo")
+        let destination = destinationRoot.appending(path: "demo")
+        let live = FileOperationFileSystem.live
+        var destinationSnapshotCalls = 0
+        let changing = FileOperationFileSystem(
+            snapshot: { url in
+                guard url.standardizedFileURL == destination.standardizedFileURL else {
+                    return try live.snapshot(url)
+                }
+                destinationSnapshotCalls += 1
+                if destinationSnapshotCalls == 3 {
+                    _ = try self.makeSkill(in: self.destinationRoot, name: "demo", contents: "appeared")
+                }
+                return try live.snapshot(url)
+            },
+            contents: live.contents,
+            copy: live.copy,
+            move: live.move,
+            remove: live.remove,
+            createSymbolicLink: live.createSymbolicLink
+        )
+        let operatorUnderTest = makeOperator(fileSystem: changing)
+        let plan = try operatorUnderTest.plan(
+            request(.move, source: source, destination: destinationRoot)
+        )
+
+        await XCTAssertThrowsErrorAsync(
+            try await operatorUnderTest.execute(plan, confirmation: plan.confirmationToken)
+        ) { XCTAssertEqual($0 as? SkillFileOperatorError, .destinationChanged) }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
+        XCTAssertEqual(try String(contentsOf: destination.appending(path: "SKILL.md")), "appeared")
+    }
+
+    func testDeleteRejectsSourceChangeDuringFinalValidation() async throws {
+        let source = try makeSkill(in: sourceRoot, name: "demo", contents: "original")
+        let live = FileOperationFileSystem.live
+        var sourceSnapshotCalls = 0
+        let changing = FileOperationFileSystem(
+            snapshot: { url in
+                guard url.standardizedFileURL == source.standardizedFileURL else {
+                    return try live.snapshot(url)
+                }
+                sourceSnapshotCalls += 1
+                if sourceSnapshotCalls == 3 {
+                    try Data("changed before trash".utf8)
+                        .write(to: source.appending(path: "SKILL.md"))
+                }
+                return try live.snapshot(url)
+            },
+            contents: live.contents,
+            copy: live.copy,
+            move: live.move,
+            remove: live.remove,
+            createSymbolicLink: live.createSymbolicLink
+        )
+        let operatorUnderTest = makeOperator(fileSystem: changing)
+        let plan = try operatorUnderTest.plan(request(.delete, source: source))
+
+        await XCTAssertThrowsErrorAsync(
+            try await operatorUnderTest.execute(plan, confirmation: plan.confirmationToken)
+        ) { XCTAssertEqual($0 as? SkillFileOperatorError, .sourceChanged) }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
+        XCTAssertTrue(trash.movedItems.isEmpty)
+    }
+
     func testDestinationChangeDuringReplacementFailsBeforeTrashAndCleansStaging() async throws {
         let source = try makeSkill(in: sourceRoot, name: "demo", contents: "new")
         let destination = try makeSkill(in: destinationRoot, name: "demo", contents: "old")

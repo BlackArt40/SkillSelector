@@ -396,6 +396,10 @@ public final class SkillFileOperator: @unchecked Sendable {
         do {
             switch plan.operation {
             case .delete:
+                try validateSourceSnapshot(
+                    plan.logicalSourceURL,
+                    expected: plan.sourceSnapshot
+                )
                 _ = try trash.trashItem(at: plan.logicalSourceURL)
             case .copy:
                 try installCopy(from: plan.logicalSourceURL, plan: plan, removeSourceAfter: false, roots: roots)
@@ -403,10 +407,15 @@ public final class SkillFileOperator: @unchecked Sendable {
                 if plan.linkForm == .symbolicLink || plan.movesExistingDestinationToTrash {
                     try installCopy(from: plan.logicalSourceURL, plan: plan, removeSourceAfter: true, roots: roots)
                 } else {
-                    try fileSystem.move(
+                    let destination = try requiredDestination(plan)
+                    try validateSourceSnapshot(
                         plan.logicalSourceURL,
-                        try requiredDestination(plan)
+                        expected: plan.sourceSnapshot
                     )
+                    guard try fileSystem.snapshot(destination) == plan.destinationSnapshot else {
+                        throw SkillFileOperatorError.destinationChanged
+                    }
+                    try fileSystem.move(plan.logicalSourceURL, destination)
                 }
             case .createSymbolicLink:
                 try installLink(plan: plan, roots: roots)
