@@ -215,18 +215,18 @@ public struct SkillDocumentReader {
             throw SkillDocumentReaderError.invalidResolvedTarget
         }
 
-        let authorizedPair = request.authorizedRootURLs.lazy
-            .map { root in
-                (
-                    standardized: root.standardizedFileURL,
-                    resolved: root.resolvingSymlinksInPath().standardizedFileURL
-                )
-            }
-            .first { root in
-                Self.contains(installation, in: root.standardized)
-                    && Self.contains(expectedCanonicalURL, in: root.resolved)
-            }
-        guard let authorizedPair else {
+        let authorizedPairs = request.authorizedRootURLs.map { root in
+            (
+                standardized: root.standardizedFileURL,
+                resolved: root.resolvingSymlinksInPath().standardizedFileURL
+            )
+        }
+        guard authorizedPairs.contains(where: {
+            Self.contains(installation, in: $0.standardized)
+        }),
+        let authorizedResolvedRoot = authorizedPairs.first(where: {
+            Self.contains(expectedCanonicalURL, in: $0.resolved)
+        })?.resolved else {
             throw SkillDocumentReaderError.unauthorizedInstallationPath
         }
 
@@ -235,7 +235,7 @@ public struct SkillDocumentReader {
                 ? resolvedInstallation
                 : installation,
             expectedCanonicalURL: expectedCanonicalURL,
-            authorizedResolvedRoot: authorizedPair.resolved
+            authorizedResolvedRoot: authorizedResolvedRoot
         )
     }
 

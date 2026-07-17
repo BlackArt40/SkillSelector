@@ -111,6 +111,25 @@ final class SkillDocumentReaderTests: XCTestCase {
         XCTAssertEqual(document.fileURL, target.appending(path: "SKILL.md").standardizedFileURL)
     }
 
+    func testReadsSymlinkInstallationAcrossTwoAuthorizedRoots() throws {
+        let linksRoot = fixture.appending(path: "links")
+        let targetsRoot = fixture.appending(path: "targets")
+        try FileManager.default.createDirectory(at: linksRoot, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: targetsRoot, withIntermediateDirectories: true)
+        let target = try makeSkill(parent: targetsRoot, name: "target", source: "cross root")
+        let link = linksRoot.appending(path: "linked-skill")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
+
+        let document = try SkillDocumentReader().read(SkillDocumentRequest(
+            installationURL: link,
+            resolvedTargetURL: target,
+            entryFilename: "SKILL.md",
+            authorizedRootURLs: [linksRoot, targetsRoot]
+        ))
+
+        XCTAssertEqual(document.source, "cross root")
+    }
+
     func testRejectsSymlinkInstallationWhenRecordedTargetDoesNotMatchActualTarget() throws {
         let target = try makeSkill(name: "actual-target")
         let otherTarget = try makeSkill(name: "recorded-target")

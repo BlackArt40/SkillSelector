@@ -150,6 +150,30 @@ final class SkillScannerTests: XCTestCase {
         XCTAssertEqual(report.installations.map(\.document.name), ["real"])
     }
 
+    func testFollowsSymbolicLinkAcrossTwoAuthorizedRoots() async throws {
+        let fixture = try ScanFixture()
+        let project = fixture.url.appending(path: "project")
+        let targets = fixture.url.appending(path: "authorized-targets")
+        let target = targets.appending(path: "demo")
+        try ScanFixture.writeSkill(at: target, name: "demo")
+        let link = project.appending(path: ".cursor/skills/linked")
+        try FileManager.default.createDirectory(
+            at: link.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
+
+        let report = await SkillScanner().scan([
+            .project(id: "project", url: project, registry: BuiltInAgentRegistry.make()),
+            .skillDirectory(id: "targets", url: targets, agentIDs: ["custom"]),
+        ])
+        let linked = try XCTUnwrap(report.installations.first {
+            $0.path.standardizedFileURL.path == link.standardizedFileURL.path
+        })
+        XCTAssertEqual(linked.resolvedTarget?.standardizedFileURL.path, target.standardizedFileURL.path)
+        XCTAssertEqual(linked.document.name, "demo")
+    }
+
     func testRejectsTraversingCustomEntryFilenameAndReportsRootIssue() async throws {
         let fixture = try ScanFixture()
         let authorizedRoot = fixture.url.appending(path: "allowed")

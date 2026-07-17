@@ -63,6 +63,7 @@ struct RootView: View {
             ToolbarItemGroup {
                 RefreshToolbarControl(
                     state: model.refreshState,
+                    isDisabled: model.fileOperationCommandsDisabled,
                     onRefresh: refresh
                 )
 
@@ -74,12 +75,54 @@ struct RootView: View {
                 .accessibilityLabel(L10n.string("Open Settings"))
             }
         }
+        .sheet(item: pendingOperationBinding) { plan in
+            OperationConfirmationView(
+                plan: plan,
+                isOperating: model.isOperating,
+                onConflictChange: model.updatePendingConflictPolicy,
+                onCancel: model.cancelPendingFileOperation,
+                onConfirm: { replacementConfirmed in
+                    Task {
+                        await model.executePendingFileOperation(
+                            replacementConfirmed: replacementConfirmed
+                        )
+                    }
+                }
+            )
+            .id(plan.id)
+        }
+        .alert(
+            L10n.string("File Operation Failed"),
+            isPresented: operationErrorBinding
+        ) {
+            Button(L10n.string("OK")) { model.operationError = nil }
+        } message: {
+            Text(verbatim: model.operationError ?? "")
+        }
     }
 
     private var hasActiveFilters: Bool {
         destination != .all
             || !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || status != .all
+    }
+
+    private var pendingOperationBinding: Binding<FileOperationPlan?> {
+        Binding(
+            get: { model.pendingOperationPlan },
+            set: { value in
+                if value == nil { model.cancelPendingFileOperation() }
+            }
+        )
+    }
+
+    private var operationErrorBinding: Binding<Bool> {
+        Binding(
+            get: { model.operationError != nil },
+            set: { isPresented in
+                if !isPresented { model.operationError = nil }
+            }
+        )
     }
 
     private func refresh() {
@@ -95,6 +138,7 @@ struct RootView: View {
 
 private struct RefreshToolbarControl: View {
     let state: RefreshState
+    let isDisabled: Bool
     let onRefresh: () -> Void
 
     @ViewBuilder
@@ -113,6 +157,7 @@ private struct RefreshToolbarControl: View {
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
+            .disabled(isDisabled)
             .frame(width: 24, height: 24)
             .help(L10n.string("Refresh Failed"))
             .accessibilityLabel(L10n.string("Refresh Failed"))
@@ -128,7 +173,7 @@ private struct RefreshToolbarControl: View {
                 }
                 .frame(width: 18, height: 18)
             }
-            .disabled(state == .running)
+            .disabled(state == .running || isDisabled)
             .frame(width: 24, height: 24)
             .help(state == .running
                 ? L10n.string("Refreshing Skills")

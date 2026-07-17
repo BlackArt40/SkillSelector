@@ -95,9 +95,27 @@ public final class IndexRefresher {
 
     @MainActor
     public func refresh(_ trigger: RefreshTrigger) async throws -> RefreshSummary {
+        try await refresh(trigger, selectedRootIDs: nil)
+    }
+
+    @MainActor
+    public func refresh(
+        _ trigger: RefreshTrigger,
+        rootIDs: Set<String>
+    ) async throws -> RefreshSummary {
+        try await refresh(trigger, selectedRootIDs: rootIDs)
+    }
+
+    @MainActor
+    private func refresh(
+        _ trigger: RefreshTrigger,
+        selectedRootIDs: Set<String>?
+    ) async throws -> RefreshSummary {
         _ = trigger
         let before = try index.skills()
-        let snapshots = try bookmarks.roots()
+        let snapshots = try bookmarks.roots().filter { root in
+            selectedRootIDs?.contains(root.id) ?? true
+        }
         var accesses: [AuthorizedRootAccess] = []
         var roots: [ScanRoot] = []
         var dispositions: [ScannedRoot] = []

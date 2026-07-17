@@ -32,6 +32,54 @@ final class SkillIndexTests: XCTestCase {
         }
     }
 
+    func testCopyOperationMetadataCreatesIndependentPathValues() throws {
+        let index = try makeIndex()
+        let source = "/tmp/project/.agents/skills/source"
+        let destination = "/tmp/project/.agents/skills/destination"
+        try index.apply(report: report(
+            rootID: "project",
+            availability: .available,
+            installations: [skill(path: source), skill(path: destination)]
+        ))
+        _ = try index.setCustomDescription(path: source, value: "Source custom")
+        _ = try index.setSourceBinding(path: source, value: "github:owner/repo/skill")
+        let metadata = try index.appMetadata(path: source)
+
+        try index.applyOperationMetadataTransfer(.copy(metadata), to: destination)
+        _ = try index.setCustomDescription(path: source, value: "Changed later")
+        _ = try index.setSourceBinding(path: source, value: "github:other/repo")
+
+        let destinationSnapshot = try XCTUnwrap(index.skills().first { $0.path == destination })
+        XCTAssertEqual(destinationSnapshot.customDescription, "Source custom")
+        XCTAssertEqual(destinationSnapshot.sourceBinding, "github:owner/repo/skill")
+    }
+
+    func testMoveOperationMetadataCanApplyAfterRefreshRemovedSource() throws {
+        let index = try makeIndex()
+        let source = "/tmp/project/.agents/skills/source"
+        let destination = "/tmp/project/.agents/skills/destination"
+        try index.apply(report: report(
+            rootID: "project",
+            availability: .available,
+            installations: [skill(path: source)]
+        ))
+        _ = try index.setCustomDescription(path: source, value: "Moved custom")
+        _ = try index.setSourceBinding(path: source, value: "github:owner/repo/skill")
+        let transfer = FileOperationMetadataTransfer.move(try index.appMetadata(path: source))
+
+        try index.apply(report: report(
+            rootID: "project",
+            availability: .available,
+            installations: [skill(path: destination)]
+        ))
+        try index.applyOperationMetadataTransfer(transfer, to: destination)
+
+        XCTAssertFalse(try index.skills().contains { $0.path == source })
+        let moved = try XCTUnwrap(index.skills().first { $0.path == destination })
+        XCTAssertEqual(moved.customDescription, "Moved custom")
+        XCTAssertEqual(moved.sourceBinding, "github:owner/repo/skill")
+    }
+
     func testUnavailableRootRetainsRecordsAndMarksThemUnavailable() throws {
         let index = try makeIndex()
         try index.apply(

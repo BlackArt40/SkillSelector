@@ -498,10 +498,11 @@ public struct SkillScanner: Sendable {
         authorizedURLs: [URL]
     ) -> Bool {
         authorizedURLs.contains { root in
-            isContained(
-                standardizedURL: standardizedURL,
-                resolvedURL: resolvedURL,
-                in: root
+            containsByPathComponents(standardizedURL, in: root.standardizedFileURL)
+        } && authorizedURLs.contains { root in
+            containsByPathComponents(
+                resolvedURL,
+                in: root.resolvingSymlinksInPath().standardizedFileURL
             )
         }
     }

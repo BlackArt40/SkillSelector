@@ -1,7 +1,9 @@
+import AppKit
 import SkillSelectorCore
 import SwiftUI
 
 struct SkillDetailView: View {
+    @Environment(AppModel.self) private var model
     let skill: SkillSnapshot?
     let rootsByID: [String: AuthorizedRootSnapshot]
     let agentNamesByID: [String: String]
@@ -85,6 +87,9 @@ struct SkillDetailView: View {
                             labeledValue(L10n.string("Content Digest"), value: digest, monospaced: true)
                         }
                     }
+                    detailSection(L10n.string("File Operations")) {
+                        fileOperationControls(skill)
+                    }
                     detailSection(L10n.string("Diagnostics")) {
                         if skill.parseDiagnostics.isEmpty {
                             Text(verbatim: L10n.string("No diagnostics"))
@@ -137,6 +142,82 @@ struct SkillDetailView: View {
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
             }
+        }
+    }
+
+    private func fileOperationControls(_ skill: SkillSnapshot) -> some View {
+        LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: 120), spacing: 8)],
+            alignment: .leading,
+            spacing: 8
+        ) {
+            operationButton(
+                L10n.string("Copy"),
+                icon: "document.on.document",
+                help: L10n.string("Copy Skill"),
+                operation: .copy,
+                skill: skill
+            )
+            operationButton(
+                L10n.string("Move"),
+                icon: "folder",
+                help: L10n.string("Move Skill"),
+                operation: .move,
+                skill: skill
+            )
+            operationButton(
+                L10n.string("Create Link"),
+                icon: "link",
+                help: L10n.string("Create Symbolic Link"),
+                operation: .createSymbolicLink,
+                skill: skill
+            )
+            Button(role: .destructive) {
+                Task { await model.planFileOperation(.delete, for: skill) }
+            } label: {
+                Label(L10n.string("Trash"), systemImage: "trash")
+            }
+            .disabled(model.fileOperationCommandsDisabled || skill.availability != .available)
+            .help(L10n.string("Move Skill to Trash"))
+            .accessibilityLabel(L10n.string("Move Skill to Trash"))
+        }
+        .controlSize(.small)
+    }
+
+    private func operationButton(
+        _ title: String,
+        icon: String,
+        help: String,
+        operation: FileOperationKind,
+        skill: SkillSnapshot
+    ) -> some View {
+        Button {
+            chooseDestination(for: operation, skill: skill)
+        } label: {
+            Label(title, systemImage: icon)
+        }
+        .disabled(model.fileOperationCommandsDisabled || skill.availability != .available)
+        .help(help)
+        .accessibilityLabel(help)
+    }
+
+    private func chooseDestination(for operation: FileOperationKind, skill: SkillSnapshot) {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = false
+        panel.title = L10n.string("Choose Skill Root")
+        panel.prompt = L10n.string("Choose Skill Root")
+        panel.message = L10n.string("Choose a registered Skill root")
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task {
+            await model.planFileOperation(
+                operation,
+                for: skill,
+                destinationRootURL: url,
+                conflictPolicy: .keepBoth
+            )
         }
     }
 

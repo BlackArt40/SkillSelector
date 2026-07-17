@@ -369,6 +369,37 @@ final class IndexRefresherTests: XCTestCase {
         XCTAssertTrue(try index.skills().isEmpty)
     }
 
+    func testAffectedRootRefreshLeavesUnselectedRootUntouched() async throws {
+        let fixture = try RefreshFixture()
+        try fixture.writeSkill(at: "first/.cursor/skills/one", name: "one")
+        try fixture.writeSkill(at: "second/.cursor/skills/two", name: "two")
+        let firstURL = fixture.home.appending(path: "first")
+        let secondURL = fixture.home.appending(path: "second")
+        let adapter = FixtureBookmarkAdapter()
+        let container = try fixture.makeContainer()
+        let bookmarks = BookmarkStore(container: container, adapter: adapter)
+        let first = try bookmarks.save(url: firstURL, kind: .project)
+        _ = try bookmarks.save(url: secondURL, kind: .project)
+        let index = SkillIndex(container: container)
+        let refresher = IndexRefresher(
+            registry: BuiltInAgentRegistry.make(),
+            bookmarks: bookmarks,
+            index: index
+        )
+        _ = try await refresher.refresh(.startup)
+        try FileManager.default.removeItem(at: firstURL)
+        try FileManager.default.removeItem(at: secondURL)
+
+        _ = try await refresher.refresh(.manual, rootIDs: [first.id])
+
+        let skills = try index.skills()
+        XCTAssertEqual(skills.map(\.name), ["one", "two"])
+        XCTAssertEqual(skills.first { $0.name == "one" }?.availability, .unavailable)
+        XCTAssertEqual(skills.first { $0.name == "two" }?.availability, .available)
+        XCTAssertEqual(adapter.stoppedURLs.filter { $0.path == firstURL.path }.count, 2)
+        XCTAssertEqual(adapter.stoppedURLs.filter { $0.path == secondURL.path }.count, 1)
+    }
+
 }
 
 private final class RefreshFixture: @unchecked Sendable {

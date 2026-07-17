@@ -85,15 +85,54 @@ public final class SkillIndex {
 
     @discardableResult
     public func setCustomDescription(path: String, value: String?) throws -> SkillSnapshot {
+        let record = try requiredRecord(path: path)
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
+        record.customDescription = trimmed?.isEmpty == false ? trimmed : nil
+        try context.save()
+        return try snapshot(record)
+    }
+
+    @discardableResult
+    public func setSourceBinding(path: String, value: String?) throws -> SkillSnapshot {
+        let record = try requiredRecord(path: path)
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
+        record.sourceBinding = trimmed?.isEmpty == false ? trimmed : nil
+        try context.save()
+        return try snapshot(record)
+    }
+
+    public func appMetadata(path: String) throws -> SkillAppMetadata {
+        let record = try requiredRecord(path: path)
+        return SkillAppMetadata(
+            customDescription: record.customDescription,
+            sourceBinding: record.sourceBinding
+        )
+    }
+
+    public func applyOperationMetadataTransfer(
+        _ transfer: FileOperationMetadataTransfer,
+        to destinationPath: String
+    ) throws {
+        let metadata: SkillAppMetadata
+        switch transfer {
+        case .none:
+            return
+        case .copy(let value), .move(let value):
+            metadata = value
+        }
+        let record = try requiredRecord(path: destinationPath)
+        record.customDescription = metadata.customDescription
+        record.sourceBinding = metadata.sourceBinding
+        try context.save()
+    }
+
+    private func requiredRecord(path: String) throws -> SkillRecord {
         let normalizedPath = URL(fileURLWithPath: path).standardizedFileURL.path
         guard let record = try context.fetch(FetchDescriptor<SkillRecord>())
             .first(where: { $0.path == normalizedPath }) else {
             throw SkillIndexError.skillNotFound(path: normalizedPath)
         }
-        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
-        record.customDescription = trimmed?.isEmpty == false ? trimmed : nil
-        try context.save()
-        return try snapshot(record)
+        return record
     }
 
     private func recordsByPath() throws -> [String: SkillRecord] {
