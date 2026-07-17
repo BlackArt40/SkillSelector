@@ -412,6 +412,43 @@ final class SkillFileOperatorTests: XCTestCase {
         XCTAssertEqual(try FileManager.default.destinationOfSymbolicLink(atPath: absoluteLink.path), source.path)
     }
 
+    func testNestedProjectRootWinsOverHomeRootAndUsesRelativeLinkTarget() async throws {
+        let project = home.appending(path: "work/project")
+        let projectSourceRoot = project.appending(path: "packages/.agents/skills")
+        let projectDestinationRoot = project.appending(path: "nested/.codex/skills")
+        for directory in [projectSourceRoot, projectDestinationRoot] {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+        let source = try makeSkill(in: projectSourceRoot, name: "demo")
+        roots = [
+            AuthorizedRootSnapshot(id: "home", url: home, kind: .home),
+            AuthorizedRootSnapshot(id: "project", url: project, kind: .project),
+        ]
+        let operatorUnderTest = makeOperator()
+
+        let plan = try operatorUnderTest.plan(
+            request(.createSymbolicLink, source: source, destination: projectDestinationRoot)
+        )
+
+        XCTAssertEqual(plan.destinationRootID, "project")
+        XCTAssertEqual(plan.destinationAgentIDs, ["codex"])
+        XCTAssertEqual(plan.linkTargetForm, .relative)
+        XCTAssertFalse(try XCTUnwrap(plan.linkTarget).hasPrefix("/"))
+    }
+
+    func testMoveReplaceToSamePathIsRejectedWithoutMutation() throws {
+        let source = try makeSkill(in: sourceRoot, name: "demo", contents: "original")
+        let operatorUnderTest = makeOperator()
+
+        XCTAssertThrowsError(
+            try operatorUnderTest.plan(
+                request(.move, source: source, destination: sourceRoot, conflict: .replace)
+            )
+        ) { XCTAssertEqual($0 as? SkillFileOperatorError, .destinationConflict) }
+        XCTAssertEqual(try String(contentsOf: source.appending(path: "SKILL.md")), "original")
+        XCTAssertTrue(trash.movedItems.isEmpty)
+    }
+
     func testRegularDeleteDisclosesAndRefreshesTargetAliases() async throws {
         let source = try makeSkill(in: sourceRoot, name: "target")
         let alias = sourceRoot.appending(path: "alias")
@@ -674,6 +711,101 @@ final class SkillFileOperatorTests: XCTestCase {
             )
         ) { XCTAssertEqual($0 as? SkillFileOperatorError, .invalidStagedSkill) }
         XCTAssertEqual(try String(contentsOf: destinationRoot.appending(path: "demo/SKILL.md")), "old")
+        XCTAssertTrue(trash.movedItems.isEmpty)
+        XCTAssertFalse(try FileManager.default.contentsOfDirectory(atPath: destinationRoot.path).contains {
+            $0.hasPrefix(".skillselector-staging-")
+        })
+    }
+
+    func testSourceChangeDuringCopyFailsAndCleansStaging() async throws {
+        let source = try makeSkill(in: sourceRoot, name: "demo", contents: "original")
+        let live = FileOperationFileSystem.live
+        let changing = FileOperationFileSystem(
+            snapshot: live.snapshot,
+            contents: live.contents,
+            copy: { from, to in
+                try live.copy(from, to)
+                try Data("changed".utf8).write(to: source.appending(path: "SKILL.md"))
+            },
+            move: live.move,
+            remove: live.remove,
+            createSymbolicLink: live.createSymbolicLink
+        )
+        let operatorUnderTest = makeOperator(fileSystem: changing)
+        let plan = try operatorUnderTest.plan(
+            request(.copy, source: source, destination: destinationRoot)
+        )
+
+        await XCTAssertThrowsErrorAsync(
+            try await operatorUnderTest.execute(plan, confirmation: plan.confirmationToken)
+        ) { XCTAssertEqual($0 as? SkillFileOperatorError, .sourceChanged) }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destinationRoot.appending(path: "demo").path))
+        XCTAssertFalse(try FileManager.default.contentsOfDirectory(atPath: destinationRoot.path).contains {
+            $0.hasPrefix(".skillselector-staging-")
+        })
+    }
+
+    func testSourceChangeAfterStagingValidationFailsBeforeInstallation() async throws {
+        let source = try makeSkill(in: sourceRoot, name: "demo", contents: "original")
+        let live = FileOperationFileSystem.live
+        var changed = false
+        let changing = FileOperationFileSystem(
+            snapshot: { url in
+                let snapshot = try live.snapshot(url)
+                if !changed, url.lastPathComponent.hasPrefix(".skillselector-staging-") {
+                    changed = true
+                    try Data("changed after staging".utf8).write(to: source.appending(path: "SKILL.md"))
+                }
+                return snapshot
+            },
+            contents: live.contents,
+            copy: live.copy,
+            move: live.move,
+            remove: live.remove,
+            createSymbolicLink: live.createSymbolicLink
+        )
+        let operatorUnderTest = makeOperator(fileSystem: changing)
+        let plan = try operatorUnderTest.plan(
+            request(.copy, source: source, destination: destinationRoot)
+        )
+
+        await XCTAssertThrowsErrorAsync(
+            try await operatorUnderTest.execute(plan, confirmation: plan.confirmationToken)
+        ) { XCTAssertEqual($0 as? SkillFileOperatorError, .sourceChanged) }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destinationRoot.appending(path: "demo").path))
+    }
+
+    func testDestinationChangeDuringReplacementFailsBeforeTrashAndCleansStaging() async throws {
+        let source = try makeSkill(in: sourceRoot, name: "demo", contents: "new")
+        let destination = try makeSkill(in: destinationRoot, name: "demo", contents: "old")
+        let live = FileOperationFileSystem.live
+        let changing = FileOperationFileSystem(
+            snapshot: live.snapshot,
+            contents: live.contents,
+            copy: { from, to in
+                try live.copy(from, to)
+                try Data("changed while staging".utf8).write(to: destination.appending(path: "SKILL.md"))
+            },
+            move: live.move,
+            remove: live.remove,
+            createSymbolicLink: live.createSymbolicLink
+        )
+        let operatorUnderTest = makeOperator(fileSystem: changing)
+        let plan = try operatorUnderTest.plan(
+            request(.copy, source: source, destination: destinationRoot, conflict: .replace)
+        )
+
+        await XCTAssertThrowsErrorAsync(
+            try await operatorUnderTest.execute(
+                plan,
+                confirmation: plan.confirmationToken,
+                replacementConfirmation: plan.replacementConfirmationToken
+            )
+        ) { XCTAssertEqual($0 as? SkillFileOperatorError, .destinationChanged) }
+        XCTAssertEqual(
+            try String(contentsOf: destination.appending(path: "SKILL.md")),
+            "changed while staging"
+        )
         XCTAssertTrue(trash.movedItems.isEmpty)
         XCTAssertFalse(try FileManager.default.contentsOfDirectory(atPath: destinationRoot.path).contains {
             $0.hasPrefix(".skillselector-staging-")

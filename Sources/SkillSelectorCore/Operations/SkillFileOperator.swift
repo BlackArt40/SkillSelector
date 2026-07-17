@@ -216,8 +216,9 @@ public final class SkillFileOperator: @unchecked Sendable {
         guard isAuthorized(source, resolved: resolvedSource, roots: roots) else {
             throw SkillFileOperatorError.unauthorizedSource
         }
+        let sourceRootMatch: RegisteredRootMatch
         do {
-            _ = try validateRegisteredRoot(
+            sourceRootMatch = try validateRegisteredRoot(
                 source.deletingLastPathComponent(),
                 entryFilename: request.sourceEntryFilename,
                 roots: roots,
@@ -246,7 +247,7 @@ public final class SkillFileOperator: @unchecked Sendable {
             )
         }
 
-        let sourceRoot = matchingResolvedAuthorizedRoot(resolvedSource, roots: roots)
+        let sourceRoot = sourceRootMatch.root
         let link = linkPlan(
             operation: request.operation,
             sourceSnapshot: sourceSnapshot,
@@ -266,6 +267,10 @@ public final class SkillFileOperator: @unchecked Sendable {
             destinationRootSnapshot = nil
         }
         let replacement = request.conflictPolicy == .replace && destinationSnapshot != nil
+        if request.operation == .move,
+           destination?.url.path == source.path {
+            throw SkillFileOperatorError.destinationConflict
+        }
         let aliases = affectedAliases(
             operation: request.operation,
             source: source,
@@ -479,54 +484,56 @@ public final class SkillFileOperator: @unchecked Sendable {
     ) throws -> RegisteredRootMatch {
         let candidate = candidateURL.standardizedFileURL
         let resolved = candidate.resolvingSymlinksInPath().standardizedFileURL
-        guard let authorized = matchingAuthorizedRoot(candidate, resolved: resolved, roots: roots) else {
-            throw SkillFileOperatorError.unauthorizedDestination
-        }
         guard resolved.path == candidate.path else {
             throw SkillFileOperatorError.unauthorizedDestination
         }
+        let authorizedRoots = matchingAuthorizedRoots(candidate, resolved: resolved, roots: roots)
+        guard !authorizedRoots.isEmpty else {
+            throw SkillFileOperatorError.unauthorizedDestination
+        }
 
-        let definitions: [AgentDefinition]
-        switch authorized.kind {
-        case .home:
-            definitions = registry.definitions.filter { definition in
-                definition.globalRoots.contains { globalRoot in
-                    matchesHomeRoot(candidate, declaration: globalRoot, home: authorized.url)
+        for authorized in authorizedRoots {
+            let definitions: [AgentDefinition]
+            switch authorized.kind {
+            case .home:
+                definitions = registry.definitions.filter { definition in
+                    definition.globalRoots.contains { globalRoot in
+                        matchesHomeRoot(candidate, declaration: globalRoot, home: authorized.url)
+                    }
+                }
+            case .project:
+                definitions = registry.definitions.filter { definition in
+                    definition.projectPatterns.contains { pattern in
+                        pathSuffix(candidate, relativeTo: authorized.url, matches: pattern)
+                    }
+                }
+            case .system, .custom:
+                definitions = registry.definitions.filter { definition in
+                    definition.globalRoots.contains { declaration in
+                        guard declaration.hasPrefix("/") else { return false }
+                        return URL(fileURLWithPath: declaration).standardizedFileURL.path == candidate.path
+                    }
+                }
+                if definitions.isEmpty, candidate.path == authorized.url.standardizedFileURL.path {
+                    return RegisteredRootMatch(
+                        root: authorized,
+                        url: candidate,
+                        agentIDs: [authorized.kind == .system ? "system" : "custom"],
+                        entryFilename: entryFilename
+                    )
                 }
             }
-        case .project:
-            definitions = registry.definitions.filter { definition in
-                definition.projectPatterns.contains { pattern in
-                    pathSuffix(candidate, relativeTo: authorized.url, matches: pattern)
-                }
-            }
-        case .system, .custom:
-            definitions = registry.definitions.filter { definition in
-                definition.globalRoots.contains { declaration in
-                    guard declaration.hasPrefix("/") else { return false }
-                    return URL(fileURLWithPath: declaration).standardizedFileURL.path == candidate.path
-                }
-            }
-            if definitions.isEmpty, candidate.path == authorized.url.standardizedFileURL.path {
-                return RegisteredRootMatch(
-                    root: authorized,
-                    url: candidate,
-                    agentIDs: [authorized.kind == .system ? "system" : "custom"],
-                    entryFilename: entryFilename
-                )
-            }
+            guard !definitions.isEmpty else { continue }
+            let sameEntry = definitions.filter { $0.entryFilename == entryFilename }
+            let selected = sameEntry.isEmpty ? definitions : sameEntry
+            return RegisteredRootMatch(
+                root: authorized,
+                url: candidate,
+                agentIDs: selected.map(\.id).sorted(),
+                entryFilename: selected.first?.entryFilename ?? entryFilename
+            )
         }
-        guard !definitions.isEmpty else {
-            throw SkillFileOperatorError.unregisteredDestination
-        }
-        let sameEntry = definitions.filter { $0.entryFilename == entryFilename }
-        let selected = sameEntry.isEmpty ? definitions : sameEntry
-        return RegisteredRootMatch(
-            root: authorized,
-            url: candidate,
-            agentIDs: selected.map(\.id).sorted(),
-            entryFilename: selected.first?.entryFilename ?? entryFilename
-        )
+        throw SkillFileOperatorError.unregisteredDestination
     }
 
     private func validateName(_ name: String) throws {
@@ -598,21 +605,39 @@ public final class SkillFileOperator: @unchecked Sendable {
         _ logical: URL,
         roots: [AuthorizedRootSnapshot]
     ) -> AuthorizedRootSnapshot? {
-        roots.first { root in
-            contains(logical.standardizedFileURL, in: root.url.standardizedFileURL)
-        }
+        matchingLogicalAuthorizedRoots(logical, roots: roots).first
+    }
+
+    private func matchingLogicalAuthorizedRoots(
+        _ logical: URL,
+        roots: [AuthorizedRootSnapshot]
+    ) -> [AuthorizedRootSnapshot] {
+        roots
+            .filter { root in
+                contains(logical.standardizedFileURL, in: root.url.standardizedFileURL)
+            }
+            .sorted(by: mostSpecificRoot)
     }
 
     private func matchingResolvedAuthorizedRoot(
         _ resolved: URL,
         roots: [AuthorizedRootSnapshot]
     ) -> AuthorizedRootSnapshot? {
-        roots.first { root in
-            contains(
-                resolved.standardizedFileURL,
-                in: root.url.resolvingSymlinksInPath().standardizedFileURL
-            )
-        }
+        matchingResolvedAuthorizedRoots(resolved, roots: roots).first
+    }
+
+    private func matchingResolvedAuthorizedRoots(
+        _ resolved: URL,
+        roots: [AuthorizedRootSnapshot]
+    ) -> [AuthorizedRootSnapshot] {
+        roots
+            .filter { root in
+                contains(
+                    resolved.standardizedFileURL,
+                    in: root.url.resolvingSymlinksInPath().standardizedFileURL
+                )
+            }
+            .sorted(by: mostSpecificRoot)
     }
 
     private func matchingAuthorizedRoot(
@@ -620,13 +645,33 @@ public final class SkillFileOperator: @unchecked Sendable {
         resolved: URL,
         roots: [AuthorizedRootSnapshot]
     ) -> AuthorizedRootSnapshot? {
-        roots.first { root in
-            contains(logical.standardizedFileURL, in: root.url.standardizedFileURL)
-                && contains(
-                    resolved.standardizedFileURL,
-                    in: root.url.resolvingSymlinksInPath().standardizedFileURL
-                )
-        }
+        matchingAuthorizedRoots(logical, resolved: resolved, roots: roots).first
+    }
+
+    private func matchingAuthorizedRoots(
+        _ logical: URL,
+        resolved: URL,
+        roots: [AuthorizedRootSnapshot]
+    ) -> [AuthorizedRootSnapshot] {
+        roots
+            .filter { root in
+                contains(logical.standardizedFileURL, in: root.url.standardizedFileURL)
+                    && contains(
+                        resolved.standardizedFileURL,
+                        in: root.url.resolvingSymlinksInPath().standardizedFileURL
+                    )
+            }
+            .sorted(by: mostSpecificRoot)
+    }
+
+    private func mostSpecificRoot(
+        _ lhs: AuthorizedRootSnapshot,
+        _ rhs: AuthorizedRootSnapshot
+    ) -> Bool {
+        let lhsCount = lhs.url.standardizedFileURL.pathComponents.count
+        let rhsCount = rhs.url.standardizedFileURL.pathComponents.count
+        if lhsCount != rhsCount { return lhsCount > rhsCount }
+        return lhs.id < rhs.id
     }
 
     private func contains(_ candidate: URL, in root: URL) -> Bool {
@@ -728,14 +773,19 @@ public final class SkillFileOperator: @unchecked Sendable {
             guard let target = plan.linkTarget else {
                 throw SkillFileOperatorError.invalidStagedSkill
             }
+            try validateSourceSnapshot(source, expected: plan.sourceSnapshot)
             try fileSystem.createSymbolicLink(stage, target)
         } else {
+            try validateSourceSnapshot(source, expected: plan.sourceSnapshot)
             try fileSystem.copy(source, stage)
         }
+        try validateSourceSnapshot(source, expected: plan.sourceSnapshot)
         try validateStagedSkill(stage, plan: plan, roots: roots)
+        try validateSourceSnapshot(source, expected: plan.sourceSnapshot)
         let trashedDestination = try replaceDestinationIfNeeded(plan: plan, stage: stage)
         if removeSourceAfter {
             do {
+                try validateSourceSnapshot(source, expected: plan.sourceSnapshot)
                 try fileSystem.remove(source)
             } catch let originalError {
                 do {
@@ -761,9 +811,21 @@ public final class SkillFileOperator: @unchecked Sendable {
         guard let target = plan.linkTarget else {
             throw SkillFileOperatorError.invalidStagedSkill
         }
+        try validateSourceSnapshot(plan.logicalSourceURL, expected: plan.sourceSnapshot)
         try fileSystem.createSymbolicLink(stage, target)
+        try validateSourceSnapshot(plan.logicalSourceURL, expected: plan.sourceSnapshot)
         try validateStagedSkill(stage, plan: plan, roots: roots)
+        try validateSourceSnapshot(plan.logicalSourceURL, expected: plan.sourceSnapshot)
         _ = try replaceDestinationIfNeeded(plan: plan, stage: stage)
+    }
+
+    private func validateSourceSnapshot(
+        _ source: URL,
+        expected: FileOperationItemSnapshot
+    ) throws {
+        guard try fileSystem.snapshot(source) == expected else {
+            throw SkillFileOperatorError.sourceChanged
+        }
     }
 
     private func validateStagedSkill(
@@ -789,6 +851,9 @@ public final class SkillFileOperator: @unchecked Sendable {
     @discardableResult
     private func replaceDestinationIfNeeded(plan: FileOperationPlan, stage: URL) throws -> URL? {
         let destination = try requiredDestination(plan)
+        guard try fileSystem.snapshot(destination) == plan.destinationSnapshot else {
+            throw SkillFileOperatorError.destinationChanged
+        }
         var trashedDestination: URL?
         if plan.movesExistingDestinationToTrash {
             trashedDestination = try trash.trashItem(at: destination)
