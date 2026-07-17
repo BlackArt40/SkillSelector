@@ -22,7 +22,7 @@ final class NPMMetadataProviderTests: XCTestCase {
                 skillSubdirectory: nil,
                 description: "Exact package description.",
                 evidenceURL: URL(string: "https://www.npmjs.com/package/%40acme%2Fdemo")!,
-                sourceBinding: "npm:@acme/demo"
+                sourceBinding: nil
             ),
         ])
         XCTAssertEqual(runner.commands.map(\.arguments), [
@@ -46,6 +46,23 @@ final class NPMMetadataProviderTests: XCTestCase {
 
         XCTAssertEqual(candidate.description, "Exact npm README paragraph.")
         XCTAssertEqual(candidate.evidenceURL.absoluteString, "https://www.npmjs.com/package/demo")
+        XCTAssertNil(candidate.sourceBinding)
+    }
+
+    func testReadmeFallbackPreservesExactMultilineSourceSlice() async throws {
+        let runner = MetadataFixtureRunner(results: [
+            .success(result(stdout: #"[{"name":"demo"}]"#)),
+            .success(result(stdout: ###"{"name":"demo","readme":"# Demo\n\nFirst source line\n  indented continuation\nthird source line\n\n## Usage"}"###)),
+        ])
+        let provider = NPMMetadataProvider(executableURL: URL(fileURLWithPath: "/usr/bin/npm"), runner: runner)
+
+        let candidates = try await provider.candidates(for: MetadataQuery(name: "demo"))
+        let candidate = try XCTUnwrap(candidates.first)
+
+        XCTAssertEqual(
+            candidate.description,
+            "First source line\n  indented continuation\nthird source line"
+        )
     }
 
     func testDashPrefixedPackageNamesAreRejectedBeforeView() async throws {

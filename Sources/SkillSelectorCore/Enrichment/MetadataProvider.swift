@@ -21,7 +21,7 @@ public struct MetadataCandidate: Codable, Hashable, Sendable {
     public let skillSubdirectory: String?
     public let description: String
     public let evidenceURL: URL
-    public let sourceBinding: String
+    public let sourceBinding: String?
 
     public init(
         provider: MetadataProviderKind,
@@ -29,7 +29,7 @@ public struct MetadataCandidate: Codable, Hashable, Sendable {
         skillSubdirectory: String?,
         description: String,
         evidenceURL: URL,
-        sourceBinding: String
+        sourceBinding: String?
     ) {
         self.provider = provider
         self.sourceIdentifier = sourceIdentifier
@@ -58,6 +58,7 @@ enum MetadataProviderSupport {
         guard !name.isEmpty,
               name.utf8.count <= 200,
               !name.hasPrefix("-"),
+              !name.contains(":"),
               !name.contains("/"),
               !name.contains("\\"),
               name.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) }) else {
@@ -101,6 +102,72 @@ enum MetadataProviderSupport {
 
     static func readmeParagraph(_ value: String?) -> String? {
         guard let value else { return nil }
-        return nonempty(FrontmatterParser.parse(value).firstDescriptiveParagraph)
+        return nonempty(rawDescriptiveParagraph(in: value))
+    }
+
+    private static func rawDescriptiveParagraph(in source: String) -> String? {
+        let lines = sourceLines(source)
+        var scanStart = 0
+        if lines.first.map({ trimmed(source, line: $0) }) == "---",
+           let boundary = lines.dropFirst().firstIndex(where: {
+               trimmed(source, line: $0) == "---"
+           }) {
+            scanStart = boundary + 1
+        }
+
+        var paragraphStart: String.Index?
+        var paragraphEnd: String.Index?
+        var insideFence = false
+        for line in lines.dropFirst(scanStart) {
+            let value = trimmed(source, line: line)
+            if value.hasPrefix("```") || value.hasPrefix("~~~") {
+                if paragraphStart != nil { break }
+                insideFence.toggle()
+                continue
+            }
+            if insideFence { continue }
+            if value.isEmpty {
+                if paragraphStart != nil { break }
+                continue
+            }
+            if value == "---"
+                || value.hasPrefix("#")
+                || value.hasPrefix("-")
+                || value.hasPrefix("*")
+                || value.hasPrefix(">") {
+                if paragraphStart != nil { break }
+                continue
+            }
+            paragraphStart = paragraphStart ?? line.content.lowerBound
+            paragraphEnd = line.content.upperBound
+        }
+
+        guard let paragraphStart, let paragraphEnd else { return nil }
+        return String(source[paragraphStart..<paragraphEnd])
+    }
+
+    private struct SourceLine {
+        let content: Range<String.Index>
+    }
+
+    private static func sourceLines(_ source: String) -> [SourceLine] {
+        var lines: [SourceLine] = []
+        var start = source.startIndex
+        var cursor = start
+        while cursor < source.endIndex {
+            if source[cursor].isNewline {
+                lines.append(SourceLine(content: start..<cursor))
+                cursor = source.index(after: cursor)
+                start = cursor
+            } else {
+                cursor = source.index(after: cursor)
+            }
+        }
+        lines.append(SourceLine(content: start..<source.endIndex))
+        return lines
+    }
+
+    private static func trimmed(_ source: String, line: SourceLine) -> String {
+        source[line.content].trimmingCharacters(in: .whitespaces)
     }
 }

@@ -49,7 +49,7 @@ public final class SecurityScopedBookmarkAdapter: BookmarkDataCreating, @uncheck
     }
 }
 
-public final class AccessLease {
+public final class AccessLease: @unchecked Sendable {
     private let lock = NSLock()
     private var closeAction: (() -> Void)?
 
@@ -70,7 +70,7 @@ public final class AccessLease {
     }
 }
 
-public struct AuthorizedRootAccess {
+public struct AuthorizedRootAccess: Sendable {
     public let root: AuthorizedRootSnapshot
     public let lease: AccessLease
 }

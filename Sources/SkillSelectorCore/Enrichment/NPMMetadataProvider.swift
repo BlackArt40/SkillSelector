@@ -2,11 +2,22 @@ import Foundation
 
 public struct NPMMetadataProvider: MetadataProvider {
     private let executableURL: URL
+    private let authorizedHomeURL: URL?
+    private let toolAccess: ToolAccess?
     private let runner: any CommandRunning
     private let decoder = JSONDecoder()
 
     public init(executableURL: URL, runner: any CommandRunning = ExternalCommandRunner()) {
         self.executableURL = executableURL.standardizedFileURL
+        self.authorizedHomeURL = nil
+        self.toolAccess = nil
+        self.runner = runner
+    }
+
+    public init(toolAccess: ToolAccess, runner: any CommandRunning = ExternalCommandRunner()) {
+        self.executableURL = toolAccess.executableURL
+        self.authorizedHomeURL = toolAccess.authorizedHomeURL
+        self.toolAccess = toolAccess
         self.runner = runner
     }
 
@@ -43,7 +54,7 @@ public struct NPMMetadataProvider: MetadataProvider {
                 skillSubdirectory: nil,
                 description: description,
                 evidenceURL: evidenceURL,
-                sourceBinding: "npm:\(result.name)"
+                sourceBinding: nil
             ))
         }
         return candidates
@@ -53,6 +64,7 @@ public struct NPMMetadataProvider: MetadataProvider {
         let result = try await runner.run(ExternalCommand(
             executableURL: executableURL,
             arguments: arguments,
+            authorizedHomeURL: authorizedHomeURL,
             timeout: 30,
             maximumOutputBytes: 1_048_576
         ))

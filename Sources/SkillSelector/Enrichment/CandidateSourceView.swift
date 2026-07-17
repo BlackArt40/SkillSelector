@@ -109,11 +109,13 @@ struct CandidateSourceView: View {
 
     private var controls: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Toggle(
-                L10n.string("Bind as Update Source"),
-                isOn: $bindAsUpdateSource
-            )
-            .help(L10n.string("Require separate confirmation before binding the selected source."))
+            if selectedCandidate?.sourceBinding != nil {
+                Toggle(
+                    L10n.string("Bind as Update Source"),
+                    isOn: $bindAsUpdateSource
+                )
+                .help(L10n.string("Require separate confirmation before binding the selected source."))
+            }
 
             HStack {
                 Button(L10n.string("Cancel"), role: .cancel, action: onCancel)
@@ -137,7 +139,13 @@ struct CandidateSourceView: View {
 
     private func apply(bindSource: Bool) {
         guard group.candidates.indices.contains(selectedIndex) else { return }
-        onApply(group.candidates[selectedIndex], bindSource)
+        let candidate = group.candidates[selectedIndex]
+        onApply(candidate, bindSource && candidate.sourceBinding != nil)
+    }
+
+    private var selectedCandidate: MetadataCandidate? {
+        guard group.candidates.indices.contains(selectedIndex) else { return nil }
+        return group.candidates[selectedIndex]
     }
 
     private func providerName(_ provider: MetadataProviderKind) -> String {

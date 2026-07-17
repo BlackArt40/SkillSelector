@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 import XCTest
 @testable import SkillSelectorCore
 
@@ -217,6 +218,79 @@ final class ExternalCommandRunnerTests: XCTestCase {
         XCTAssertEqual(adapter.accessEvents, ["start", "stop"])
         XCTAssertFalse(adapter.isAccessing)
         XCTAssertEqual(runner.commands.map(\.arguments), [["--version"]])
+    }
+
+    func testToolAccessKeepsExecutableAndHomeLeasesForBothProviders() async throws {
+        let npmScript = try makeExecutable("#!/bin/sh\nexit 0\n", name: "npm")
+        let ghScript = try makeExecutable("#!/bin/sh\nexit 0\n", name: "gh")
+        let home = fixture.appendingPathComponent("home")
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        let homeAdapter = FixtureBookmarkAdapter()
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(
+            for: SkillRecord.self,
+            AuthorizedRootRecord.self,
+            configurations: configuration
+        )
+        let bookmarks = BookmarkStore(container: container, adapter: homeAdapter)
+        let homeRoot = try bookmarks.save(url: home, kind: .home)
+        let homeAccess = try bookmarks.resolve(id: homeRoot.id)
+        let adapter = FixtureBookmarkAdapter()
+        let store = FixtureToolStore()
+        store.saved[.npm] = Data(npmScript.path.utf8)
+        store.saved[.gh] = Data(ghScript.path.utf8)
+        let locator = ToolLocator(
+            store: store,
+            bookmarkAdapter: adapter,
+            runner: FixtureRunner { _ in commandResult(stdout: "fake 1.0\n") },
+            searchDirectories: []
+        )
+
+        let result = await locator.openAccess(.npm, authorizedHomeAccess: homeAccess)
+        let access = try XCTUnwrap(result.access)
+        XCTAssertTrue(adapter.isAccessing)
+        XCTAssertTrue(homeAdapter.isAccessing)
+        let providerRunner = FixtureRunner { command in
+            XCTAssertTrue(adapter.isAccessing)
+            XCTAssertTrue(homeAdapter.isAccessing)
+            XCTAssertEqual(command.authorizedHomeURL, home.standardizedFileURL)
+            return commandResult(stdout: "[]")
+        }
+
+        let candidates = try await NPMMetadataProvider(
+            toolAccess: access,
+            runner: providerRunner
+        ).candidates(for: MetadataQuery(name: "demo"))
+
+        XCTAssertEqual(candidates, [])
+        XCTAssertTrue(adapter.isAccessing)
+        XCTAssertTrue(homeAdapter.isAccessing)
+        access.close()
+        XCTAssertFalse(adapter.isAccessing)
+        XCTAssertFalse(homeAdapter.isAccessing)
+        XCTAssertEqual(adapter.accessEvents, ["start", "stop"])
+        XCTAssertEqual(homeAdapter.accessEvents, ["start", "stop"])
+
+        let secondHomeAccess = try bookmarks.resolve(id: homeRoot.id)
+        let ghResult = await locator.openAccess(.gh, authorizedHomeAccess: secondHomeAccess)
+        let ghAccess = try XCTUnwrap(ghResult.access)
+        let ghRunner = FixtureRunner { command in
+            XCTAssertTrue(adapter.isAccessing)
+            XCTAssertTrue(homeAdapter.isAccessing)
+            XCTAssertEqual(command.authorizedHomeURL, home.standardizedFileURL)
+            return commandResult(stdout: "[]")
+        }
+
+        let ghCandidates = try await GitHubMetadataProvider(
+            toolAccess: ghAccess,
+            runner: ghRunner
+        ).candidates(for: MetadataQuery(name: "demo"))
+        XCTAssertEqual(ghCandidates, [])
+        ghAccess.close()
+        XCTAssertFalse(adapter.isAccessing)
+        XCTAssertFalse(homeAdapter.isAccessing)
+        XCTAssertEqual(adapter.accessEvents, ["start", "stop", "start", "stop"])
+        XCTAssertEqual(homeAdapter.accessEvents, ["start", "stop", "start", "stop"])
     }
 
     func testToolLocatorClassifiesGhAuthOutcomes() async throws {

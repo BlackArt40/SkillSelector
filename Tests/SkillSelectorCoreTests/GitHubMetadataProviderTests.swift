@@ -67,6 +67,24 @@ final class GitHubMetadataProviderTests: XCTestCase {
         ])
     }
 
+    func testReadmeFallbackPreservesExactMultilineSourceSlice() async throws {
+        let runner = MetadataFixtureRunner(results: [
+            .success(result(stdout: #"[{"path":"SKILL.md","repository":{"nameWithOwner":"acme/demo"},"url":"https://github.com/acme/demo/blob/main/SKILL.md"}]"#)),
+            .success(result(stdout: "# Demo\n")),
+            .success(result(stdout: #"{"description":null,"html_url":"https://github.com/acme/demo"}"#)),
+            .success(result(stdout: "# Demo\r\n\r\nFirst source line\r\n  indented continuation\r\nthird source line\r\n\r\n## Install\r\n")),
+        ])
+        let provider = GitHubMetadataProvider(executableURL: URL(fileURLWithPath: "/usr/bin/gh"), runner: runner)
+
+        let candidates = try await provider.candidates(for: MetadataQuery(name: "demo"))
+        let candidate = try XCTUnwrap(candidates.first)
+
+        XCTAssertEqual(
+            candidate.description,
+            "First source line\r\n  indented continuation\r\nthird source line"
+        )
+    }
+
     func testEmptySearchReturnsNoCandidates() async throws {
         let runner = MetadataFixtureRunner(results: [.success(result(stdout: "[]"))])
         let provider = GitHubMetadataProvider(executableURL: URL(fileURLWithPath: "/usr/bin/gh"), runner: runner)
@@ -118,6 +136,22 @@ final class GitHubMetadataProviderTests: XCTestCase {
         let candidates = try await provider.candidates(for: MetadataQuery(name: "demo"))
         XCTAssertEqual(candidates, [])
         XCTAssertEqual(runner.commands.count, 1)
+    }
+
+    func testQualifierLikeNamesAreRejectedWithoutRunningACommand() async {
+        for name in ["language:swift", "org:foo"] {
+            let runner = MetadataFixtureRunner(results: [])
+            let provider = GitHubMetadataProvider(
+                executableURL: URL(fileURLWithPath: "/usr/bin/gh"),
+                runner: runner
+            )
+
+            await XCTAssertThrowsMetadataError(
+                try await provider.candidates(for: MetadataQuery(name: name)),
+                expected: .invalidQuery
+            )
+            XCTAssertEqual(runner.commands, [])
+        }
     }
 }
 

@@ -197,10 +197,10 @@ final class AppModel {
                 value: candidate.description,
                 provenance: "\(candidate.provider.rawValue):\(candidate.evidenceURL.absoluteString)"
             )
-            if bindSource {
+            if bindSource, let sourceBinding = candidate.sourceBinding {
                 _ = try index.setSourceBinding(
                     path: group.skillPath,
-                    value: candidate.sourceBinding
+                    value: sourceBinding
                 )
             }
             try reloadSnapshot()
@@ -450,23 +450,63 @@ final class AppModel {
         isEnriching = true
         defer { isEnriching = false }
 
-        let gh = await toolLocator.locate(ToolKind.gh.rawValue)
-        let npm = await toolLocator.locate(ToolKind.npm.rawValue)
+        guard let bookmarks else {
+            enrichmentError = L10n.string("No supported metadata tool is available.")
+            return
+        }
+        let homeRoot: AuthorizedRootSnapshot
+        do {
+            guard let resolvedHomeRoot = try bookmarks.roots().first(where: { $0.kind == .home }) else {
+                enrichmentError = L10n.string("No supported metadata tool is available.")
+                return
+            }
+            homeRoot = resolvedHomeRoot
+        } catch {
+            enrichmentError = String(describing: error)
+            return
+        }
+        let ghHomeAccess: AuthorizedRootAccess
+        do {
+            ghHomeAccess = try bookmarks.resolve(id: homeRoot.id)
+        } catch {
+            enrichmentError = String(describing: error)
+            return
+        }
+        let gh = await toolLocator.openAccess(
+            .gh,
+            authorizedHomeAccess: ghHomeAccess
+        )
+        let npmHomeAccess: AuthorizedRootAccess
+        do {
+            npmHomeAccess = try bookmarks.resolve(id: homeRoot.id)
+        } catch {
+            gh.access?.close()
+            enrichmentError = String(describing: error)
+            return
+        }
+        let npm = await toolLocator.openAccess(
+            .npm,
+            authorizedHomeAccess: npmHomeAccess
+        )
+        defer {
+            gh.access?.close()
+            npm.access?.close()
+        }
         var providers: [any MetadataProvider] = []
-        if gh.state == .available, let executableURL = gh.executableURL {
+        if let access = gh.access {
             providers.append(GitHubMetadataProvider(
-                executableURL: executableURL,
+                toolAccess: access,
                 runner: commandRunner
             ))
         }
-        if npm.state == .available, let executableURL = npm.executableURL {
+        if let access = npm.access {
             providers.append(NPMMetadataProvider(
-                executableURL: executableURL,
+                toolAccess: access,
                 runner: commandRunner
             ))
         }
         guard !providers.isEmpty else {
-            enrichmentError = gh.state == .unauthenticated
+            enrichmentError = gh.location.state == .unauthenticated
                 ? L10n.string("GitHub CLI is not authenticated and npm is unavailable.")
                 : L10n.string("No supported metadata tool is available.")
             return
