@@ -1,14 +1,6 @@
 import Darwin
 import Foundation
 
-// Swift does not import the variadic pointer overload used by F_GETPATH.
-@_silgen_name("fcntl")
-private func fcntlWithPointer(
-    _ descriptor: Int32,
-    _ command: Int32,
-    _ pointer: UnsafeMutableRawPointer
-) -> Int32
-
 public struct SkillDocumentRequest: Hashable, Sendable {
     public let installationURL: URL
     public let resolvedTargetURL: URL?
@@ -50,21 +42,32 @@ public enum SkillDocumentReaderError: Error, Equatable, Sendable {
 }
 
 struct SkillDocumentFileMetadata {
+    let isDirectory: Bool
     let isRegularFile: Bool
     let byteCount: Int
 }
 
 struct SkillDocumentFileOperations: @unchecked Sendable {
-    let openReadOnly: (URL) throws -> Int32
+    let openDirectory: (URL) throws -> Int32
+    let openEntry: (Int32, String) throws -> Int32
     let metadata: (Int32) throws -> SkillDocumentFileMetadata
     let canonicalURL: (Int32) throws -> URL
     let readChunk: (Int32, Int) throws -> Data
     let close: (Int32) -> Void
 
     static let live = SkillDocumentFileOperations(
-        openReadOnly: { url in
+        openDirectory: { url in
             let descriptor = url.path.withCString {
-                Darwin.open($0, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
+                Darwin.open($0, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+            }
+            guard descriptor >= 0 else {
+                throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+            }
+            return descriptor
+        },
+        openEntry: { directoryDescriptor, filename in
+            let descriptor = filename.withCString {
+                Darwin.openat(directoryDescriptor, $0, O_RDONLY | O_CLOEXEC)
             }
             guard descriptor >= 0 else {
                 throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
@@ -77,6 +80,7 @@ struct SkillDocumentFileOperations: @unchecked Sendable {
                 throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
             }
             return SkillDocumentFileMetadata(
+                isDirectory: status.st_mode & S_IFMT == S_IFDIR,
                 isRegularFile: status.st_mode & S_IFMT == S_IFREG,
                 byteCount: max(0, Int(status.st_size))
             )
@@ -84,7 +88,11 @@ struct SkillDocumentFileOperations: @unchecked Sendable {
         canonicalURL: { descriptor in
             var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
             let result = buffer.withUnsafeMutableBufferPointer { pointer in
-                fcntlWithPointer(descriptor, F_GETPATH, pointer.baseAddress!)
+                Darwin.fcntl(
+                    descriptor,
+                    F_GETPATH,
+                    UnsafeMutableRawPointer(pointer.baseAddress!)
+                )
             }
             guard result != -1 else {
                 throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
@@ -128,61 +136,82 @@ public struct SkillDocumentReader {
     }
 
     public func read(_ request: SkillDocumentRequest) throws -> SkillDocument {
-        let prepared = try prepare(request)
-        return try withOpenedFile(prepared) { descriptor, metadata, canonicalURL in
-            guard metadata.byteCount <= Self.maximumRenderBytes else {
-                throw SkillDocumentReaderError.tooLarge(
-                    limit: Self.maximumRenderBytes,
-                    actual: metadata.byteCount
-                )
-            }
-
-            var data = Data()
-            data.reserveCapacity(min(metadata.byteCount, Self.maximumRenderBytes))
-            while data.count <= Self.maximumRenderBytes {
-                let remaining = Self.maximumRenderBytes + 1 - data.count
-                let chunk: Data
-                do {
-                    chunk = try operations.readChunk(descriptor, remaining)
-                } catch {
-                    throw SkillDocumentReaderError.unreadableFile
+        let prepared = try prepareInstallation(request)
+        return try withOpenedDirectory(prepared) { directoryDescriptor in
+            try withOpenedEntry(
+                directoryDescriptor: directoryDescriptor,
+                filename: request.entryFilename,
+                authorizedResolvedRoot: prepared.authorizedResolvedRoot
+            ) { entryDescriptor, metadata, canonicalURL in
+                guard metadata.byteCount <= Self.maximumRenderBytes else {
+                    throw SkillDocumentReaderError.tooLarge(
+                        limit: Self.maximumRenderBytes,
+                        actual: metadata.byteCount
+                    )
                 }
-                if chunk.isEmpty { break }
-                data.append(chunk)
+
+                var data = Data()
+                data.reserveCapacity(min(metadata.byteCount, Self.maximumRenderBytes))
+                while data.count <= Self.maximumRenderBytes {
+                    let remaining = Self.maximumRenderBytes + 1 - data.count
+                    let chunk: Data
+                    do {
+                        chunk = try operations.readChunk(entryDescriptor, remaining)
+                    } catch {
+                        throw SkillDocumentReaderError.unreadableFile
+                    }
+                    if chunk.isEmpty { break }
+                    data.append(chunk)
+                }
+                guard data.count <= Self.maximumRenderBytes else {
+                    throw SkillDocumentReaderError.tooLarge(
+                        limit: Self.maximumRenderBytes,
+                        actual: data.count
+                    )
+                }
+                guard let source = String(data: data, encoding: .utf8) else {
+                    throw SkillDocumentReaderError.invalidUTF8
+                }
+                return SkillDocument(source: source, fileURL: canonicalURL)
             }
-            guard data.count <= Self.maximumRenderBytes else {
-                throw SkillDocumentReaderError.tooLarge(
-                    limit: Self.maximumRenderBytes,
-                    actual: data.count
-                )
-            }
-            guard let source = String(data: data, encoding: .utf8) else {
-                throw SkillDocumentReaderError.invalidUTF8
-            }
-            return SkillDocument(source: source, fileURL: canonicalURL)
         }
     }
 
     public func validatedEntryURL(_ request: SkillDocumentRequest) throws -> URL {
-        let prepared = try prepare(request)
-        return try withOpenedFile(prepared) { _, _, canonicalURL in canonicalURL }
+        let prepared = try prepareInstallation(request)
+        return try withOpenedDirectory(prepared) { directoryDescriptor in
+            try withOpenedEntry(
+                directoryDescriptor: directoryDescriptor,
+                filename: request.entryFilename,
+                authorizedResolvedRoot: prepared.authorizedResolvedRoot
+            ) { _, _, canonicalURL in canonicalURL }
+        }
     }
 
-    private func prepare(_ request: SkillDocumentRequest) throws -> PreparedEntry {
+    private func prepareInstallation(
+        _ request: SkillDocumentRequest
+    ) throws -> PreparedInstallation {
         guard Self.isSimpleEntryFilename(request.entryFilename) else {
             throw SkillDocumentReaderError.invalidEntryFilename(request.entryFilename)
         }
 
         let installation = request.installationURL.standardizedFileURL
+        let standardizedRoots = request.authorizedRootURLs.map(\.standardizedFileURL)
+        guard standardizedRoots.contains(where: { Self.contains(installation, in: $0) }) else {
+            throw SkillDocumentReaderError.unauthorizedInstallationPath
+        }
+
         let resolvedInstallation = installation.resolvingSymlinksInPath().standardizedFileURL
         let installationIsSymbolicLink = (try? installation.resourceValues(
             forKeys: [.isSymbolicLinkKey]
         ).isSymbolicLink) == true
-        if installationIsSymbolicLink && request.resolvedTargetURL == nil {
+        if installationIsSymbolicLink != (request.resolvedTargetURL != nil) {
             throw SkillDocumentReaderError.invalidResolvedTarget
         }
-        if let expectedTarget = request.resolvedTargetURL?.standardizedFileURL,
-           expectedTarget.path != resolvedInstallation.path {
+        let expectedCanonicalURL = request.resolvedTargetURL?.standardizedFileURL
+            ?? resolvedInstallation
+        if request.resolvedTargetURL != nil,
+           expectedCanonicalURL.path != resolvedInstallation.path {
             throw SkillDocumentReaderError.invalidResolvedTarget
         }
 
@@ -195,34 +224,58 @@ public struct SkillDocumentReader {
             }
             .first { root in
                 Self.contains(installation, in: root.standardized)
-                    && Self.contains(resolvedInstallation, in: root.resolved)
+                    && Self.contains(expectedCanonicalURL, in: root.resolved)
             }
         guard let authorizedPair else {
             throw SkillDocumentReaderError.unauthorizedInstallationPath
         }
 
-        let entryURL = installation.appending(path: request.entryFilename).standardizedFileURL
-        guard Self.contains(entryURL, in: installation) else {
-            throw SkillDocumentReaderError.invalidEntryFilename(request.entryFilename)
-        }
-        let resolvedEntryURL = entryURL.resolvingSymlinksInPath().standardizedFileURL
-        guard Self.contains(resolvedEntryURL, in: authorizedPair.resolved) else {
-            throw SkillDocumentReaderError.entryEscapesAuthorizedRoot
-        }
-
-        return PreparedEntry(
-            candidateURL: resolvedEntryURL,
+        return PreparedInstallation(
+            directoryCandidateURL: installationIsSymbolicLink
+                ? resolvedInstallation
+                : installation,
+            expectedCanonicalURL: expectedCanonicalURL,
             authorizedResolvedRoot: authorizedPair.resolved
         )
     }
 
-    private func withOpenedFile<Result>(
-        _ prepared: PreparedEntry,
+    private func withOpenedDirectory<Result>(
+        _ prepared: PreparedInstallation,
+        operation: (Int32) throws -> Result
+    ) throws -> Result {
+        let descriptor: Int32
+        do {
+            descriptor = try operations.openDirectory(prepared.directoryCandidateURL)
+        } catch {
+            throw SkillDocumentReaderError.unreadableFile
+        }
+        defer { operations.close(descriptor) }
+
+        let metadata: SkillDocumentFileMetadata
+        let canonicalURL: URL
+        do {
+            metadata = try operations.metadata(descriptor)
+            canonicalURL = try operations.canonicalURL(descriptor).standardizedFileURL
+        } catch {
+            throw SkillDocumentReaderError.unreadableFile
+        }
+        guard metadata.isDirectory,
+              canonicalURL.path == prepared.expectedCanonicalURL.path,
+              Self.contains(canonicalURL, in: prepared.authorizedResolvedRoot) else {
+            throw SkillDocumentReaderError.invalidResolvedTarget
+        }
+        return try operation(descriptor)
+    }
+
+    private func withOpenedEntry<Result>(
+        directoryDescriptor: Int32,
+        filename: String,
+        authorizedResolvedRoot: URL,
         operation: (Int32, SkillDocumentFileMetadata, URL) throws -> Result
     ) throws -> Result {
         let descriptor: Int32
         do {
-            descriptor = try operations.openReadOnly(prepared.candidateURL)
+            descriptor = try operations.openEntry(directoryDescriptor, filename)
         } catch {
             throw SkillDocumentReaderError.unreadableFile
         }
@@ -239,7 +292,7 @@ public struct SkillDocumentReader {
         guard metadata.isRegularFile else {
             throw SkillDocumentReaderError.notRegularFile
         }
-        guard Self.contains(canonicalURL, in: prepared.authorizedResolvedRoot) else {
+        guard Self.contains(canonicalURL, in: authorizedResolvedRoot) else {
             throw SkillDocumentReaderError.entryEscapesAuthorizedRoot
         }
         return try operation(descriptor, metadata, canonicalURL)
@@ -260,8 +313,9 @@ public struct SkillDocumentReader {
             && Array(candidateComponents.prefix(rootComponents.count)) == rootComponents
     }
 
-    private struct PreparedEntry {
-        let candidateURL: URL
+    private struct PreparedInstallation {
+        let directoryCandidateURL: URL
+        let expectedCanonicalURL: URL
         let authorizedResolvedRoot: URL
     }
 }

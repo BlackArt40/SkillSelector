@@ -199,7 +199,8 @@ final class SkillDocumentReaderTests: XCTestCase {
             Data([0x61]),
         ]
         let reader = SkillDocumentReader(operations: SkillDocumentFileOperations(
-            openReadOnly: live.openReadOnly,
+            openDirectory: live.openDirectory,
+            openEntry: live.openEntry,
             metadata: live.metadata,
             canonicalURL: live.canonicalURL,
             readChunk: { _, byteCount in
@@ -229,7 +230,8 @@ final class SkillDocumentReaderTests: XCTestCase {
         let live = SkillDocumentFileOperations.live
         var chunks = [Data("ab".utf8), Data("c".utf8), Data("def".utf8), Data()]
         let reader = SkillDocumentReader(operations: SkillDocumentFileOperations(
-            openReadOnly: live.openReadOnly,
+            openDirectory: live.openDirectory,
+            openEntry: live.openEntry,
             metadata: live.metadata,
             canonicalURL: live.canonicalURL,
             readChunk: { _, _ in chunks.removeFirst() },
@@ -244,25 +246,65 @@ final class SkillDocumentReaderTests: XCTestCase {
     }
 
     func testRejectsCanonicalPathThatEscapesWhenDirectoryChangesBeforeOpen() throws {
-        let installation = try makeSkill(name: "swapped", source: "authorized")
-        let backup = fixture.appending(path: "swapped-backup")
+        let parent = fixture.appending(path: "parent")
+        let installation = try makeSkill(parent: parent, name: "swapped", source: "authorized")
+        let backup = fixture.appending(path: "parent-backup")
         let outside = FileManager.default.temporaryDirectory
             .appending(path: "SkillDocumentReaderOutside-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: outside) }
-        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
-        try Data("outside".utf8).write(to: outside.appending(path: "SKILL.md"))
+        _ = try makeSkill(parent: outside, name: "swapped", source: "outside")
 
         let live = SkillDocumentFileOperations.live
         var didSwap = false
         var closeCount = 0
         let reader = SkillDocumentReader(operations: SkillDocumentFileOperations(
-            openReadOnly: { url in
+            openDirectory: { url in
                 if !didSwap {
                     didSwap = true
-                    try FileManager.default.moveItem(at: installation, to: backup)
-                    try FileManager.default.createSymbolicLink(at: installation, withDestinationURL: outside)
+                    try FileManager.default.moveItem(at: parent, to: backup)
+                    try FileManager.default.createSymbolicLink(at: parent, withDestinationURL: outside)
                 }
-                return try live.openReadOnly(url)
+                return try live.openDirectory(url)
+            },
+            openEntry: live.openEntry,
+            metadata: live.metadata,
+            canonicalURL: live.canonicalURL,
+            readChunk: live.readChunk,
+            close: { descriptor in
+                closeCount += 1
+                live.close(descriptor)
+            }
+        ))
+
+        XCTAssertThrowsError(try reader.read(request(installation: installation))) { error in
+            XCTAssertEqual(error as? SkillDocumentReaderError, .invalidResolvedTarget)
+        }
+        XCTAssertEqual(closeCount, 1)
+    }
+
+    func testRejectsEntrySymlinkSwappedOutsideBeforeOpenAt() throws {
+        let original = fixture.appending(path: "original.md")
+        try Data("authorized".utf8).write(to: original)
+        let outside = FileManager.default.temporaryDirectory
+            .appending(path: "SkillDocumentReaderOutside-\(UUID().uuidString).md")
+        defer { try? FileManager.default.removeItem(at: outside) }
+        try Data("outside".utf8).write(to: outside)
+        let installation = try makeSkill(name: "entry-swap", source: nil)
+        let entry = installation.appending(path: "SKILL.md")
+        try FileManager.default.createSymbolicLink(at: entry, withDestinationURL: original)
+
+        let live = SkillDocumentFileOperations.live
+        var didSwap = false
+        var closeCount = 0
+        let reader = SkillDocumentReader(operations: SkillDocumentFileOperations(
+            openDirectory: live.openDirectory,
+            openEntry: { directoryDescriptor, filename in
+                if !didSwap {
+                    didSwap = true
+                    try FileManager.default.removeItem(at: entry)
+                    try FileManager.default.createSymbolicLink(at: entry, withDestinationURL: outside)
+                }
+                return try live.openEntry(directoryDescriptor, filename)
             },
             metadata: live.metadata,
             canonicalURL: live.canonicalURL,
@@ -276,30 +318,26 @@ final class SkillDocumentReaderTests: XCTestCase {
         XCTAssertThrowsError(try reader.read(request(installation: installation))) { error in
             XCTAssertEqual(error as? SkillDocumentReaderError, .entryEscapesAuthorizedRoot)
         }
-        XCTAssertEqual(closeCount, 1)
+        XCTAssertEqual(closeCount, 2)
     }
 
-    func testEntrySymlinkSwapAfterResolutionStillReadsOriginalAuthorizedTarget() throws {
-        let original = fixture.appending(path: "original.md")
-        try Data("authorized".utf8).write(to: original)
-        let outside = FileManager.default.temporaryDirectory
-            .appending(path: "SkillDocumentReaderOutside-\(UUID().uuidString).md")
-        defer { try? FileManager.default.removeItem(at: outside) }
-        try Data("outside".utf8).write(to: outside)
-        let installation = try makeSkill(name: "entry-swap", source: nil)
-        let entry = installation.appending(path: "SKILL.md")
-        try FileManager.default.createSymbolicLink(at: entry, withDestinationURL: original)
+    func testInstallationSymlinkSwapBeforeEntryOpenStillReadsRecordedTarget() throws {
+        let targetA = try makeSkill(name: "target-a", source: "A")
+        let targetB = try makeSkill(name: "target-b", source: "B")
+        let link = fixture.appending(path: "switched-installation")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: targetA)
 
         let live = SkillDocumentFileOperations.live
         var didSwap = false
         let reader = SkillDocumentReader(operations: SkillDocumentFileOperations(
-            openReadOnly: { url in
+            openDirectory: live.openDirectory,
+            openEntry: { directoryDescriptor, filename in
                 if !didSwap {
                     didSwap = true
-                    try FileManager.default.removeItem(at: entry)
-                    try FileManager.default.createSymbolicLink(at: entry, withDestinationURL: outside)
+                    try FileManager.default.removeItem(at: link)
+                    try FileManager.default.createSymbolicLink(at: link, withDestinationURL: targetB)
                 }
-                return try live.openReadOnly(url)
+                return try live.openEntry(directoryDescriptor, filename)
             },
             metadata: live.metadata,
             canonicalURL: live.canonicalURL,
@@ -308,8 +346,8 @@ final class SkillDocumentReaderTests: XCTestCase {
         ))
 
         XCTAssertEqual(
-            try reader.read(request(installation: installation)).source,
-            "authorized"
+            try reader.read(request(installation: link, resolvedTarget: targetA)).source,
+            "A"
         )
     }
 
