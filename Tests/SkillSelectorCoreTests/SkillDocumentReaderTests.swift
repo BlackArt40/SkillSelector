@@ -92,6 +92,10 @@ final class SkillDocumentReaderTests: XCTestCase {
             try SkillDocumentReader().read(request(installation: installation)).source,
             "shared source"
         )
+        XCTAssertEqual(
+            try SkillDocumentReader().validatedEntryURL(request(installation: installation)),
+            target.standardizedFileURL
+        )
     }
 
     func testReadsSymlinkInstallationWithMatchingAuthorizedResolvedTarget() throws {
@@ -104,7 +108,7 @@ final class SkillDocumentReaderTests: XCTestCase {
         )
 
         XCTAssertEqual(document.source, "linked installation")
-        XCTAssertEqual(document.fileURL, link.appending(path: "SKILL.md").standardizedFileURL)
+        XCTAssertEqual(document.fileURL, target.appending(path: "SKILL.md").standardizedFileURL)
     }
 
     func testRejectsSymlinkInstallationWhenRecordedTargetDoesNotMatchActualTarget() throws {
@@ -188,11 +192,22 @@ final class SkillDocumentReaderTests: XCTestCase {
 
     func testBoundsReadAndRejectsFileThatGrowsAfterMetadataCheck() throws {
         let installation = try makeSkill(source: "initially small")
-        var requestedByteCount = 0
-        let reader = SkillDocumentReader { _, byteCount in
-            requestedByteCount = byteCount
-            return Data(repeating: 0x61, count: byteCount)
-        }
+        let live = SkillDocumentFileOperations.live
+        var requestedByteCounts: [Int] = []
+        var chunks = [
+            Data(repeating: 0x61, count: SkillDocumentReader.maximumRenderBytes),
+            Data([0x61]),
+        ]
+        let reader = SkillDocumentReader(operations: SkillDocumentFileOperations(
+            openReadOnly: live.openReadOnly,
+            metadata: live.metadata,
+            canonicalURL: live.canonicalURL,
+            readChunk: { _, byteCount in
+                requestedByteCounts.append(byteCount)
+                return chunks.removeFirst()
+            },
+            close: live.close
+        ))
 
         XCTAssertThrowsError(try reader.read(request(installation: installation))) { error in
             XCTAssertEqual(
@@ -203,7 +218,99 @@ final class SkillDocumentReaderTests: XCTestCase {
                 )
             )
         }
-        XCTAssertEqual(requestedByteCount, SkillDocumentReader.maximumRenderBytes + 1)
+        XCTAssertEqual(
+            requestedByteCounts,
+            [SkillDocumentReader.maximumRenderBytes + 1, 1]
+        )
+    }
+
+    func testConcatenatesShortReadsUntilEOF() throws {
+        let installation = try makeSkill(source: "placeholder")
+        let live = SkillDocumentFileOperations.live
+        var chunks = [Data("ab".utf8), Data("c".utf8), Data("def".utf8), Data()]
+        let reader = SkillDocumentReader(operations: SkillDocumentFileOperations(
+            openReadOnly: live.openReadOnly,
+            metadata: live.metadata,
+            canonicalURL: live.canonicalURL,
+            readChunk: { _, _ in chunks.removeFirst() },
+            close: live.close
+        ))
+
+        XCTAssertEqual(
+            try reader.read(request(installation: installation)).source,
+            "abcdef"
+        )
+        XCTAssertTrue(chunks.isEmpty)
+    }
+
+    func testRejectsCanonicalPathThatEscapesWhenDirectoryChangesBeforeOpen() throws {
+        let installation = try makeSkill(name: "swapped", source: "authorized")
+        let backup = fixture.appending(path: "swapped-backup")
+        let outside = FileManager.default.temporaryDirectory
+            .appending(path: "SkillDocumentReaderOutside-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: outside) }
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        try Data("outside".utf8).write(to: outside.appending(path: "SKILL.md"))
+
+        let live = SkillDocumentFileOperations.live
+        var didSwap = false
+        var closeCount = 0
+        let reader = SkillDocumentReader(operations: SkillDocumentFileOperations(
+            openReadOnly: { url in
+                if !didSwap {
+                    didSwap = true
+                    try FileManager.default.moveItem(at: installation, to: backup)
+                    try FileManager.default.createSymbolicLink(at: installation, withDestinationURL: outside)
+                }
+                return try live.openReadOnly(url)
+            },
+            metadata: live.metadata,
+            canonicalURL: live.canonicalURL,
+            readChunk: live.readChunk,
+            close: { descriptor in
+                closeCount += 1
+                live.close(descriptor)
+            }
+        ))
+
+        XCTAssertThrowsError(try reader.read(request(installation: installation))) { error in
+            XCTAssertEqual(error as? SkillDocumentReaderError, .entryEscapesAuthorizedRoot)
+        }
+        XCTAssertEqual(closeCount, 1)
+    }
+
+    func testEntrySymlinkSwapAfterResolutionStillReadsOriginalAuthorizedTarget() throws {
+        let original = fixture.appending(path: "original.md")
+        try Data("authorized".utf8).write(to: original)
+        let outside = FileManager.default.temporaryDirectory
+            .appending(path: "SkillDocumentReaderOutside-\(UUID().uuidString).md")
+        defer { try? FileManager.default.removeItem(at: outside) }
+        try Data("outside".utf8).write(to: outside)
+        let installation = try makeSkill(name: "entry-swap", source: nil)
+        let entry = installation.appending(path: "SKILL.md")
+        try FileManager.default.createSymbolicLink(at: entry, withDestinationURL: original)
+
+        let live = SkillDocumentFileOperations.live
+        var didSwap = false
+        let reader = SkillDocumentReader(operations: SkillDocumentFileOperations(
+            openReadOnly: { url in
+                if !didSwap {
+                    didSwap = true
+                    try FileManager.default.removeItem(at: entry)
+                    try FileManager.default.createSymbolicLink(at: entry, withDestinationURL: outside)
+                }
+                return try live.openReadOnly(url)
+            },
+            metadata: live.metadata,
+            canonicalURL: live.canonicalURL,
+            readChunk: live.readChunk,
+            close: live.close
+        ))
+
+        XCTAssertEqual(
+            try reader.read(request(installation: installation)).source,
+            "authorized"
+        )
     }
 
     private func request(

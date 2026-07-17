@@ -42,7 +42,7 @@ struct MarkdownDocumentView: View {
 
             content
         }
-        .task(id: skill.path) {
+        .task(id: DocumentLoadIdentity(snapshot: skill)) {
             await load()
         }
     }
