@@ -27,6 +27,10 @@ struct CandidateSourceView: View {
             controls
         }
         .frame(minWidth: 620, idealWidth: 700, minHeight: 470, idealHeight: 540)
+        .onChange(of: selectedIndex) { _, _ in
+            bindAsUpdateSource = false
+            confirmsSourceBinding = false
+        }
         .confirmationDialog(
             L10n.string("Confirm Update Source"),
             isPresented: $confirmsSourceBinding,
@@ -124,14 +128,20 @@ struct CandidateSourceView: View {
                 }
                 Spacer()
                 Button(L10n.string("Apply Metadata")) {
-                    if bindAsUpdateSource {
+                    if SourceBindingDecision.shouldRequestConfirmation(
+                        bindAsUpdateSource: bindAsUpdateSource,
+                        sourceBinding: selectedCandidate?.sourceBinding
+                    ) {
                         confirmsSourceBinding = true
                     } else {
                         apply(bindSource: false)
                     }
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(group.candidates.indices.contains(selectedIndex) == false)
+                .disabled(
+                    group.candidates.indices.contains(selectedIndex) == false
+                        || (bindAsUpdateSource && selectedCandidate?.sourceBinding == nil)
+                )
             }
         }
         .padding(20)

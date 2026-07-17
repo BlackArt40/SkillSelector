@@ -40,6 +40,15 @@ public struct MetadataCandidate: Codable, Hashable, Sendable {
     }
 }
 
+public enum SourceBindingDecision {
+    public static func shouldRequestConfirmation(
+        bindAsUpdateSource: Bool,
+        sourceBinding: String?
+    ) -> Bool {
+        bindAsUpdateSource && sourceBinding != nil
+    }
+}
+
 public protocol MetadataProvider: Sendable {
     func candidates(for query: MetadataQuery) async throws -> [MetadataCandidate]
 }
