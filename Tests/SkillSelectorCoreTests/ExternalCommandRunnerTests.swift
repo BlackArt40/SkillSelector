@@ -44,6 +44,52 @@ final class ExternalCommandRunnerTests: XCTestCase {
         }
     }
 
+    func testStdoutOutputLimitTerminatesBackgroundChildHoldingPipe() async throws {
+        let pidFile = fixture.appendingPathComponent("stdout-limit-child.pid")
+        let script = try makeExecutable("#!/bin/sh\nsleep 30 &\nprintf '%s' \"$!\" > \"$1\"\nprintf '1234567890'\nwait\n")
+        let task = Task {
+            try await ExternalCommandRunner().run(ExternalCommand(
+                executableURL: script,
+                arguments: [pidFile.path],
+                timeout: 10,
+                maximumOutputBytes: 5
+            ))
+        }
+        let childPID = try await waitForPID(in: pidFile)
+        let started = Date()
+
+        await XCTAssertThrowsErrorAsync(try await task.value) { error in
+            XCTAssertEqual(error as? ExternalCommandError, .outputLimitExceeded(.stdout))
+        }
+
+        XCTAssertLessThan(Date().timeIntervalSince(started), 3)
+        let childGone = await waitUntilProcessIsGone(childPID)
+        XCTAssertTrue(childGone, "Background child \(childPID) survived stdout output limit")
+    }
+
+    func testStderrOutputLimitTerminatesBackgroundChildHoldingPipe() async throws {
+        let pidFile = fixture.appendingPathComponent("stderr-limit-child.pid")
+        let script = try makeExecutable("#!/bin/sh\nsleep 30 &\nprintf '%s' \"$!\" > \"$1\"\nprintf '1234567890' 1>&2\nwait\n")
+        let task = Task {
+            try await ExternalCommandRunner().run(ExternalCommand(
+                executableURL: script,
+                arguments: [pidFile.path],
+                timeout: 10,
+                maximumOutputBytes: 5
+            ))
+        }
+        let childPID = try await waitForPID(in: pidFile)
+        let started = Date()
+
+        await XCTAssertThrowsErrorAsync(try await task.value) { error in
+            XCTAssertEqual(error as? ExternalCommandError, .outputLimitExceeded(.stderr))
+        }
+
+        XCTAssertLessThan(Date().timeIntervalSince(started), 3)
+        let childGone = await waitUntilProcessIsGone(childPID)
+        XCTAssertTrue(childGone, "Background child \(childPID) survived stderr output limit")
+    }
+
     func testTimeoutTerminatesProcess() async throws {
         let script = try makeExecutable("#!/bin/sh\nsleep 5\n")
         let started = Date()

@@ -293,8 +293,10 @@ public final class ExternalCommandRunner: ExternalCommandRunning, @unchecked Sen
             var waitResult: pid_t
             repeat { waitResult = waitpid(spawnedProcessID, &status, 0) } while waitResult == -1 && errno == EINTR
             guard waitResult == spawnedProcessID else {
-                state.fail(.launchFailed(self.posixErrorDescription("waitpid")))
+                let error = ExternalCommandError.launchFailed(self.posixErrorDescription("waitpid"))
+                state.fail(error)
                 group.notify(queue: .global(qos: .utility)) {
+                    state.abort(error)
                     self.removeRun(runID)
                 }
                 return
