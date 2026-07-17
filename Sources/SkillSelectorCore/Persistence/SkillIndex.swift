@@ -2,6 +2,7 @@ import Foundation
 import SwiftData
 
 public enum SkillIndexError: Error, Equatable {
+    case skillNotFound(path: String)
     case invalidAgentProvenance(path: String)
     case unableToEncodeAgentProvenance(path: String)
 }
@@ -80,6 +81,19 @@ public final class SkillIndex {
             sortBy: [SortDescriptor(\.path)]
         )
         return try context.fetch(descriptor).map { try snapshot($0) }
+    }
+
+    @discardableResult
+    public func setCustomDescription(path: String, value: String?) throws -> SkillSnapshot {
+        let normalizedPath = URL(fileURLWithPath: path).standardizedFileURL.path
+        guard let record = try context.fetch(FetchDescriptor<SkillRecord>())
+            .first(where: { $0.path == normalizedPath }) else {
+            throw SkillIndexError.skillNotFound(path: normalizedPath)
+        }
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
+        record.customDescription = trimmed?.isEmpty == false ? trimmed : nil
+        try context.save()
+        return try snapshot(record)
     }
 
     private func recordsByPath() throws -> [String: SkillRecord] {

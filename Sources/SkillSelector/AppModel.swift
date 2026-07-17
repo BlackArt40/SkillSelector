@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Observation
 import SkillSelectorCore
@@ -7,6 +8,12 @@ enum RefreshState: Hashable {
     case running
     case finished(RefreshSummary)
     case failed(String)
+}
+
+enum AppModelDocumentError: Error {
+    case authorizationStorageUnavailable
+    case noAuthorizedRoot
+    case externalOpenFailed
 }
 
 struct SkillSelection: Hashable, Identifiable {
@@ -96,6 +103,46 @@ final class AppModel {
         !authorizedRoots.isEmpty
     }
 
+    func loadDocument(for skill: SkillSnapshot) async throws -> SkillDocument {
+        let access = try resolveDocumentAccess(for: skill)
+        defer { access.leases.forEach { $0.close() } }
+        let request = access.request
+
+        let readTask = Task.detached(priority: .userInitiated) {
+            try SkillDocumentReader().read(request)
+        }
+        return try await withTaskCancellationHandler {
+            try await readTask.value
+        } onCancel: {
+            readTask.cancel()
+        }
+    }
+
+    func revealDocumentInFinder(for skill: SkillSnapshot) throws {
+        try withDocumentAccess(for: skill) { request in
+            let fileURL = try SkillDocumentReader().validatedEntryURL(request)
+            NSWorkspace.shared.activateFileViewerSelecting([fileURL])
+        }
+    }
+
+    func openDocumentInDefaultEditor(for skill: SkillSnapshot) throws {
+        try withDocumentAccess(for: skill) { request in
+            let fileURL = try SkillDocumentReader().validatedEntryURL(request)
+            guard NSWorkspace.shared.open(fileURL) else {
+                throw AppModelDocumentError.externalOpenFailed
+            }
+        }
+    }
+
+    func saveCustomDescription(path: String, value: String?) throws {
+        _ = try index.setCustomDescription(path: path, value: value)
+        try reloadSnapshot()
+    }
+
+    func restoreDefaultDescription(path: String) throws {
+        try saveCustomDescription(path: path, value: nil)
+    }
+
     private func performRefresh(_ trigger: RefreshTrigger) async {
         refreshState = .running
         do {
@@ -128,5 +175,42 @@ final class AppModel {
            !updatedSnapshots.contains(where: { $0.path == selection.path }) {
             self.selection = nil
         }
+    }
+
+    private func withDocumentAccess<Result>(
+        for skill: SkillSnapshot,
+        operation: (SkillDocumentRequest) throws -> Result
+    ) throws -> Result {
+        let access = try resolveDocumentAccess(for: skill)
+        defer { access.leases.forEach { $0.close() } }
+        return try operation(access.request)
+    }
+
+    private func resolveDocumentAccess(
+        for skill: SkillSnapshot
+    ) throws -> (request: SkillDocumentRequest, leases: [AccessLease]) {
+        guard let bookmarks else {
+            throw AppModelDocumentError.authorizationStorageUnavailable
+        }
+
+        var accesses: [AuthorizedRootAccess] = []
+        var firstResolutionError: Error?
+        for rootID in skill.rootIDs {
+            do {
+                accesses.append(try bookmarks.resolve(id: rootID))
+            } catch {
+                firstResolutionError = firstResolutionError ?? error
+            }
+        }
+        guard !accesses.isEmpty else {
+            if let firstResolutionError { throw firstResolutionError }
+            throw AppModelDocumentError.noAuthorizedRoot
+        }
+        return (SkillDocumentRequest(
+            installationURL: URL(fileURLWithPath: skill.path),
+            resolvedTargetURL: skill.resolvedTarget.map(URL.init(fileURLWithPath:)),
+            entryFilename: skill.entryFilename,
+            authorizedRootURLs: accesses.map(\.root.url)
+        ), accesses.map(\.lease))
     }
 }

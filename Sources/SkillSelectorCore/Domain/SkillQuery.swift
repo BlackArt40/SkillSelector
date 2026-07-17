@@ -60,15 +60,7 @@ public struct SkillQuery: Hashable, Sendable {
     }
 
     public static func effectiveDescription(for snapshot: SkillSnapshot) -> String {
-        [
-            snapshot.customDescription,
-            snapshot.localDescription,
-            snapshot.enrichedDescription,
-        ]
-        .compactMap { value in
-            value?.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        .first { !$0.isEmpty } ?? snapshot.name
+        DescriptionResolver.resolve(DescriptionCandidates(snapshot: snapshot)).text
     }
 
     private func matchesScope(

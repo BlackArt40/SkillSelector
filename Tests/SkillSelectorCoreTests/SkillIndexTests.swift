@@ -4,6 +4,34 @@ import XCTest
 @testable import SkillSelectorCore
 
 final class SkillIndexTests: XCTestCase {
+    func testSetCustomDescriptionTrimsPersistsAndClearsOverride() throws {
+        let index = try makeIndex()
+        let path = "/tmp/project/.agents/skills/demo"
+        try index.apply(
+            report: report(
+                rootID: "project",
+                availability: .available,
+                installations: [skill(path: path)]
+            )
+        )
+
+        let customized = try index.setCustomDescription(path: path, value: "  My summary\n")
+        XCTAssertEqual(customized.customDescription, "My summary")
+        XCTAssertEqual(try index.skills().first?.customDescription, "My summary")
+
+        let restored = try index.setCustomDescription(path: path, value: " \n\t ")
+        XCTAssertNil(restored.customDescription)
+        XCTAssertNil(try index.skills().first?.customDescription)
+    }
+
+    func testSetCustomDescriptionThrowsTypedNotFoundError() throws {
+        let index = try makeIndex()
+
+        XCTAssertThrowsError(try index.setCustomDescription(path: "/missing", value: "summary")) { error in
+            XCTAssertEqual(error as? SkillIndexError, .skillNotFound(path: "/missing"))
+        }
+    }
+
     func testUnavailableRootRetainsRecordsAndMarksThemUnavailable() throws {
         let index = try makeIndex()
         try index.apply(
