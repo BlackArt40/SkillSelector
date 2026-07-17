@@ -1,5 +1,29 @@
 import Foundation
 
+protocol IndexRefresherFileSystem {
+    func isDirectory(_ url: URL) -> Bool
+    func contentsOfDirectory(at url: URL) -> [URL]
+    func resolvingSymlinks(in url: URL) -> URL
+}
+
+private struct LocalIndexRefresherFileSystem: IndexRefresherFileSystem {
+    func isDirectory(_ url: URL) -> Bool {
+        (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
+    }
+
+    func contentsOfDirectory(at url: URL) -> [URL] {
+        (try? FileManager.default.contentsOfDirectory(
+            at: url,
+            includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
+            options: []
+        )) ?? []
+    }
+
+    func resolvingSymlinks(in url: URL) -> URL {
+        url.resolvingSymlinksInPath().standardizedFileURL
+    }
+}
+
 public enum RefreshTrigger: Sendable {
     case startup
     case manual
@@ -24,6 +48,7 @@ public final class IndexRefresher {
     private let bookmarks: BookmarkStore
     private let scanner: SkillScanner
     private let index: SkillIndex
+    private let fileSystem: any IndexRefresherFileSystem
 
     public init(
         registry: AgentRegistry,
@@ -35,6 +60,21 @@ public final class IndexRefresher {
         self.bookmarks = bookmarks
         self.scanner = scanner
         self.index = index
+        fileSystem = LocalIndexRefresherFileSystem()
+    }
+
+    init(
+        registry: AgentRegistry,
+        bookmarks: BookmarkStore,
+        scanner: SkillScanner = SkillScanner(),
+        index: SkillIndex,
+        fileSystem: any IndexRefresherFileSystem
+    ) {
+        self.registry = registry
+        self.bookmarks = bookmarks
+        self.scanner = scanner
+        self.index = index
+        self.fileSystem = fileSystem
     }
 
     @MainActor
@@ -44,6 +84,7 @@ public final class IndexRefresher {
         let snapshots = try bookmarks.roots()
         var accesses: [AuthorizedRootAccess] = []
         var roots: [ScanRoot] = []
+        var absentRoots: [ScannedRoot] = []
         var unresolvedRoots: [ScannedRoot] = []
 
         defer {
@@ -54,7 +95,9 @@ public final class IndexRefresher {
             do {
                 let access = try bookmarks.resolve(id: snapshot.id)
                 accesses.append(access)
-                roots.append(contentsOf: scanRoots(for: access.root))
+                let plan = scanPlan(for: access.root)
+                roots.append(contentsOf: plan.scanRoots)
+                absentRoots.append(contentsOf: plan.absentRoots)
             } catch {
                 unresolvedRoots.append(
                     ScannedRoot(
@@ -69,68 +112,100 @@ public final class IndexRefresher {
         }
 
         var report = await scanner.scan(roots)
+        report.roots.append(contentsOf: absentRoots)
         report.roots.append(contentsOf: unresolvedRoots)
         try index.apply(report: report)
         let after = try index.skills()
         return summary(before: before, after: after)
     }
 
-    private func scanRoots(for root: AuthorizedRootSnapshot) -> [ScanRoot] {
+    private struct ScanPlan {
+        var scanRoots: [ScanRoot]
+        var absentRoots: [ScannedRoot]
+    }
+
+    private func scanPlan(for root: AuthorizedRootSnapshot) -> ScanPlan {
         switch root.kind {
         case .home:
             return homeRoots(root)
         case .project:
-            return [.project(id: root.id, url: root.url, registry: registry)]
+            return ScanPlan(
+                scanRoots: [.project(id: root.id, url: root.url, registry: registry)],
+                absentRoots: []
+            )
         case .system, .custom:
             return exactRoots(root)
         }
     }
 
-    private func homeRoots(_ root: AuthorizedRootSnapshot) -> [ScanRoot] {
+    private func homeRoots(_ root: AuthorizedRootSnapshot) -> ScanPlan {
         var candidates: [String: (url: URL, agents: Set<String>, entry: String)] = [:]
+        var availableDispositions = [root.url.path: root.url]
         for definition in registry.definitions {
             for declaredPath in definition.globalRoots {
                 for url in expandedHomeURLs(declaredPath, relativeTo: root.url) {
-                    let key = "\(url.path)\u{1f}\(definition.entryFilename)"
-                    candidates[key, default: (url, [], definition.entryFilename)]
-                        .agents.insert(definition.id)
+                    if isDirectory(url) {
+                        let key = "\(url.path)\u{1f}\(definition.entryFilename)"
+                        candidates[key, default: (url, [], definition.entryFilename)]
+                            .agents.insert(definition.id)
+                    } else {
+                        availableDispositions[url.path] = url
+                    }
                 }
             }
         }
-        return candidates
+        let scanRoots = candidates
             .sorted { $0.value.url.path < $1.value.url.path }
             .map { key, candidate in
-                .skillDirectory(
-                    id: "\(root.id):\(key)",
+                ScanRoot.skillDirectory(
+                    id: root.id,
                     url: candidate.url,
                     agentIDs: candidate.agents,
                     entryFilename: candidate.entry
                 )
             }
+        return ScanPlan(
+            scanRoots: scanRoots,
+            absentRoots: availableDispositions.values.map {
+                ScannedRoot(id: root.id, url: $0, availability: .available)
+            }
+        )
     }
 
-    private func exactRoots(_ root: AuthorizedRootSnapshot) -> [ScanRoot] {
+    private func exactRoots(_ root: AuthorizedRootSnapshot) -> ScanPlan {
+        guard isDirectory(root.url) else {
+            return ScanPlan(
+                scanRoots: [],
+                absentRoots: [ScannedRoot(id: root.id, url: root.url, availability: .available)]
+            )
+        }
         let matching = registry.definitions.filter { definition in
             definition.globalRoots.contains(root.url.path)
         }
         let grouped = Dictionary(grouping: matching, by: \.entryFilename)
         if grouped.isEmpty {
-            return [
-                .skillDirectory(
-                    id: root.id,
-                    url: root.url,
-                    agentIDs: [root.kind == .system ? "system" : "custom"]
-                )
-            ]
-        }
-        return grouped.sorted { $0.key < $1.key }.map { entryFilename, definitions in
-            .skillDirectory(
-                id: "\(root.id):\(entryFilename)",
-                url: root.url,
-                agentIDs: Set(definitions.map(\.id)),
-                entryFilename: entryFilename
+            return ScanPlan(
+                scanRoots: [
+                    .skillDirectory(
+                        id: root.id,
+                        url: root.url,
+                        agentIDs: [root.kind == .system ? "system" : "custom"]
+                    ),
+                ],
+                absentRoots: []
             )
         }
+        return ScanPlan(
+            scanRoots: grouped.sorted { $0.key < $1.key }.map { entryFilename, definitions in
+                ScanRoot.skillDirectory(
+                    id: root.id,
+                    url: root.url,
+                    agentIDs: Set(definitions.map(\.id)),
+                    entryFilename: entryFilename
+                )
+            },
+            absentRoots: []
+        )
     }
 
     private func summary(before: [SkillSnapshot], after: [SkillSnapshot]) -> RefreshSummary {
@@ -154,7 +229,7 @@ public final class IndexRefresher {
     }
 
     private func isDirectory(_ url: URL) -> Bool {
-        (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
+        fileSystem.isDirectory(url)
     }
 
     private func expandedHomeURLs(_ path: String, relativeTo home: URL) -> [URL] {
@@ -169,18 +244,21 @@ public final class IndexRefresher {
         for component in components {
             if component.contains("{") || component.contains("}") {
                 guard isValidTemplate(component) else { return [] }
-                candidates = candidates.flatMap { parent in
-                    directoryContents(parent).filter { child in
+                candidates = candidates.flatMap { (parent: URL) -> [URL] in
+                    guard isContained(parent, in: home), isDirectory(parent) else {
+                        return [URL]()
+                    }
+                    return directoryContents(parent).filter { child in
                         segment(child.lastPathComponent, matches: component)
-                            && isDirectory(child)
                             && isContained(child, in: home)
+                            && isDirectory(child)
                     }
                 }
             } else {
                 candidates = candidates.map { $0.appending(path: component).standardizedFileURL }
             }
         }
-        return candidates.filter { isDirectory($0) && isContained($0, in: home) }
+        return candidates.filter { isContained($0, in: home) }
     }
 
     private func isValidTemplate(_ template: String) -> Bool {
@@ -208,16 +286,15 @@ public final class IndexRefresher {
     }
 
     private func directoryContents(_ url: URL) -> [URL] {
-        (try? FileManager.default.contentsOfDirectory(
-            at: url,
-            includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
-            options: []
-        )) ?? []
+        fileSystem.contentsOfDirectory(at: url)
     }
 
     private func isContained(_ candidate: URL, in root: URL) -> Bool {
         contains(candidate.standardizedFileURL, in: root.standardizedFileURL)
-            && contains(candidate.resolvingSymlinksInPath(), in: root.resolvingSymlinksInPath())
+            && contains(
+                fileSystem.resolvingSymlinks(in: candidate),
+                in: fileSystem.resolvingSymlinks(in: root)
+            )
     }
 
     private func contains(_ candidate: URL, in root: URL) -> Bool {
