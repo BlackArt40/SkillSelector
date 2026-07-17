@@ -65,23 +65,37 @@ public struct SkillScanner: Sendable {
 
         do {
             let installations: [ScannedSkill]
+            let issues: [ScanIssue]
             switch root.kind {
             case .skillDirectory(let agentIDs, let entryFilename):
-                installations = try scanSkillDirectory(
-                    root,
-                    agentIDs: agentIDs,
-                    entryFilename: entryFilename,
-                    authorizedURLs: authorizedURLs
-                )
+                if Self.isValidEntryFilename(entryFilename) {
+                    installations = try scanSkillDirectory(
+                        root,
+                        agentIDs: agentIDs,
+                        entryFilename: entryFilename,
+                        authorizedURLs: authorizedURLs
+                    )
+                    issues = []
+                } else {
+                    installations = []
+                    issues = [invalidEntryFilenameIssue(entryFilename)]
+                }
             case .project(let registry):
+                let validation = validatedDefinitions(registry.definitions)
                 installations = try scanProject(
                     root,
-                    registry: registry,
+                    definitions: validation.definitions,
                     authorizedURLs: authorizedURLs
                 )
+                issues = validation.issues
             }
             return (
-                ScannedRoot(id: root.id, url: root.url, availability: .available),
+                ScannedRoot(
+                    id: root.id,
+                    url: root.url,
+                    availability: .available,
+                    issues: issues
+                ),
                 installations
             )
         } catch {
@@ -129,7 +143,7 @@ public struct SkillScanner: Sendable {
 
     private func scanProject(
         _ root: ScanRoot,
-        registry: AgentRegistry,
+        definitions: [AgentDefinition],
         authorizedURLs: [URL]
     ) throws -> [ScannedSkill] {
         var installations: [ScannedSkill] = []
@@ -137,7 +151,7 @@ public struct SkillScanner: Sendable {
             root.url,
             relativeComponents: [],
             root: root,
-            definitions: registry.definitions,
+            definitions: definitions,
             authorizedURLs: authorizedURLs,
             installations: &installations
         )
@@ -152,22 +166,18 @@ public struct SkillScanner: Sendable {
         authorizedURLs: [URL],
         installations: inout [ScannedSkill]
     ) throws {
-        if !relativeComponents.isEmpty {
-            let entries = matchingEntries(
-                in: relativeComponents,
-                definitions: definitions
-            )
-            if containsRecognizedEntry(in: directory, entries: entries) {
-                if let candidate = makeProjectCandidate(
-                    installationURL: directory,
-                    entries: entries,
-                    rootID: root.id,
-                    authorizedURLs: authorizedURLs
-                ) {
-                    installations.append(candidate)
-                }
-                return
-            }
+        if !relativeComponents.isEmpty,
+           let candidate = makeProjectCandidate(
+               installationURL: directory,
+               entries: matchingEntries(
+                   in: relativeComponents,
+                   definitions: definitions
+               ),
+               rootID: root.id,
+               authorizedURLs: authorizedURLs
+           ) {
+            installations.append(candidate)
+            return
         }
 
         for child in try directoryContents(directory) {
@@ -253,16 +263,6 @@ public struct SkillScanner: Sendable {
         return result
     }
 
-    private func containsRecognizedEntry(
-        in directory: URL,
-        entries: [(agentIDs: Set<String>, entryFilename: String)]
-    ) -> Bool {
-        entries.contains { entry in
-            let entryURL = directory.appending(path: entry.entryFilename)
-            return isSymbolicLink(entryURL) || isRegularFile(entryURL)
-        }
-    }
-
     private func pathSuffix(_ path: [String], matches pattern: [String]) -> Bool {
         guard path.count >= pattern.count else { return false }
         return zip(path.suffix(pattern.count), pattern).allSatisfy { value, template in
@@ -289,6 +289,8 @@ public struct SkillScanner: Sendable {
         rootID: String,
         authorizedURLs: [URL]
     ) -> ScannedSkill? {
+        guard Self.isValidEntryFilename(entryFilename) else { return nil }
+
         let installationURL = installationURL.standardizedFileURL
         let symbolicLink = isSymbolicLink(installationURL)
         let contentDirectory: URL
@@ -297,7 +299,11 @@ public struct SkillScanner: Sendable {
         if symbolicLink {
             let target = installationURL.resolvingSymlinksInPath().standardizedFileURL
             guard target != installationURL,
-                  authorizedURLs.contains(where: { contains(target, in: $0) }),
+                  isWithinAuthorizedRoots(
+                      standardizedURL: installationURL,
+                      resolvedURL: target,
+                      authorizedURLs: authorizedURLs
+                  ),
                   isDirectory(target) else {
                 return nil
             }
@@ -309,15 +315,32 @@ public struct SkillScanner: Sendable {
             resolvedTarget = nil
         }
 
-        let entryURL = contentDirectory.appending(path: entryFilename)
-        guard accessibleFile(entryURL, authorizedURLs: authorizedURLs),
-              isRegularFile(entryURL) else {
+        let resolvedEntryURL: URL
+        switch inspectEntry(
+            in: contentDirectory,
+            entryFilename: entryFilename,
+            authorizedURLs: authorizedURLs
+        ) {
+        case .absent:
             return nil
+        case .unsafe(let message):
+            return diagnosticCandidate(
+                installationURL: installationURL,
+                resolvedTarget: resolvedTarget,
+                agentIDs: agentIDs,
+                entryFilename: entryFilename,
+                rootID: rootID,
+                message: message
+            )
+        case .readable(let url):
+            resolvedEntryURL = url
         }
 
         let document: ParsedSkillDocument
         do {
-            document = FrontmatterParser.parse(try String(contentsOf: entryURL, encoding: .utf8))
+            document = FrontmatterParser.parse(
+                try String(contentsOf: resolvedEntryURL, encoding: .utf8)
+            )
         } catch {
             document = ParsedSkillDocument(
                 title: installationURL.lastPathComponent,
@@ -325,7 +348,7 @@ public struct SkillScanner: Sendable {
             )
         }
 
-        let modificationDate = try? entryURL.resourceValues(
+        let modificationDate = try? resolvedEntryURL.resourceValues(
             forKeys: [.contentModificationDateKey]
         ).contentModificationDate
         return ScannedSkill(
@@ -341,22 +364,132 @@ public struct SkillScanner: Sendable {
         )
     }
 
-    private func accessibleFile(_ url: URL, authorizedURLs: [URL]) -> Bool {
-        guard isSymbolicLink(url) else { return true }
-        let target = url.resolvingSymlinksInPath().standardizedFileURL
-        return authorizedURLs.contains(where: { contains(target, in: $0) })
+    private func inspectEntry(
+        in packageDirectory: URL,
+        entryFilename: String,
+        authorizedURLs: [URL]
+    ) -> EntryInspection {
+        let entryURL = packageDirectory.appendingPathComponent(entryFilename)
+            .standardizedFileURL
+        let resolvedEntryURL = entryURL.resolvingSymlinksInPath().standardizedFileURL
+        let isSafelyContained = isContained(
+            standardizedURL: entryURL,
+            resolvedURL: resolvedEntryURL,
+            in: packageDirectory
+        ) && isWithinAuthorizedRoots(
+            standardizedURL: entryURL,
+            resolvedURL: resolvedEntryURL,
+            authorizedURLs: authorizedURLs
+        )
+
+        guard isSymbolicLink(entryURL) || isRegularFile(entryURL) else {
+            return .absent
+        }
+        guard isSafelyContained, isRegularFile(resolvedEntryURL) else {
+            return .unsafe(
+                message: "Entry file must remain readable within its authorized package and root"
+            )
+        }
+        return .readable(resolvedEntryURL)
+    }
+
+    private func diagnosticCandidate(
+        installationURL: URL,
+        resolvedTarget: URL?,
+        agentIDs: Set<String>,
+        entryFilename: String,
+        rootID: String,
+        message: String
+    ) -> ScannedSkill {
+        ScannedSkill(
+            installation: SkillInstallation(
+                path: installationURL,
+                resolvedTarget: resolvedTarget,
+                agentIDs: agentIDs
+            ),
+            document: ParsedSkillDocument(
+                title: installationURL.lastPathComponent,
+                issues: [ParseIssue(message: message)]
+            ),
+            rootIDs: [rootID],
+            entryFilename: entryFilename
+        )
     }
 
     private func isAccessibleRoot(_ url: URL, authorizedURLs: [URL]) -> Bool {
         guard isSymbolicLink(url) else { return isDirectory(url) }
         let target = url.resolvingSymlinksInPath().standardizedFileURL
-        return authorizedURLs.contains(where: { contains(target, in: $0) }) && isDirectory(target)
+        return isWithinAuthorizedRoots(
+            standardizedURL: url.standardizedFileURL,
+            resolvedURL: target,
+            authorizedURLs: authorizedURLs
+        ) && isDirectory(target)
     }
 
-    private func contains(_ candidate: URL, in root: URL) -> Bool {
-        let candidatePath = candidate.standardizedFileURL.path
-        let rootPath = root.standardizedFileURL.path
-        return candidatePath == rootPath || candidatePath.hasPrefix(rootPath + "/")
+    private static func isValidEntryFilename(_ entryFilename: String) -> Bool {
+        !entryFilename.isEmpty
+            && entryFilename != "."
+            && entryFilename != ".."
+            && !entryFilename.contains("/")
+            && !entryFilename.contains("\\")
+    }
+
+    private func validatedDefinitions(
+        _ definitions: [AgentDefinition]
+    ) -> (definitions: [AgentDefinition], issues: [ScanIssue]) {
+        var valid: [AgentDefinition] = []
+        var issues: [ScanIssue] = []
+        for definition in definitions {
+            if Self.isValidEntryFilename(definition.entryFilename) {
+                valid.append(definition)
+            } else {
+                issues.append(invalidEntryFilenameIssue(
+                    definition.entryFilename,
+                    agentID: definition.id
+                ))
+            }
+        }
+        return (valid, issues)
+    }
+
+    private func invalidEntryFilenameIssue(
+        _ entryFilename: String,
+        agentID: String? = nil
+    ) -> ScanIssue {
+        let owner = agentID.map { " for Agent \($0)" } ?? ""
+        return ScanIssue(
+            message: "Invalid entryFilename\(owner): \(String(reflecting: entryFilename))"
+        )
+    }
+
+    private func isContained(
+        standardizedURL: URL,
+        resolvedURL: URL,
+        in root: URL
+    ) -> Bool {
+        containsByPathComponents(standardizedURL, in: root.standardizedFileURL)
+            && containsByPathComponents(resolvedURL, in: root.resolvingSymlinksInPath())
+    }
+
+    private func isWithinAuthorizedRoots(
+        standardizedURL: URL,
+        resolvedURL: URL,
+        authorizedURLs: [URL]
+    ) -> Bool {
+        authorizedURLs.contains { root in
+            isContained(
+                standardizedURL: standardizedURL,
+                resolvedURL: resolvedURL,
+                in: root
+            )
+        }
+    }
+
+    private func containsByPathComponents(_ candidate: URL, in root: URL) -> Bool {
+        let candidateComponents = candidate.standardizedFileURL.pathComponents
+        let rootComponents = root.standardizedFileURL.pathComponents
+        return candidateComponents.count >= rootComponents.count
+            && Array(candidateComponents.prefix(rootComponents.count)) == rootComponents
     }
 
     private func directoryContents(_ url: URL) throws -> [URL] {
@@ -382,4 +515,10 @@ public struct SkillScanner: Sendable {
     private func isDirectoryOrSymbolicLink(_ url: URL) -> Bool {
         isSymbolicLink(url) || isDirectory(url)
     }
+}
+
+private enum EntryInspection {
+    case absent
+    case readable(URL)
+    case unsafe(message: String)
 }

@@ -40,6 +40,26 @@ final class FrontmatterParserTests: XCTestCase {
         XCTAssertTrue(parsed.issues.isEmpty)
     }
 
+    func testIndentedDelimiterRemainsLiteralBlockContent() {
+        let parsed = FrontmatterParser.parse(
+            "---\nname: delimiter\ndescription: |\n  Before\n  ---\n  After\n---\n# Delimiter"
+        )
+
+        XCTAssertEqual(parsed.description, "Before\n---\nAfter")
+        XCTAssertEqual(parsed.title, "Delimiter")
+        XCTAssertTrue(parsed.issues.isEmpty)
+    }
+
+    func testIndentedDelimiterRemainsFoldedBlockContent() {
+        let parsed = FrontmatterParser.parse(
+            "---\nname: delimiter\ndescription: >\n  Before\n  ---\n  After\n---\n# Delimiter"
+        )
+
+        XCTAssertEqual(parsed.description, "Before --- After")
+        XCTAssertEqual(parsed.title, "Delimiter")
+        XCTAssertTrue(parsed.issues.isEmpty)
+    }
+
     func testExtractsHeadingAndFirstDescriptiveParagraphWithoutFrontmatter() {
         let text = """
         # Repository Tools
@@ -86,5 +106,14 @@ final class FrontmatterParserTests: XCTestCase {
         XCTAssertEqual(parsed.name, "demo")
         XCTAssertEqual(parsed.title, "Demo")
         XCTAssertEqual(parsed.firstDescriptiveParagraph, "Useful fallback text.")
+    }
+
+    func testBodyParagraphContainingColonIsNotTreatedAsFrontmatter() {
+        let parsed = FrontmatterParser.parse(
+            "---\nname: usage\ndescription: Local description\n---\n# Usage\n\nUsage: Run this command."
+        )
+
+        XCTAssertEqual(parsed.firstDescriptiveParagraph, "Usage: Run this command.")
+        XCTAssertTrue(parsed.issues.isEmpty)
     }
 }

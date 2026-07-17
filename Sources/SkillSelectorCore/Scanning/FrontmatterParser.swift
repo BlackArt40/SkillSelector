@@ -6,12 +6,11 @@ public enum FrontmatterParser {
         var fields: [String: String] = [:]
         var issues: [ParseIssue] = []
         var bodyLines = lines
-        let hasFrontmatter = lines.first?.trimmingCharacters(in: .whitespaces) == "---"
+        var skipsFrontmatterPairsInBody = false
+        let hasFrontmatter = lines.first == "---"
 
         if hasFrontmatter {
-            if let boundary = lines.dropFirst().firstIndex(where: {
-                $0.trimmingCharacters(in: .whitespaces) == "---"
-            }) {
+            if let boundary = lines.dropFirst().firstIndex(of: "---") {
                 parseFrontmatter(
                     Array(lines[1..<boundary]),
                     into: &fields,
@@ -26,6 +25,7 @@ public enum FrontmatterParser {
                     issues: &issues
                 )
                 bodyLines = Array(lines.dropFirst())
+                skipsFrontmatterPairsInBody = true
             }
         }
 
@@ -38,7 +38,10 @@ public enum FrontmatterParser {
             issues.append(ParseIssue(line: 1, message: "Missing frontmatter boundary"))
         }
 
-        let bodyMetadata = extractBodyMetadata(from: bodyLines)
+        let bodyMetadata = extractBodyMetadata(
+            from: bodyLines,
+            skippingFrontmatterPairs: skipsFrontmatterPairsInBody
+        )
         return ParsedSkillDocument(
             name: fields["name"],
             description: fields["description"],
@@ -218,7 +221,10 @@ public enum FrontmatterParser {
         return trimmed.hasPrefix("#") || trimmed.hasPrefix("```")
     }
 
-    private static func extractBodyMetadata(from lines: [String]) -> (title: String?, paragraph: String?) {
+    private static func extractBodyMetadata(
+        from lines: [String],
+        skippingFrontmatterPairs: Bool
+    ) -> (title: String?, paragraph: String?) {
         let title = lines.lazy.compactMap { line -> String? in
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard trimmed.hasPrefix("# ") else { return nil }
@@ -239,7 +245,9 @@ public enum FrontmatterParser {
                 if !paragraphLines.isEmpty { break }
                 continue
             }
-            if trimmed == "---" || trimmed.hasPrefix("#") || looksLikeFrontmatterPair(trimmed) {
+            if trimmed == "---"
+                || trimmed.hasPrefix("#")
+                || (skippingFrontmatterPairs && looksLikeFrontmatterPair(trimmed)) {
                 if !paragraphLines.isEmpty { break }
                 continue
             }

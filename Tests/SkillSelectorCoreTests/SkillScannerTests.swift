@@ -74,7 +74,12 @@ final class SkillScannerTests: XCTestCase {
 
         let report = await SkillScanner().scan([fixture.projectRoot])
 
-        XCTAssertTrue(report.installations.isEmpty)
+        XCTAssertEqual(report.installations.count, 1)
+        let scanned = try XCTUnwrap(report.installations.first)
+        XCTAssertEqual(scanned.path.path, outer.standardizedFileURL.path)
+        XCTAssertTrue(scanned.document.issues.contains {
+            $0.message.contains("authorized package")
+        })
     }
 
     func testMalformedSkillRemainsVisibleWithParseDiagnostics() async throws {
@@ -138,6 +143,97 @@ final class SkillScannerTests: XCTestCase {
         let report = await SkillScanner().scan([authorized])
 
         XCTAssertEqual(report.installations.map(\.document.name), ["real"])
+    }
+
+    func testRejectsTraversingCustomEntryFilenameAndReportsRootIssue() async throws {
+        let fixture = try ScanFixture()
+        let authorizedRoot = fixture.url.appending(path: "allowed")
+        let package = authorizedRoot.appending(path: ".custom/skills/demo")
+        try FileManager.default.createDirectory(at: package, withIntermediateDirectories: true)
+        let outside = fixture.url.appending(path: "outside.md")
+        try "---\nname: outside\ndescription: Must not be read\n---\n".write(
+            to: outside,
+            atomically: true,
+            encoding: .utf8
+        )
+        let malicious = AgentDefinition(
+            id: "custom",
+            displayName: "Custom",
+            globalRoots: [],
+            projectPatterns: [".custom/skills"],
+            entryFilename: "../../../../outside.md"
+        )
+        let root = ScanRoot.project(
+            id: "allowed",
+            url: authorizedRoot,
+            registry: AgentRegistry(definitions: [malicious])
+        )
+
+        let report = await SkillScanner().scan([root])
+
+        XCTAssertTrue(report.installations.isEmpty)
+        XCTAssertEqual(report.roots[0].availability, .available)
+        XCTAssertTrue(report.roots[0].issues.contains {
+            $0.message.contains("entryFilename")
+        })
+    }
+
+    func testRejectsEveryEntryFilenameThatIsNotOneComponent() async throws {
+        let fixture = try ScanFixture()
+        let invalidEntryFilenames = ["", ".", "..", "nested/SKILL.md", "nested\\SKILL.md"]
+        let roots = invalidEntryFilenames.enumerated().map { index, entryFilename in
+            ScanRoot.skillDirectory(
+                id: "invalid-\(index)",
+                url: fixture.url,
+                agentIDs: ["custom"],
+                entryFilename: entryFilename
+            )
+        }
+
+        let report = await SkillScanner().scan(roots)
+
+        XCTAssertTrue(report.installations.isEmpty)
+        XCTAssertEqual(report.roots.count, invalidEntryFilenames.count)
+        XCTAssertTrue(report.roots.allSatisfy { root in
+            root.issues.contains { $0.message.contains("entryFilename") }
+        })
+    }
+
+    func testDirectPackageWithUnauthorizedEntryStopsBeforeNestedSkill() async throws {
+        let fixture = try ScanFixture()
+        let directPackage = fixture.url.appending(path: "direct-package")
+        try FileManager.default.createDirectory(at: directPackage, withIntermediateDirectories: true)
+        let externalEntry = fixture.url.deletingLastPathComponent()
+            .appending(path: "direct-external-\(UUID().uuidString).md")
+        defer { try? FileManager.default.removeItem(at: externalEntry) }
+        try "---\nname: external\ndescription: External\n---\n".write(
+            to: externalEntry,
+            atomically: true,
+            encoding: .utf8
+        )
+        try FileManager.default.createSymbolicLink(
+            at: directPackage.appending(path: "SKILL.md"),
+            withDestinationURL: externalEntry
+        )
+        try ScanFixture.writeSkill(
+            at: directPackage.appending(path: "nested"),
+            name: "nested",
+            description: "Nested"
+        )
+        let root = ScanRoot.skillDirectory(
+            id: "direct",
+            url: directPackage,
+            agentIDs: ["custom"]
+        )
+
+        let report = await SkillScanner().scan([root])
+
+        XCTAssertEqual(report.installations.count, 1)
+        let scanned = try XCTUnwrap(report.installations.first)
+        XCTAssertEqual(scanned.path.path, directPackage.standardizedFileURL.path)
+        XCTAssertTrue(scanned.document.issues.contains {
+            $0.message.contains("authorized package")
+        })
     }
 
     func testUnavailableRootIsReportedSeparatelyFromInstallations() async throws {

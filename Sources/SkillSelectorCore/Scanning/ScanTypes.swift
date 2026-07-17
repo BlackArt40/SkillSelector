@@ -74,15 +74,30 @@ public enum ScanRootAvailability: Hashable, Sendable {
     case unavailable(reason: String)
 }
 
+public struct ScanIssue: Codable, Hashable, Sendable {
+    public let message: String
+
+    public init(message: String) {
+        self.message = message
+    }
+}
+
 public struct ScannedRoot: Hashable, Sendable {
     public let id: String
     public let url: URL
     public let availability: ScanRootAvailability
+    public let issues: [ScanIssue]
 
-    public init(id: String, url: URL, availability: ScanRootAvailability) {
+    public init(
+        id: String,
+        url: URL,
+        availability: ScanRootAvailability,
+        issues: [ScanIssue] = []
+    ) {
         self.id = id
         self.url = url.standardizedFileURL
         self.availability = availability
+        self.issues = issues
     }
 }
 
