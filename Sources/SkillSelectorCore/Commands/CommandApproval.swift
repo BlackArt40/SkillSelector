@@ -83,7 +83,10 @@ public final class CommandApproval: @unchecked Sendable {
         var bytes = Data()
         append(executablePath, to: &bytes)
         for argument in arguments { append(argument, to: &bytes) }
-        append(configurationFingerprint ?? "", to: &bytes)
+        bytes.append(configurationFingerprint == nil ? 0 : 1)
+        if let configurationFingerprint {
+            append(configurationFingerprint, to: &bytes)
+        }
         // Length framing keeps argument boundaries unambiguous. A
         // cryptographic digest makes the persisted approval key stable while
         // avoiding collisions that could authorize a different command.

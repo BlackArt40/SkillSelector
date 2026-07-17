@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 public enum CommandOutputStream: String, Codable, Hashable, Sendable {
@@ -65,11 +66,14 @@ public enum ExternalCommandError: Error, Equatable, Sendable {
     case outputLimitExceeded(CommandOutputStream)
 }
 
+public protocol ExternalCommandRunning: Sendable {
+    func run(_ command: ExternalCommand) async throws -> CommandResult
+}
+
 private final class CommandRunState: @unchecked Sendable {
     private let lock = NSLock()
-    private var process: Process?
+    private var processGroupID: pid_t?
     private var finished = false
-    private var started = false
     private var continuation: CheckedContinuation<CommandResult, Error>?
     private var terminationError: ExternalCommandError?
 
@@ -77,55 +81,37 @@ private final class CommandRunState: @unchecked Sendable {
         self.continuation = continuation
     }
 
-    func setProcess(_ process: Process) {
+    func pendingError() -> ExternalCommandError? {
         lock.lock(); defer { lock.unlock() }
-        self.process = process
+        return terminationError
     }
 
-    func terminate() {
+    func setProcessGroupID(_ processGroupID: pid_t) {
         lock.lock()
-        let process = self.process
+        self.processGroupID = processGroupID
+        let shouldTerminate = terminationError != nil
         lock.unlock()
-        guard let process, process.isRunning else { return }
-        process.terminate()
-        // Some processes ignore SIGTERM. A short grace period prevents a
-        // cancelled or timed-out command from holding the continuation open.
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 0.2) {
-            if process.isRunning { process.interrupt() }
-            if process.isRunning { kill(process.processIdentifier, SIGKILL) }
-        }
+        if shouldTerminate { terminateProcessGroup(processGroupID) }
     }
 
     func fail(_ error: ExternalCommandError) {
         lock.lock()
-        if !started && !finished {
-            finished = true
-            let continuation = self.continuation
-            self.continuation = nil
-            lock.unlock()
-            continuation?.resume(throwing: error)
-            return
-        }
+        guard !finished else { lock.unlock(); return }
         terminationError = terminationError ?? error
+        let processGroupID = self.processGroupID
         lock.unlock()
-        terminate()
+        if let processGroupID { terminateProcessGroup(processGroupID) }
     }
 
-    func markStarted() -> Bool {
-        lock.lock(); defer { lock.unlock() }
-        guard !finished, terminationError == nil else { return false }
-        started = true
-        return true
-    }
-
-    func abort(_ error: ExternalCommandError) {
+    func abort(_ error: Error) {
         lock.lock()
         guard !finished else { lock.unlock(); return }
         finished = true
         let continuation = self.continuation
         self.continuation = nil
+        let recordedError = terminationError
         lock.unlock()
-        continuation?.resume(throwing: error)
+        continuation?.resume(throwing: recordedError ?? error)
     }
 
     func finish(_ result: CommandResult) {
@@ -139,9 +125,21 @@ private final class CommandRunState: @unchecked Sendable {
         if let error { continuation?.resume(throwing: error) }
         else { continuation?.resume(returning: result) }
     }
+
+    private func terminateProcessGroup(_ processGroupID: pid_t) {
+        guard processGroupID > 0 else { return }
+        kill(-processGroupID, SIGTERM)
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 0.2) {
+            // The group can outlive its leader. Probe and kill the group rather
+            // than consulting only the original process PID.
+            if kill(-processGroupID, 0) == 0 || errno == EPERM {
+                kill(-processGroupID, SIGKILL)
+            }
+        }
+    }
 }
 
-public final class ExternalCommandRunner: @unchecked Sendable {
+public final class ExternalCommandRunner: ExternalCommandRunning, @unchecked Sendable {
     public static let defaultPath = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
     private let defaultTimeout: TimeInterval
@@ -197,70 +195,155 @@ public final class ExternalCommandRunner: @unchecked Sendable {
         activeLock.lock()
         activeRuns[runID] = state
         activeLock.unlock()
+
         if Task.isCancelled {
-            state.abort(.cancelled)
-            activeLock.lock()
-            activeRuns.removeValue(forKey: runID)
-            activeLock.unlock()
+            completeAbortedRun(runID: runID, state: state, error: ExternalCommandError.cancelled)
             return
         }
 
-        let process = Process()
-        process.executableURL = command.executableURL
-        process.arguments = command.arguments
-        process.environment = makeEnvironment(command)
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
-        state.setProcess(process)
+        var stdoutDescriptors: [Int32] = [0, 0]
+        var stderrDescriptors: [Int32] = [0, 0]
+        guard pipe(&stdoutDescriptors) == 0 else {
+            completeAbortedRun(runID: runID, state: state, error: posixError("pipe"))
+            return
+        }
+        guard pipe(&stderrDescriptors) == 0 else {
+            close(stdoutDescriptors[0]); close(stdoutDescriptors[1])
+            completeAbortedRun(runID: runID, state: state, error: posixError("pipe"))
+            return
+        }
 
+        var actions: posix_spawn_file_actions_t? = nil
+        var attributes: posix_spawnattr_t? = nil
+        guard posix_spawn_file_actions_init(&actions) == 0,
+              posix_spawnattr_init(&attributes) == 0 else {
+            closeDescriptors(stdoutDescriptors + stderrDescriptors)
+            completeAbortedRun(runID: runID, state: state, error: posixError("posix_spawn initialization"))
+            return
+        }
+        defer {
+            posix_spawn_file_actions_destroy(&actions)
+            posix_spawnattr_destroy(&attributes)
+        }
+
+        posix_spawn_file_actions_addclose(&actions, stdoutDescriptors[0])
+        posix_spawn_file_actions_addclose(&actions, stderrDescriptors[0])
+        posix_spawn_file_actions_adddup2(&actions, stdoutDescriptors[1], STDOUT_FILENO)
+        posix_spawn_file_actions_adddup2(&actions, stderrDescriptors[1], STDERR_FILENO)
+        posix_spawn_file_actions_addclose(&actions, stdoutDescriptors[1])
+        posix_spawn_file_actions_addclose(&actions, stderrDescriptors[1])
+        posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETPGROUP))
+        posix_spawnattr_setpgroup(&attributes, 0)
+
+        if let error = state.pendingError() {
+            closeDescriptors(stdoutDescriptors + stderrDescriptors)
+            completeAbortedRun(runID: runID, state: state, error: error)
+            return
+        }
+
+        var processID: pid_t = 0
+        let arguments = [command.executableURL.path] + command.arguments
+        let environment = makeEnvironment(command)
+            .map { "\($0.key)=\($0.value)" }
+            .sorted()
+        let spawnStatus = withMutableCStringArray(arguments) { argumentPointers in
+            withMutableCStringArray(environment) { environmentPointers in
+                posix_spawn(
+                    &processID,
+                    command.executableURL.path,
+                    &actions,
+                    &attributes,
+                    argumentPointers,
+                    environmentPointers
+                )
+            }
+        }
+        close(stdoutDescriptors[1])
+        close(stderrDescriptors[1])
+
+        guard spawnStatus == 0 else {
+            close(stdoutDescriptors[0]); close(stderrDescriptors[0])
+            let message = String(cString: strerror(spawnStatus))
+            completeAbortedRun(
+                runID: runID,
+                state: state,
+                error: ExternalCommandError.launchFailed(message)
+            )
+            return
+        }
+
+        state.setProcessGroupID(processID)
+        let spawnedProcessID = processID
+        let stdoutReadDescriptor = stdoutDescriptors[0]
+        let stderrReadDescriptor = stderrDescriptors[0]
         let group = DispatchGroup()
         let collector = OutputCollector(maximumBytes: maximumOutputBytes, state: state)
         group.enter()
         DispatchQueue.global(qos: .utility).async {
-            collector.read(stdoutPipe.fileHandleForReading, stream: .stdout)
+            collector.read(descriptor: stdoutReadDescriptor, stream: .stdout)
             group.leave()
         }
         group.enter()
         DispatchQueue.global(qos: .utility).async {
-            collector.read(stderrPipe.fileHandleForReading, stream: .stderr)
+            collector.read(descriptor: stderrReadDescriptor, stream: .stderr)
             group.leave()
         }
-        process.terminationHandler = { process in
+        DispatchQueue.global(qos: .utility).async {
+            var status: Int32 = 0
+            var waitResult: pid_t
+            repeat { waitResult = waitpid(spawnedProcessID, &status, 0) } while waitResult == -1 && errno == EINTR
+            guard waitResult == spawnedProcessID else {
+                state.fail(.launchFailed(self.posixErrorDescription("waitpid")))
+                group.notify(queue: .global(qos: .utility)) {
+                    self.removeRun(runID)
+                }
+                return
+            }
+            let termination = self.decodeWaitStatus(status)
             group.notify(queue: .global(qos: .utility)) {
                 state.finish(CommandResult(
                     stdout: collector.stdout,
                     stderr: collector.stderr,
-                    terminationStatus: process.terminationStatus,
-                    terminationReason: process.terminationReason
+                    terminationStatus: termination.status,
+                    terminationReason: termination.reason
                 ))
-                self.activeLock.lock()
-                self.activeRuns.removeValue(forKey: runID)
-                self.activeLock.unlock()
+                self.removeRun(runID)
             }
         }
-
-        guard state.markStarted() else {
-            try? stdoutPipe.fileHandleForReading.close()
-            try? stderrPipe.fileHandleForReading.close()
-            activeLock.lock()
-            activeRuns.removeValue(forKey: runID)
-            activeLock.unlock()
-            return
-        }
-        do {
-            try process.run()
-        } catch {
-            state.abort(.launchFailed(error.localizedDescription))
-            activeLock.lock()
-            activeRuns.removeValue(forKey: runID)
-            activeLock.unlock()
-            return
-        }
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout) {
-            if process.isRunning { state.fail(.timedOut) }
+            state.fail(.timedOut)
         }
+    }
+
+    private func completeAbortedRun(runID: UUID, state: CommandRunState, error: Error) {
+        state.abort(error)
+        removeRun(runID)
+    }
+
+    private func removeRun(_ runID: UUID) {
+        activeLock.lock()
+        activeRuns.removeValue(forKey: runID)
+        activeLock.unlock()
+    }
+
+    private func closeDescriptors(_ descriptors: [Int32]) {
+        for descriptor in descriptors { close(descriptor) }
+    }
+
+    private func posixError(_ operation: String) -> ExternalCommandError {
+        .launchFailed(posixErrorDescription(operation))
+    }
+
+    private func posixErrorDescription(_ operation: String) -> String {
+        "\(operation): \(String(cString: strerror(errno)))"
+    }
+
+    private func decodeWaitStatus(_ status: Int32) -> (status: Int32, reason: Process.TerminationReason) {
+        let signal = status & 0x7f
+        if signal == 0 {
+            return ((status >> 8) & 0xff, .exit)
+        }
+        return (signal, .uncaughtSignal)
     }
 
     private func makeEnvironment(_ command: ExternalCommand) -> [String: String] {
@@ -272,12 +355,22 @@ public final class ExternalCommandRunner: @unchecked Sendable {
         if let home = command.authorizedHomeURL {
             environment["HOME"] = home.path
         }
-        // Only these values are intentionally forwarded. In particular, no
-        // token, proxy, shell, or user-provided arbitrary variable is inherited.
         for key in ["TMPDIR"] where command.environment[key] != nil {
             environment[key] = command.environment[key]
         }
         return environment
+    }
+
+    private func withMutableCStringArray<Result>(
+        _ strings: [String],
+        body: (UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>) -> Result
+    ) -> Result {
+        var pointers = strings.map { strdup($0) }
+        pointers.append(nil)
+        defer { for pointer in pointers { free(pointer) } }
+        return pointers.withUnsafeMutableBufferPointer { buffer in
+            body(buffer.baseAddress!)
+        }
     }
 }
 
@@ -285,39 +378,52 @@ private final class OutputCollector: @unchecked Sendable {
     private let lock = NSLock()
     private let maximumBytes: Int
     private let state: CommandRunState
-    private(set) var stdout = Data()
-    private(set) var stderr = Data()
+    private var stdoutData = Data()
+    private var stderrData = Data()
+
+    var stdout: Data {
+        lock.lock(); defer { lock.unlock() }
+        return stdoutData
+    }
+
+    var stderr: Data {
+        lock.lock(); defer { lock.unlock() }
+        return stderrData
+    }
 
     init(maximumBytes: Int, state: CommandRunState) {
         self.maximumBytes = maximumBytes
         self.state = state
     }
 
-    func read(_ handle: FileHandle, stream: CommandOutputStream) {
-        defer { try? handle.close() }
-        do {
-            while true {
-                let chunk = try handle.read(upToCount: 32 * 1024) ?? Data()
-                if chunk.isEmpty { break }
-                lock.lock()
-                let current = stream == .stdout ? stdout.count : stderr.count
-                let total = current + chunk.count
-                if total <= maximumBytes {
-                    if stream == .stdout { stdout.append(chunk) } else { stderr.append(chunk) }
-                    lock.unlock()
-                } else {
-                    let remaining = max(0, maximumBytes - current)
-                    if remaining > 0 {
-                        if stream == .stdout { stdout.append(chunk.prefix(remaining)) }
-                        else { stderr.append(chunk.prefix(remaining)) }
-                    }
-                    lock.unlock()
-                    state.fail(.outputLimitExceeded(stream))
-                    break
-                }
+    func read(descriptor: Int32, stream: CommandOutputStream) {
+        defer { close(descriptor) }
+        var buffer = [UInt8](repeating: 0, count: 32 * 1024)
+        while true {
+            let count = Darwin.read(descriptor, &buffer, buffer.count)
+            if count == 0 { return }
+            if count < 0 {
+                if errno == EINTR { continue }
+                state.fail(.launchFailed("read: \(String(cString: strerror(errno)))"))
+                return
             }
-        } catch {
-            state.fail(.launchFailed(error.localizedDescription))
+            lock.lock()
+            let current = stream == .stdout ? stdoutData.count : stderrData.count
+            let total = current + count
+            if total <= maximumBytes {
+                if stream == .stdout { stdoutData.append(buffer, count: count) }
+                else { stderrData.append(buffer, count: count) }
+                lock.unlock()
+            } else {
+                let remaining = max(0, maximumBytes - current)
+                if remaining > 0 {
+                    if stream == .stdout { stdoutData.append(buffer, count: remaining) }
+                    else { stderrData.append(buffer, count: remaining) }
+                }
+                lock.unlock()
+                state.fail(.outputLimitExceeded(stream))
+                return
+            }
         }
     }
 }
