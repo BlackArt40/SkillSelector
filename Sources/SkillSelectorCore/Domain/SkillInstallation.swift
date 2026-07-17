@@ -13,4 +13,12 @@ public struct SkillInstallation: Identifiable, Hashable, Sendable {
         self.resolvedTarget = resolvedTarget
         self.agentIDs = agentIDs
     }
+
+    public static func == (lhs: SkillInstallation, rhs: SkillInstallation) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
 }

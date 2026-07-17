@@ -48,14 +48,14 @@ public enum BuiltInAgentRegistry {
             AgentDefinition(
                 id: "cline",
                 displayName: "Cline",
-                globalRoots: ["~/.cline/skills"],
-                projectPatterns: [".cline/skills", ".clinerules/skills", ".claude/skills"]
+                globalRoots: ["~/.cline/skills", "~/.agents/skills"],
+                projectPatterns: [".cline/skills", ".clinerules/skills", ".claude/skills", ".agents/skills"]
             ),
             AgentDefinition(
                 id: "roo-code",
                 displayName: "Roo Code",
-                globalRoots: ["~/.roo/skills", "~/.agents/skills"],
-                projectPatterns: [".roo/skills", ".agents/skills"],
+                globalRoots: ["~/.roo/skills", "~/.agents/skills", "~/.roo/skills-{modeSlug}", "~/.agents/skills-{modeSlug}"],
+                projectPatterns: [".roo/skills", ".agents/skills", ".roo/skills-{modeSlug}", ".agents/skills-{modeSlug}"],
                 isLegacy: true
             ),
             AgentDefinition(

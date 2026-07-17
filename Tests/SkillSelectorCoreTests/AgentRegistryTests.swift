@@ -30,6 +30,22 @@ final class AgentRegistryTests: XCTestCase {
         XCTAssertEqual(skill.resolvedTarget?.path, "/tmp/target/demo")
     }
 
+    func testInstallationsWithTheSameNormalizedPathHaveTheSameHashableIdentity() {
+        let first = SkillInstallation(
+            path: URL(fileURLWithPath: "/tmp/shared/../shared/demo"),
+            resolvedTarget: URL(fileURLWithPath: "/tmp/first-target"),
+            agentIDs: ["cursor"]
+        )
+        let second = SkillInstallation(
+            path: URL(fileURLWithPath: "/tmp/shared/demo"),
+            resolvedTarget: URL(fileURLWithPath: "/tmp/second-target"),
+            agentIDs: ["gemini-cli"]
+        )
+
+        XCTAssertEqual(first, second)
+        XCTAssertEqual(Set([first, second]).count, 1)
+    }
+
     func testBuiltInDefinitionsContainEveryConfirmedPath() throws {
         let expectedPaths: [String: (globalRoots: Set<String>, projectPatterns: Set<String>)] = [
             "claude-code": (["~/.claude/skills"], [".claude/skills"]),
@@ -39,8 +55,8 @@ final class AgentRegistryTests: XCTestCase {
             "opencode": (["~/.config/opencode/skills", "~/.opencode/skills"], [".opencode/skills", ".agents/skills"]),
             "cursor": (["~/.cursor/skills", "~/.agents/skills", "~/.claude/skills", "~/.codex/skills"], [".cursor/skills", ".agents/skills", ".claude/skills", ".codex/skills"]),
             "kilo-code": (["~/.kilo/skills"], [".kilo/skills", ".agents/skills"]),
-            "cline": (["~/.cline/skills"], [".cline/skills", ".clinerules/skills", ".claude/skills"]),
-            "roo-code": (["~/.roo/skills", "~/.agents/skills"], [".roo/skills", ".agents/skills"]),
+            "cline": (["~/.cline/skills", "~/.agents/skills"], [".cline/skills", ".clinerules/skills", ".claude/skills", ".agents/skills"]),
+            "roo-code": (["~/.roo/skills", "~/.agents/skills", "~/.roo/skills-{modeSlug}", "~/.agents/skills-{modeSlug}"], [".roo/skills", ".agents/skills", ".roo/skills-{modeSlug}", ".agents/skills-{modeSlug}"]),
             "windsurf": (["~/.codeium/windsurf/skills", "~/.agents/skills", "~/.claude/skills", "/Library/Application Support/Windsurf/skills"], [".windsurf/skills", ".agents/skills", ".claude/skills"]),
             "gemini-cli": (["~/.gemini/skills", "~/.agents/skills"], [".gemini/skills", ".agents/skills"]),
             "github-copilot": (["~/.copilot/skills", "~/.claude/skills", "~/.agents/skills"], [".github/skills", ".claude/skills", ".agents/skills"]),
@@ -67,7 +83,7 @@ final class AgentRegistryTests: XCTestCase {
     func testRegistryFindsAllDefinitionsForSharedGlobalRoot() {
         let matches = Set(BuiltInAgentRegistry.make().matchingGlobalRoot("~/.agents/skills").map(\.id))
 
-        XCTAssertEqual(matches, ["cursor", "roo-code", "windsurf", "gemini-cli", "github-copilot"])
+        XCTAssertEqual(matches, ["cursor", "cline", "roo-code", "windsurf", "gemini-cli", "github-copilot"])
     }
 
     func testCustomDefinitionsReplaceSameIdentifierAndAppendNewDefinitions() throws {
