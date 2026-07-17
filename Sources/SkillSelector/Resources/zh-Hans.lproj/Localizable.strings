@@ -75,6 +75,7 @@
 "Search Skills" = "搜索 Skill";
 "Select a Skill" = "选择一个 Skill";
 "SkillSelector accesses only known Agent paths inside your home directory." = "SkillSelector 只访问主目录中已知的 Agent 路径。";
+"SkillSelector Settings" = "SkillSelector 设置";
 "Skills" = "Skill";
 "Sort" = "排序";
 "Sort Skills" = "排序 Skill";

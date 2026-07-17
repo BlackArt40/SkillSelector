@@ -46,6 +46,9 @@ struct SkillSelectorApp: App {
                 .environment(model)
                 .padding(20)
                 .frame(width: 420)
+                .background(
+                    SettingsWindowTitle(title: L10n.string("SkillSelector Settings"))
+                )
         }
     }
 }

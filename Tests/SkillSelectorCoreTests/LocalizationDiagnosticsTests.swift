@@ -101,6 +101,8 @@ final class LocalizationDiagnosticsTests: XCTestCase {
         XCTAssertTrue(diagnosticKeys.isSubset(of: Set(english.keys)))
         XCTAssertTrue(diagnosticKeys.isSubset(of: Set(chinese.keys)))
         XCTAssertEqual(Set(english.keys), Set(chinese.keys))
+        XCTAssertEqual(english["SkillSelector Settings"], "SkillSelector Settings")
+        XCTAssertEqual(chinese["SkillSelector Settings"], "SkillSelector 设置")
     }
 
     func testLegacyParseIssueWithoutStructuredDiagnosticStillDecodes() throws {
