@@ -11,14 +11,14 @@ public struct BookmarkResolution: Hashable, Sendable {
     }
 }
 
-public protocol BookmarkDataCreating: AnyObject {
+public protocol BookmarkDataCreating: AnyObject, Sendable {
     func createBookmarkData(for url: URL) throws -> Data
     func resolveBookmarkData(_ data: Data) throws -> BookmarkResolution
     func startAccessing(_ url: URL) -> Bool
     func stopAccessing(_ url: URL)
 }
 
-public final class SecurityScopedBookmarkAdapter: BookmarkDataCreating {
+public final class SecurityScopedBookmarkAdapter: BookmarkDataCreating, @unchecked Sendable {
     public init() {}
 
     public func createBookmarkData(for url: URL) throws -> Data {

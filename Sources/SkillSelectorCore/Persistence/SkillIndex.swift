@@ -93,6 +93,25 @@ public final class SkillIndex {
     }
 
     @discardableResult
+    public func setEnrichedDescription(
+        path: String,
+        value: String?,
+        provenance: String?
+    ) throws -> SkillSnapshot {
+        let record = try requiredRecord(path: path)
+        record.enrichedDescription = value.flatMap { candidate in
+            candidate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? nil : candidate
+        }
+        record.enrichedDescriptionProvenance = provenance.flatMap { candidate in
+            candidate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? nil : candidate
+        }
+        try context.save()
+        return try snapshot(record)
+    }
+
+    @discardableResult
     public func setSourceBinding(path: String, value: String?) throws -> SkillSnapshot {
         let record = try requiredRecord(path: path)
         let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)

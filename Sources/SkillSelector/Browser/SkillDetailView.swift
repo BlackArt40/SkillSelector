@@ -87,6 +87,22 @@ struct SkillDetailView: View {
                             labeledValue(L10n.string("Content Digest"), value: digest, monospaced: true)
                         }
                     }
+                    detailSection(L10n.string("Trusted Metadata")) {
+                        Button {
+                            Task { await model.enrich([skill]) }
+                        } label: {
+                            Label(
+                                L10n.string("Find Metadata"),
+                                systemImage: "text.magnifyingglass"
+                            )
+                        }
+                        .controlSize(.small)
+                        .disabled(
+                            model.enrichmentCommandsDisabled
+                                || skill.availability != .available
+                        )
+                        .help(L10n.string("Find trusted metadata with local gh and npm tools"))
+                    }
                     detailSection(L10n.string("File Operations")) {
                         fileOperationControls(skill)
                     }

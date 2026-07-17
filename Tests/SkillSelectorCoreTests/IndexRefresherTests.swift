@@ -433,7 +433,7 @@ private final class RefreshFixture: @unchecked Sendable {
     }
 }
 
-private final class FixtureBookmarkAdapter: BookmarkDataCreating {
+private final class FixtureBookmarkAdapter: BookmarkDataCreating, @unchecked Sendable {
     var shouldFailResolution = false
     private(set) var stoppedURLs: [URL] = []
 

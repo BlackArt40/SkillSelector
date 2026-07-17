@@ -113,7 +113,7 @@ final class BookmarkStoreTests: XCTestCase {
     }
 }
 
-private final class BookmarkAdapterSpy: BookmarkDataCreating {
+private final class BookmarkAdapterSpy: BookmarkDataCreating, @unchecked Sendable {
     var nextResolutionIsStale = false
     var shouldStartAccess = true
     private(set) var createdURLs: [URL] = []

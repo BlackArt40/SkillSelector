@@ -4,6 +4,32 @@ import XCTest
 @testable import SkillSelectorCore
 
 final class SkillIndexTests: XCTestCase {
+    func testApplyingRemoteMetadataDoesNotImplicitlyBindUpdateSource() throws {
+        let index = try makeIndex()
+        let path = "/tmp/project/.agents/skills/demo"
+        try index.apply(report: report(
+            rootID: "project",
+            availability: .available,
+            installations: [skill(path: path)]
+        ))
+
+        let enriched = try index.setEnrichedDescription(
+            path: path,
+            value: "Exact remote text.",
+            provenance: "github:https://github.com/acme/demo/blob/main/SKILL.md"
+        )
+
+        XCTAssertEqual(enriched.enrichedDescription, "Exact remote text.")
+        XCTAssertEqual(
+            enriched.enrichedDescriptionProvenance,
+            "github:https://github.com/acme/demo/blob/main/SKILL.md"
+        )
+        XCTAssertNil(enriched.sourceBinding)
+
+        let bound = try index.setSourceBinding(path: path, value: "github:acme/demo:.")
+        XCTAssertEqual(bound.sourceBinding, "github:acme/demo:.")
+    }
+
     func testSetCustomDescriptionTrimsPersistsAndClearsOverride() throws {
         let index = try makeIndex()
         let path = "/tmp/project/.agents/skills/demo"

@@ -42,7 +42,20 @@ struct SkillSelectorApp: App {
         }
             .defaultSize(width: 1120, height: 720)
         Settings {
-            AuthorizationViews()
+            @Bindable var model = model
+            VStack(alignment: .leading, spacing: 18) {
+                AuthorizationViews()
+                Divider()
+                Toggle(
+                    L10n.string("Enrich Missing Descriptions After Refresh"),
+                    isOn: $model.enrichMissingDescriptionsAfterRefresh
+                )
+                Text(verbatim: L10n.string(
+                    "Uses local gh and npm tools only for Skills without custom, local, or remote descriptions."
+                ))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
                 .environment(model)
                 .padding(20)
                 .frame(width: 420)

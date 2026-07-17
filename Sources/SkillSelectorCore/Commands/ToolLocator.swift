@@ -36,12 +36,12 @@ public struct ToolLocation: Codable, Hashable, Sendable {
 
 public typealias ToolStatus = ToolLocation
 
-public protocol ExecutableBookmarkStoring: AnyObject {
+public protocol ExecutableBookmarkStoring: AnyObject, Sendable {
     func bookmarkData(for tool: ToolKind) -> Data?
     func save(bookmarkData: Data, for tool: ToolKind) throws
 }
 
-public final class UserDefaultsExecutableBookmarkStore: ExecutableBookmarkStoring {
+public final class UserDefaultsExecutableBookmarkStore: ExecutableBookmarkStoring, @unchecked Sendable {
     private let defaults: UserDefaults
     private let keyPrefix: String
 
@@ -59,7 +59,7 @@ public final class UserDefaultsExecutableBookmarkStore: ExecutableBookmarkStorin
     }
 }
 
-public final class ToolLocator {
+public actor ToolLocator {
     private let store: ExecutableBookmarkStoring
     private let bookmarkAdapter: any BookmarkDataCreating
     private let runner: any ExternalCommandRunning

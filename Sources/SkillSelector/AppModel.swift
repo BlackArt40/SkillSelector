@@ -27,6 +27,13 @@ struct SkillSelection: Hashable, Identifiable {
     var id: String { path }
 }
 
+struct EnrichmentCandidateGroup: Identifiable, Hashable {
+    let skillPath: String
+    let skillName: String
+    let candidates: [MetadataCandidate]
+    var id: String { skillPath }
+}
+
 @MainActor
 @Observable
 final class AppModel {
@@ -34,8 +41,14 @@ final class AppModel {
     private let index: SkillIndex
     private let bookmarks: BookmarkStore?
     private let registry: AgentRegistry
+    private let toolLocator: ToolLocator
+    private let commandRunner: any CommandRunning
+    private let defaults: UserDefaults
     @ObservationIgnored private var activeRefresh: (id: UUID, task: Task<Void, Never>)?
     @ObservationIgnored private var pendingOperationContext: PendingOperationContext?
+    @ObservationIgnored private var remainingEnrichmentGroups: [EnrichmentCandidateGroup] = []
+    @ObservationIgnored private var enrichmentTotalCount = 0
+    @ObservationIgnored private var completedEnrichmentCount = 0
 
     var refreshState: RefreshState = .idle
     var selection: SkillSelection?
@@ -46,17 +59,37 @@ final class AppModel {
     var pendingOperationPlan: FileOperationPlan?
     var operationError: String?
     private(set) var isOperating = false
+    private(set) var isEnriching = false
+    var pendingEnrichmentGroup: EnrichmentCandidateGroup?
+    var enrichmentError: String?
+    var enrichMissingDescriptionsAfterRefresh: Bool {
+        didSet {
+            defaults.set(
+                enrichMissingDescriptionsAfterRefresh,
+                forKey: Self.enrichAfterRefreshDefaultsKey
+            )
+        }
+    }
 
     init(
         refresher: IndexRefresher,
         index: SkillIndex,
         bookmarks: BookmarkStore? = nil,
-        registry: AgentRegistry
+        registry: AgentRegistry,
+        toolLocator: ToolLocator = ToolLocator(),
+        commandRunner: any CommandRunning = ExternalCommandRunner(),
+        defaults: UserDefaults = .standard
     ) {
         self.refresher = refresher
         self.index = index
         self.bookmarks = bookmarks
         self.registry = registry
+        self.toolLocator = toolLocator
+        self.commandRunner = commandRunner
+        self.defaults = defaults
+        enrichMissingDescriptionsAfterRefresh = defaults.bool(
+            forKey: Self.enrichAfterRefreshDefaultsKey
+        )
         agentDefinitions = registry.definitions
         do {
             try reloadSnapshot()
@@ -99,7 +132,12 @@ final class AppModel {
     }
 
     func refresh(_ trigger: RefreshTrigger) async {
-        guard pendingOperationPlan == nil, !isOperating else { return }
+        guard pendingOperationPlan == nil,
+              !isOperating,
+              !isEnriching,
+              pendingEnrichmentGroup == nil else {
+            return
+        }
         if let activeRefresh {
             await activeRefresh.task.value
             clearRefresh(id: activeRefresh.id)
@@ -121,7 +159,67 @@ final class AppModel {
     }
 
     var fileOperationCommandsDisabled: Bool {
-        isOperating || pendingOperationPlan != nil || activeRefresh != nil
+        isOperating
+            || pendingOperationPlan != nil
+            || isEnriching
+            || pendingEnrichmentGroup != nil
+            || activeRefresh != nil
+    }
+
+    var enrichmentCommandsDisabled: Bool {
+        isEnriching
+            || pendingEnrichmentGroup != nil
+            || isOperating
+            || pendingOperationPlan != nil
+            || activeRefresh != nil
+    }
+
+    var pendingEnrichmentPosition: (current: Int, total: Int) {
+        (completedEnrichmentCount + 1, enrichmentTotalCount)
+    }
+
+    func enrich(_ skills: [SkillSnapshot]) async {
+        await waitForActiveRefresh()
+        guard !isEnriching,
+              pendingEnrichmentGroup == nil,
+              !isOperating,
+              pendingOperationPlan == nil else {
+            return
+        }
+        await performEnrichment(for: skills)
+    }
+
+    func applyEnrichmentCandidate(_ candidate: MetadataCandidate, bindSource: Bool) {
+        guard let group = pendingEnrichmentGroup else { return }
+        do {
+            _ = try index.setEnrichedDescription(
+                path: group.skillPath,
+                value: candidate.description,
+                provenance: "\(candidate.provider.rawValue):\(candidate.evidenceURL.absoluteString)"
+            )
+            if bindSource {
+                _ = try index.setSourceBinding(
+                    path: group.skillPath,
+                    value: candidate.sourceBinding
+                )
+            }
+            try reloadSnapshot()
+            advanceEnrichmentQueue()
+            enrichmentError = nil
+        } catch {
+            enrichmentError = String(describing: error)
+        }
+    }
+
+    func skipPendingEnrichmentCandidate() {
+        advanceEnrichmentQueue()
+    }
+
+    func cancelPendingEnrichment() {
+        pendingEnrichmentGroup = nil
+        remainingEnrichmentGroups.removeAll()
+        enrichmentTotalCount = 0
+        completedEnrichmentCount = 0
     }
 
     func planFileOperation(
@@ -131,7 +229,10 @@ final class AppModel {
         conflictPolicy: FileConflictPolicy = .keepBoth
     ) async {
         await waitForActiveRefresh()
-        guard pendingOperationPlan == nil, !isOperating else {
+        guard pendingOperationPlan == nil,
+              !isOperating,
+              !isEnriching,
+              pendingEnrichmentGroup == nil else {
             operationError = L10n.string("Finish the current file operation first.")
             return
         }
@@ -233,7 +334,11 @@ final class AppModel {
     func executePendingFileOperation(replacementConfirmed: Bool) async {
         guard let plan = pendingOperationPlan,
               let context = pendingOperationContext,
-              !isOperating else { return }
+              !isOperating,
+              !isEnriching,
+              pendingEnrichmentGroup == nil else {
+            return
+        }
         isOperating = true
         defer {
             isOperating = false
@@ -320,10 +425,130 @@ final class AppModel {
             let summary = try await refresher.refresh(trigger)
             try reloadSnapshot()
             refreshState = .finished(summary)
+            if enrichMissingDescriptionsAfterRefresh {
+                let refreshedSnapshots = snapshots
+                let missing = refreshedSnapshots.filter {
+                    Self.isMissingDescription($0.customDescription)
+                        && Self.isMissingDescription($0.localDescription)
+                        && Self.isMissingDescription($0.enrichedDescription)
+                }
+                if !missing.isEmpty {
+                    await performEnrichment(for: missing)
+                }
+            }
         } catch {
             refreshState = .failed(String(describing: error))
         }
     }
+
+    private func performEnrichment(for skills: [SkillSnapshot]) async {
+        let eligible = skills.filter { $0.availability == .available }
+        guard !eligible.isEmpty else {
+            enrichmentError = L10n.string("No metadata candidates were found.")
+            return
+        }
+        isEnriching = true
+        defer { isEnriching = false }
+
+        let gh = await toolLocator.locate(ToolKind.gh.rawValue)
+        let npm = await toolLocator.locate(ToolKind.npm.rawValue)
+        var providers: [any MetadataProvider] = []
+        if gh.state == .available, let executableURL = gh.executableURL {
+            providers.append(GitHubMetadataProvider(
+                executableURL: executableURL,
+                runner: commandRunner
+            ))
+        }
+        if npm.state == .available, let executableURL = npm.executableURL {
+            providers.append(NPMMetadataProvider(
+                executableURL: executableURL,
+                runner: commandRunner
+            ))
+        }
+        guard !providers.isEmpty else {
+            enrichmentError = gh.state == .unauthenticated
+                ? L10n.string("GitHub CLI is not authenticated and npm is unavailable.")
+                : L10n.string("No supported metadata tool is available.")
+            return
+        }
+
+        var candidateCache: [String: [MetadataCandidate]] = [:]
+        var groups: [EnrichmentCandidateGroup] = []
+        var firstError: Error?
+        for skill in eligible {
+            let candidates: [MetadataCandidate]
+            if let cached = candidateCache[skill.name] {
+                candidates = cached
+            } else {
+                var collected: [MetadataCandidate] = []
+                for provider in providers {
+                    do {
+                        collected.append(contentsOf: try await provider.candidates(
+                            for: MetadataQuery(name: skill.name)
+                        ))
+                    } catch {
+                        firstError = firstError ?? error
+                    }
+                }
+                candidates = collected
+                candidateCache[skill.name] = collected
+            }
+            if !candidates.isEmpty {
+                groups.append(EnrichmentCandidateGroup(
+                    skillPath: skill.path,
+                    skillName: skill.name,
+                    candidates: candidates
+                ))
+            }
+        }
+        guard let first = groups.first else {
+            enrichmentError = firstError.map(localizedEnrichmentError)
+                ?? L10n.string("No metadata candidates were found.")
+            return
+        }
+        pendingEnrichmentGroup = first
+        remainingEnrichmentGroups = Array(groups.dropFirst())
+        enrichmentTotalCount = groups.count
+        completedEnrichmentCount = 0
+        enrichmentError = nil
+    }
+
+    private func advanceEnrichmentQueue() {
+        completedEnrichmentCount += 1
+        pendingEnrichmentGroup = remainingEnrichmentGroups.first
+        if !remainingEnrichmentGroups.isEmpty {
+            remainingEnrichmentGroups.removeFirst()
+        }
+        if pendingEnrichmentGroup == nil {
+            enrichmentTotalCount = 0
+            completedEnrichmentCount = 0
+        }
+    }
+
+    private func localizedEnrichmentError(_ error: Error) -> String {
+        guard let error = error as? MetadataProviderError else {
+            return String(describing: error)
+        }
+        return switch error {
+        case .invalidQuery:
+            L10n.string("The Skill name cannot be used for metadata lookup.")
+        case .invalidResponse:
+            L10n.string("A metadata tool returned an invalid response.")
+        case .rateLimited:
+            L10n.string("The metadata service rate limit was reached.")
+        case .unauthenticated:
+            L10n.string("GitHub CLI is not authenticated.")
+        case .commandFailed:
+            L10n.string("The metadata command failed.")
+        }
+    }
+
+    private static func isMissingDescription(_ value: String?) -> Bool {
+        value?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false
+    }
+
+    private static let enrichAfterRefreshDefaultsKey =
+        "SkillSelector.enrichMissingDescriptionsAfterRefresh"
 
     private func waitForActiveRefresh() async {
         guard let activeRefresh else { return }

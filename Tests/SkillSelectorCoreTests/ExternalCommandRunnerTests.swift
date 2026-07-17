@@ -307,7 +307,7 @@ final class ExternalCommandRunnerTests: XCTestCase {
     }
 }
 
-private final class FixtureToolStore: ExecutableBookmarkStoring {
+private final class FixtureToolStore: ExecutableBookmarkStoring, @unchecked Sendable {
     var saved: [ToolKind: Data] = [:]
     var saveError: Error?
     func bookmarkData(for tool: ToolKind) -> Data? { saved[tool] }
