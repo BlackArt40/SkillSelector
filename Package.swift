@@ -13,7 +13,8 @@ let package = Package(
         .target(name: "SkillSelectorCore"),
         .executableTarget(
             name: "SkillSelector",
-            dependencies: ["SkillSelectorCore"]
+            dependencies: ["SkillSelectorCore"],
+            resources: [.process("Resources")]
         ),
         .testTarget(name: "SkillSelectorCoreTests", dependencies: ["SkillSelectorCore"]),
     ]

@@ -18,23 +18,36 @@ struct SkillSelection: Hashable, Identifiable {
 @Observable
 final class AppModel {
     private let refresher: IndexRefresher
+    private let index: SkillIndex
     private let bookmarks: BookmarkStore?
+    @ObservationIgnored private var activeRefresh: (id: UUID, task: Task<Void, Never>)?
 
     var refreshState: RefreshState = .idle
     var selection: SkillSelection?
+    private(set) var snapshots: [SkillSnapshot] = []
+    private(set) var authorizedRoots: [AuthorizedRootSnapshot] = []
+    private(set) var rootsByID: [String: AuthorizedRootSnapshot] = [:]
+    let agentDefinitions: [AgentDefinition]
 
-    init(refresher: IndexRefresher, bookmarks: BookmarkStore? = nil) {
+    init(
+        refresher: IndexRefresher,
+        index: SkillIndex,
+        bookmarks: BookmarkStore? = nil,
+        registry: AgentRegistry
+    ) {
         self.refresher = refresher
+        self.index = index
         self.bookmarks = bookmarks
-    }
-
-    func checkEnvironment() async {
-        refreshState = .running
+        agentDefinitions = registry.definitions
         do {
-            refreshState = .finished(try await refresher.refresh(.startup))
+            try reloadSnapshot()
         } catch {
             refreshState = .failed(String(describing: error))
         }
+    }
+
+    func checkEnvironment() async {
+        await refresh(.startup)
     }
 
     func checkEnvironmentOnLaunch() async {
@@ -48,14 +61,72 @@ final class AppModel {
 
     func authorize(_ url: URL, as kind: AuthorizedRootKind) async {
         guard let bookmarks else {
-            refreshState = .failed("Authorization storage is unavailable")
+            refreshState = .failed(L10n.string("Authorization storage is unavailable"))
             return
         }
+        await waitForActiveRefresh()
         do {
             _ = try bookmarks.save(url: url, kind: kind)
-            await checkEnvironment()
+            authorizedRoots = try bookmarks.roots()
+            rootsByID = Dictionary(uniqueKeysWithValues: authorizedRoots.map { ($0.id, $0) })
+            await refresh(.manual)
         } catch {
             refreshState = .failed(String(describing: error))
+        }
+    }
+
+    func refresh(_ trigger: RefreshTrigger) async {
+        if let activeRefresh {
+            await activeRefresh.task.value
+            clearRefresh(id: activeRefresh.id)
+            return
+        }
+
+        let id = UUID()
+        let task = Task { [weak self] in
+            guard let self else { return }
+            await self.performRefresh(trigger)
+        }
+        activeRefresh = (id, task)
+        await task.value
+        clearRefresh(id: id)
+    }
+
+    var hasAuthorization: Bool {
+        !authorizedRoots.isEmpty
+    }
+
+    private func performRefresh(_ trigger: RefreshTrigger) async {
+        refreshState = .running
+        do {
+            let summary = try await refresher.refresh(trigger)
+            try reloadSnapshot()
+            refreshState = .finished(summary)
+        } catch {
+            refreshState = .failed(String(describing: error))
+        }
+    }
+
+    private func waitForActiveRefresh() async {
+        guard let activeRefresh else { return }
+        await activeRefresh.task.value
+        clearRefresh(id: activeRefresh.id)
+    }
+
+    private func clearRefresh(id: UUID) {
+        guard activeRefresh?.id == id else { return }
+        activeRefresh = nil
+    }
+
+    private func reloadSnapshot() throws {
+        let updatedSnapshots = try index.skills()
+        let updatedRoots = try bookmarks?.roots() ?? []
+        snapshots = updatedSnapshots
+        authorizedRoots = updatedRoots
+        rootsByID = Dictionary(uniqueKeysWithValues: updatedRoots.map { ($0.id, $0) })
+        if let selection,
+           !updatedSnapshots.contains(where: { $0.path == selection.path }) {
+            self.selection = nil
         }
     }
 }

@@ -18,25 +18,34 @@ struct SkillSelectorApp: App {
         }
         let bookmarks = BookmarkStore(container: container)
         let index = SkillIndex(container: container)
+        let registry = BuiltInAgentRegistry.make()
         let refresher = IndexRefresher(
-            registry: BuiltInAgentRegistry.make(),
+            registry: registry,
             bookmarks: bookmarks,
             index: index
         )
-        _model = State(initialValue: AppModel(refresher: refresher, bookmarks: bookmarks))
+        _model = State(
+            initialValue: AppModel(
+                refresher: refresher,
+                index: index,
+                bookmarks: bookmarks,
+                registry: registry
+            )
+        )
     }
 
     var body: some Scene {
         WindowGroup {
-            HSplitView {
-                AuthorizationViews()
-                    .frame(minWidth: 220, idealWidth: 240, maxWidth: 280)
-                    .padding()
-                RootView()
-            }
+            RootView()
                 .environment(model)
                 .task { await model.checkEnvironmentOnLaunch() }
         }
             .defaultSize(width: 1120, height: 720)
+        Settings {
+            AuthorizationViews()
+                .environment(model)
+                .padding(20)
+                .frame(width: 420)
+        }
     }
 }
