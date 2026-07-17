@@ -79,8 +79,7 @@ final class SkillIndexTests: XCTestCase {
         let index = try makeIndex()
         let shared = skill(
             path: "/tmp/shared/demo",
-            agentIDs: ["cursor"],
-            rootIDs: ["home", "project"]
+            agentIDsByRoot: ["home": ["cursor"], "project": ["codex"]]
         )
         try index.apply(
             report: ScanReport(
@@ -96,6 +95,7 @@ final class SkillIndexTests: XCTestCase {
 
         let snapshot = try XCTUnwrap(index.skills().first)
         XCTAssertEqual(snapshot.rootIDs, ["home"])
+        XCTAssertEqual(snapshot.agentIDs, ["cursor"])
         XCTAssertEqual(snapshot.availability, .available)
     }
 
@@ -131,6 +131,7 @@ final class SkillIndexTests: XCTestCase {
         resolvedTarget: String? = nil,
         agentIDs: Set<String> = ["cursor"],
         rootIDs: Set<String> = ["project"],
+        agentIDsByRoot: [String: Set<String>]? = nil,
         date: Date? = nil,
         document: ParsedSkillDocument = ParsedSkillDocument(
             name: "demo",
@@ -144,7 +145,8 @@ final class SkillIndexTests: XCTestCase {
                 agentIDs: agentIDs
             ),
             document: document,
-            rootIDs: rootIDs,
+            agentIDsByRoot: agentIDsByRoot
+                ?? Dictionary(uniqueKeysWithValues: rootIDs.map { ($0, agentIDs) }),
             entryFilename: "SKILL.md",
             entryModificationDate: date
         )

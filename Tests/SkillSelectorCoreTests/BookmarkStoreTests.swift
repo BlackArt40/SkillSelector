@@ -14,7 +14,7 @@ final class BookmarkStoreTests: XCTestCase {
 
         XCTAssertEqual(access.root.url, url.standardizedFileURL)
         XCTAssertEqual(access.root.kind, .project)
-        XCTAssertEqual(store.roots(), [access.root])
+        XCTAssertEqual(try store.roots(), [access.root])
         XCTAssertEqual(adapter.createdURLs, [url.standardizedFileURL])
         access.lease.close()
         XCTAssertEqual(adapter.stoppedURLs, [url.standardizedFileURL])
@@ -22,17 +22,54 @@ final class BookmarkStoreTests: XCTestCase {
 
     func testStaleBookmarkRefreshesPersistedData() throws {
         let adapter = BookmarkAdapterSpy()
-        let store = try makeStore(adapter: adapter)
+        let container = try makeContainer()
+        let store = BookmarkStore(container: container, adapter: adapter)
         let url = URL(fileURLWithPath: "/tmp/custom")
         let saved = try store.save(url: url, kind: .custom)
         adapter.nextResolutionIsStale = true
 
         let firstAccess = try store.resolve(id: saved.id)
         firstAccess.lease.close()
-        _ = try store.resolve(id: saved.id)
+        let reloadedStore = BookmarkStore(container: container, adapter: adapter)
+        let secondAccess = try reloadedStore.resolve(id: saved.id)
+        secondAccess.lease.close()
 
         XCTAssertEqual(adapter.createdURLs, [url.standardizedFileURL, url.standardizedFileURL])
         XCTAssertEqual(adapter.resolvedData, [Data("bookmark-1".utf8), Data("bookmark-2".utf8)])
+    }
+
+    func testRootsThrowsForPersistedInvalidKind() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let record = AuthorizedRootRecord(
+            path: "/tmp/invalid",
+            kind: .custom,
+            bookmarkData: Data("invalid".utf8)
+        )
+        record.kindRawValue = "broader-root"
+        context.insert(record)
+        try context.save()
+        let store = BookmarkStore(container: container, adapter: BookmarkAdapterSpy())
+
+        XCTAssertThrowsError(try store.roots()) { error in
+            XCTAssertEqual(error as? BookmarkStoreError, .invalidRootKind("broader-root"))
+        }
+    }
+
+    func testStaleBookmarkRejectsPathCollisionBeforeMutationOrAccess() throws {
+        let adapter = BookmarkAdapterSpy()
+        let container = try makeContainer()
+        let store = BookmarkStore(container: container, adapter: adapter)
+        let first = try store.save(url: URL(fileURLWithPath: "/tmp/first"), kind: .project)
+        _ = try store.save(url: URL(fileURLWithPath: "/tmp/second"), kind: .custom)
+        adapter.nextResolutionIsStale = true
+
+        XCTAssertThrowsError(try store.resolve(id: first.id)) { error in
+            XCTAssertEqual(error as? BookmarkStoreError, .duplicateRootPath("/tmp/second"))
+        }
+        XCTAssertEqual(adapter.createdURLs.count, 2)
+        XCTAssertTrue(adapter.startedURLs.isEmpty)
+        XCTAssertEqual(try store.roots().map(\.url.path), ["/tmp/first", "/tmp/second"])
     }
 
     func testAccessLeaseClosesSuccessfulAccessExactlyOnce() throws {
@@ -63,13 +100,16 @@ final class BookmarkStoreTests: XCTestCase {
     }
 
     private func makeStore(adapter: BookmarkAdapterSpy) throws -> BookmarkStore {
+        BookmarkStore(container: try makeContainer(), adapter: adapter)
+    }
+
+    private func makeContainer() throws -> ModelContainer {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(
+        return try ModelContainer(
             for: SkillRecord.self,
             AuthorizedRootRecord.self,
             configurations: configuration
         )
-        return BookmarkStore(container: container, adapter: adapter)
     }
 }
 

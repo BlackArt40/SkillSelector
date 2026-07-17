@@ -15,7 +15,7 @@ public final class SkillIndex {
 
         for root in report.roots {
             guard case .unavailable(let reason) = root.availability else { continue }
-            for record in records.values where record.rootIDs.contains(root.id) {
+            for record in records.values where agentIDsByRoot(for: record)[root.id] != nil {
                 record.availabilityRawValue = SkillAvailability.unavailable.rawValue
                 record.unavailableReason = reason
             }
@@ -28,11 +28,15 @@ public final class SkillIndex {
                     .map { $0.path.standardizedFileURL.path }
             )
             for record in Array(records.values)
-                where record.rootIDs.contains(root.id) && !reportedPaths.contains(record.path) {
-                record.rootIDs.removeAll { $0 == root.id }
-                if record.rootIDs.isEmpty {
+                where agentIDsByRoot(for: record)[root.id] != nil
+                    && !reportedPaths.contains(record.path) {
+                var associations = agentIDsByRoot(for: record)
+                associations[root.id] = nil
+                if associations.isEmpty {
                     context.delete(record)
                     records[record.path] = nil
+                } else {
+                    record.agentIDsByRootData = encode(associations)
                 }
             }
         }
@@ -82,14 +86,18 @@ public final class SkillIndex {
         record.modificationDate = scanned.entryModificationDate
         record.availabilityRawValue = SkillAvailability.available.rawValue
         record.unavailableReason = nil
-        record.agentIDs = scanned.agentIDs.sorted()
-        record.rootIDs = Array(Set(record.rootIDs).union(scanned.rootIDs)).sorted()
+        var associations = agentIDsByRoot(for: record)
+        for (rootID, agentIDs) in scanned.agentIDsByRoot {
+            associations[rootID] = agentIDs
+        }
+        record.agentIDsByRootData = encode(associations)
         record.entryFilename = scanned.entryFilename
         record.parseDiagnosticsData = (try? encoder.encode(scanned.document.issues)) ?? Data()
     }
 
     private func snapshot(_ record: SkillRecord) -> SkillSnapshot {
-        SkillSnapshot(
+        let associations = agentIDsByRoot(for: record)
+        return SkillSnapshot(
             path: record.path,
             resolvedTarget: record.resolvedTarget,
             name: record.name,
@@ -102,10 +110,20 @@ public final class SkillIndex {
             availability: SkillAvailability(rawValue: record.availabilityRawValue) ?? .unavailable,
             unavailableReason: record.unavailableReason,
             sourceBinding: record.sourceBinding,
-            agentIDs: record.agentIDs.sorted(),
-            rootIDs: record.rootIDs.sorted(),
+            agentIDs: associations.values.reduce(into: Set<String>()) { result, agentIDs in
+                result.formUnion(agentIDs)
+            }.sorted(),
+            rootIDs: associations.keys.sorted(),
             entryFilename: record.entryFilename,
             parseDiagnostics: (try? decoder.decode([ParseIssue].self, from: record.parseDiagnosticsData)) ?? []
         )
+    }
+
+    private func agentIDsByRoot(for record: SkillRecord) -> [String: Set<String>] {
+        (try? decoder.decode([String: Set<String>].self, from: record.agentIDsByRootData)) ?? [:]
+    }
+
+    private func encode(_ associations: [String: Set<String>]) -> Data {
+        (try? encoder.encode(associations)) ?? Data()
     }
 }

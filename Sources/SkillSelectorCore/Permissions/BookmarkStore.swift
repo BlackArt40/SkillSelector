@@ -78,6 +78,7 @@ public struct AuthorizedRootAccess {
 public enum BookmarkStoreError: Error, Equatable {
     case rootNotFound(String)
     case invalidRootKind(String)
+    case duplicateRootPath(String)
 }
 
 public final class BookmarkStore {
@@ -121,6 +122,10 @@ public final class BookmarkStore {
         let resolution = try adapter.resolveBookmarkData(record.bookmarkData)
         let url = resolution.url.standardizedFileURL
         if resolution.isStale {
+            let records = try context.fetch(FetchDescriptor<AuthorizedRootRecord>())
+            if records.contains(where: { $0.id != record.id && $0.path == url.path }) {
+                throw BookmarkStoreError.duplicateRootPath(url.path)
+            }
             record.bookmarkData = try adapter.createBookmarkData(for: url)
             record.path = url.path
             try context.save()
@@ -135,13 +140,14 @@ public final class BookmarkStore {
         )
     }
 
-    public func roots() -> [AuthorizedRootSnapshot] {
+    public func roots() throws -> [AuthorizedRootSnapshot] {
         let descriptor = FetchDescriptor<AuthorizedRootRecord>(
             sortBy: [SortDescriptor(\.path)]
         )
-        guard let records = try? context.fetch(descriptor) else { return [] }
-        return records.compactMap { record in
-            guard let kind = AuthorizedRootKind(rawValue: record.kindRawValue) else { return nil }
+        return try context.fetch(descriptor).map { record in
+            guard let kind = AuthorizedRootKind(rawValue: record.kindRawValue) else {
+                throw BookmarkStoreError.invalidRootKind(record.kindRawValue)
+            }
             return AuthorizedRootSnapshot(
                 id: record.id,
                 url: URL(fileURLWithPath: record.path),

@@ -13,6 +13,10 @@ final class SkillScannerTests: XCTestCase {
 
         XCTAssertEqual(report.installations.count, 1)
         XCTAssertEqual(report.installations[0].agentIDs, ["cursor", "gemini-cli"])
+        XCTAssertEqual(
+            report.installations[0].agentIDsByRoot,
+            ["cursor": ["cursor"], "gemini-cli": ["gemini-cli"]]
+        )
         XCTAssertEqual(report.installations[0].document.name, "demo")
     }
 

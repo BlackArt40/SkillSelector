@@ -20,8 +20,7 @@ public final class SkillRecord {
     public var availabilityRawValue: String
     public var unavailableReason: String?
     public var sourceBinding: String?
-    public var agentIDs: [String]
-    public var rootIDs: [String]
+    public var agentIDsByRootData: Data
     public var entryFilename: String
     public var parseDiagnosticsData: Data
 
@@ -38,8 +37,7 @@ public final class SkillRecord {
         availability: SkillAvailability = .available,
         unavailableReason: String? = nil,
         sourceBinding: String? = nil,
-        agentIDs: [String] = [],
-        rootIDs: [String] = [],
+        agentIDsByRootData: Data = Data(),
         entryFilename: String,
         parseDiagnosticsData: Data = Data()
     ) {
@@ -55,8 +53,7 @@ public final class SkillRecord {
         self.availabilityRawValue = availability.rawValue
         self.unavailableReason = unavailableReason
         self.sourceBinding = sourceBinding
-        self.agentIDs = agentIDs
-        self.rootIDs = rootIDs
+        self.agentIDsByRootData = agentIDsByRootData
         self.entryFilename = entryFilename
         self.parseDiagnosticsData = parseDiagnosticsData
     }

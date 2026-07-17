@@ -30,8 +30,10 @@ public struct SkillScanner: Sendable {
             rootReports.append(result.root)
             for candidate in result.installations {
                 if var existing = installations[candidate.installation.id] {
-                    existing.installation.agentIDs.formUnion(candidate.agentIDs)
-                    existing.rootIDs.formUnion(candidate.rootIDs)
+                    for (rootID, agentIDs) in candidate.agentIDsByRoot {
+                        existing.agentIDsByRoot[rootID, default: []].formUnion(agentIDs)
+                    }
+                    existing.installation.agentIDs = existing.agentIDs
                     if existing.installation.resolvedTarget == nil {
                         existing.installation.resolvedTarget = candidate.resolvedTarget
                     }
@@ -254,10 +256,14 @@ public struct SkillScanner: Sendable {
             ) else {
                 continue
             }
-            if result == nil {
-                result = candidate
+            if var existing = result {
+                for (candidateRootID, agentIDs) in candidate.agentIDsByRoot {
+                    existing.agentIDsByRoot[candidateRootID, default: []].formUnion(agentIDs)
+                }
+                existing.installation.agentIDs = existing.agentIDs
+                result = existing
             } else {
-                result?.installation.agentIDs.formUnion(candidate.agentIDs)
+                result = candidate
             }
         }
         return result
@@ -358,7 +364,7 @@ public struct SkillScanner: Sendable {
                 agentIDs: agentIDs
             ),
             document: document,
-            rootIDs: [rootID],
+            agentIDsByRoot: [rootID: agentIDs],
             entryFilename: entryFilename,
             entryModificationDate: modificationDate
         )
@@ -411,7 +417,7 @@ public struct SkillScanner: Sendable {
                 title: installationURL.lastPathComponent,
                 issues: [ParseIssue(message: message)]
             ),
-            rootIDs: [rootID],
+            agentIDsByRoot: [rootID: agentIDs],
             entryFilename: entryFilename
         )
     }
