@@ -99,14 +99,59 @@ final class SkillIndexTests: XCTestCase {
         XCTAssertEqual(snapshot.availability, .available)
     }
 
+    func testNewRecordStoresDecodableEmptyProvenanceMap() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let record = SkillRecord(path: "/tmp/new", name: "new", entryFilename: "SKILL.md")
+        context.insert(record)
+        try context.save()
+
+        let saved = try context.fetch(FetchDescriptor<SkillRecord>()).first { $0.path == "/tmp/new" }
+        XCTAssertEqual(try JSONDecoder().decode([String: Set<String>].self, from: try XCTUnwrap(saved?.agentIDsByRootData)), [:])
+    }
+
+    func testCorruptProvenanceFailsQueriesAndReconciliation() throws {
+        let container = try makeContainer()
+        let index = SkillIndex(container: container)
+        try index.apply(
+            report: report(
+                rootID: "project",
+                availability: .available,
+                installations: [skill(path: "/tmp/project/.agents/skills/demo")]
+            )
+        )
+        let context = ModelContext(container)
+        let record = try XCTUnwrap(try context.fetch(FetchDescriptor<SkillRecord>()).first)
+        record.agentIDsByRootData = Data("not-json".utf8)
+        try context.save()
+
+        XCTAssertThrowsError(try index.skills()) { error in
+            XCTAssertEqual(
+                error as? SkillIndexError,
+                .invalidAgentProvenance(path: "/tmp/project/.agents/skills/demo")
+            )
+        }
+        XCTAssertThrowsError(
+            try index.apply(report: report(rootID: "project", availability: .unavailable(reason: "stale")))
+        ) { error in
+            XCTAssertEqual(
+                error as? SkillIndexError,
+                .invalidAgentProvenance(path: "/tmp/project/.agents/skills/demo")
+            )
+        }
+    }
+
     private func makeIndex() throws -> SkillIndex {
+        SkillIndex(container: try makeContainer())
+    }
+
+    private func makeContainer() throws -> ModelContainer {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(
+        return try ModelContainer(
             for: SkillRecord.self,
             AuthorizedRootRecord.self,
             configurations: configuration
         )
-        return SkillIndex(container: container)
     }
 
     private func report(

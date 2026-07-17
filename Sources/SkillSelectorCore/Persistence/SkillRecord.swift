@@ -37,7 +37,7 @@ public final class SkillRecord {
         availability: SkillAvailability = .available,
         unavailableReason: String? = nil,
         sourceBinding: String? = nil,
-        agentIDsByRootData: Data = Data(),
+        agentIDsByRootData: Data = Data("{}".utf8),
         entryFilename: String,
         parseDiagnosticsData: Data = Data()
     ) {

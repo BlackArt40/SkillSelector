@@ -1,6 +1,11 @@
 import Foundation
 import SwiftData
 
+public enum SkillIndexError: Error, Equatable {
+    case invalidAgentProvenance(path: String)
+    case unableToEncodeAgentProvenance(path: String)
+}
+
 public final class SkillIndex {
     private let context: ModelContext
     private let encoder = JSONEncoder()
@@ -15,7 +20,9 @@ public final class SkillIndex {
 
         for root in report.roots {
             guard case .unavailable(let reason) = root.availability else { continue }
-            for record in records.values where agentIDsByRoot(for: record)[root.id] != nil {
+            for record in records.values {
+                let associations = try agentIDsByRoot(for: record)
+                guard associations[root.id] != nil else { continue }
                 record.availabilityRawValue = SkillAvailability.unavailable.rawValue
                 record.unavailableReason = reason
             }
@@ -27,16 +34,18 @@ public final class SkillIndex {
                     .filter { $0.rootIDs.contains(root.id) }
                     .map { $0.path.standardizedFileURL.path }
             )
-            for record in Array(records.values)
-                where agentIDsByRoot(for: record)[root.id] != nil
-                    && !reportedPaths.contains(record.path) {
-                var associations = agentIDsByRoot(for: record)
+            for record in Array(records.values) {
+                var associations = try agentIDsByRoot(for: record)
+                guard associations[root.id] != nil,
+                      !reportedPaths.contains(record.path) else {
+                    continue
+                }
                 associations[root.id] = nil
                 if associations.isEmpty {
                     context.delete(record)
                     records[record.path] = nil
                 } else {
-                    record.agentIDsByRootData = encode(associations)
+                    record.agentIDsByRootData = try encode(associations, path: record.path)
                 }
             }
         }
@@ -57,7 +66,7 @@ public final class SkillIndex {
                 context.insert(record)
                 records[path] = record
             }
-            update(record, from: scanned)
+            try update(record, from: scanned)
         }
 
         try context.save()
@@ -67,7 +76,7 @@ public final class SkillIndex {
         let descriptor = FetchDescriptor<SkillRecord>(
             sortBy: [SortDescriptor(\.path)]
         )
-        return try context.fetch(descriptor).map(snapshot)
+        return try context.fetch(descriptor).map { try snapshot($0) }
     }
 
     private func recordsByPath() throws -> [String: SkillRecord] {
@@ -77,7 +86,7 @@ public final class SkillIndex {
         )
     }
 
-    private func update(_ record: SkillRecord, from scanned: ScannedSkill) {
+    private func update(_ record: SkillRecord, from scanned: ScannedSkill) throws {
         record.resolvedTarget = scanned.resolvedTarget?.standardizedFileURL.path
         record.name = scanned.document.name
             ?? scanned.document.title
@@ -86,17 +95,17 @@ public final class SkillIndex {
         record.modificationDate = scanned.entryModificationDate
         record.availabilityRawValue = SkillAvailability.available.rawValue
         record.unavailableReason = nil
-        var associations = agentIDsByRoot(for: record)
+        var associations = try agentIDsByRoot(for: record)
         for (rootID, agentIDs) in scanned.agentIDsByRoot {
             associations[rootID] = agentIDs
         }
-        record.agentIDsByRootData = encode(associations)
+        record.agentIDsByRootData = try encode(associations, path: record.path)
         record.entryFilename = scanned.entryFilename
         record.parseDiagnosticsData = (try? encoder.encode(scanned.document.issues)) ?? Data()
     }
 
-    private func snapshot(_ record: SkillRecord) -> SkillSnapshot {
-        let associations = agentIDsByRoot(for: record)
+    private func snapshot(_ record: SkillRecord) throws -> SkillSnapshot {
+        let associations = try agentIDsByRoot(for: record)
         return SkillSnapshot(
             path: record.path,
             resolvedTarget: record.resolvedTarget,
@@ -119,11 +128,19 @@ public final class SkillIndex {
         )
     }
 
-    private func agentIDsByRoot(for record: SkillRecord) -> [String: Set<String>] {
-        (try? decoder.decode([String: Set<String>].self, from: record.agentIDsByRootData)) ?? [:]
+    private func agentIDsByRoot(for record: SkillRecord) throws -> [String: Set<String>] {
+        do {
+            return try decoder.decode([String: Set<String>].self, from: record.agentIDsByRootData)
+        } catch {
+            throw SkillIndexError.invalidAgentProvenance(path: record.path)
+        }
     }
 
-    private func encode(_ associations: [String: Set<String>]) -> Data {
-        (try? encoder.encode(associations)) ?? Data()
+    private func encode(_ associations: [String: Set<String>], path: String) throws -> Data {
+        do {
+            return try encoder.encode(associations)
+        } catch {
+            throw SkillIndexError.unableToEncodeAgentProvenance(path: path)
+        }
     }
 }
