@@ -1,22 +1,38 @@
 import Foundation
 
 protocol IndexRefresherFileSystem {
-    func isDirectory(_ url: URL) -> Bool
-    func contentsOfDirectory(at url: URL) -> [URL]
+    func probeDirectory(_ url: URL) throws -> DirectoryProbe
+    func contentsOfDirectory(at url: URL) throws -> [URL]
     func resolvingSymlinks(in url: URL) -> URL
 }
 
+enum DirectoryProbe: Equatable, Sendable {
+    case directory
+    case missing
+}
+
 private struct LocalIndexRefresherFileSystem: IndexRefresherFileSystem {
-    func isDirectory(_ url: URL) -> Bool {
-        (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
+    func probeDirectory(_ url: URL) throws -> DirectoryProbe {
+        do {
+            return try url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true
+                ? .directory
+                : .missing
+        } catch {
+            let nsError = error as NSError
+            if nsError.domain == NSCocoaErrorDomain,
+               [NSFileNoSuchFileError, NSFileReadNoSuchFileError].contains(nsError.code) {
+                return .missing
+            }
+            throw error
+        }
     }
 
-    func contentsOfDirectory(at url: URL) -> [URL] {
-        (try? FileManager.default.contentsOfDirectory(
+    func contentsOfDirectory(at url: URL) throws -> [URL] {
+        try FileManager.default.contentsOfDirectory(
             at: url,
             includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
             options: []
-        )) ?? []
+        )
     }
 
     func resolvingSymlinks(in url: URL) -> URL {
@@ -84,7 +100,7 @@ public final class IndexRefresher {
         let snapshots = try bookmarks.roots()
         var accesses: [AuthorizedRootAccess] = []
         var roots: [ScanRoot] = []
-        var absentRoots: [ScannedRoot] = []
+        var dispositions: [ScannedRoot] = []
         var unresolvedRoots: [ScannedRoot] = []
 
         defer {
@@ -97,7 +113,7 @@ public final class IndexRefresher {
                 accesses.append(access)
                 let plan = scanPlan(for: access.root)
                 roots.append(contentsOf: plan.scanRoots)
-                absentRoots.append(contentsOf: plan.absentRoots)
+                dispositions.append(contentsOf: plan.dispositions)
             } catch {
                 unresolvedRoots.append(
                     ScannedRoot(
@@ -112,8 +128,9 @@ public final class IndexRefresher {
         }
 
         var report = await scanner.scan(roots)
-        report.roots.append(contentsOf: absentRoots)
-        report.roots.append(contentsOf: unresolvedRoots)
+        report.roots = coalescedRoots(
+            report.roots + dispositions + unresolvedRoots
+        )
         try index.apply(report: report)
         let after = try index.skills()
         return summary(before: before, after: after)
@@ -121,7 +138,7 @@ public final class IndexRefresher {
 
     private struct ScanPlan {
         var scanRoots: [ScanRoot]
-        var absentRoots: [ScannedRoot]
+        var dispositions: [ScannedRoot]
     }
 
     private func scanPlan(for root: AuthorizedRootSnapshot) -> ScanPlan {
@@ -129,28 +146,50 @@ public final class IndexRefresher {
         case .home:
             return homeRoots(root)
         case .project:
-            return ScanPlan(
-                scanRoots: [.project(id: root.id, url: root.url, registry: registry)],
-                absentRoots: []
-            )
+            return projectRoots(root)
         case .system, .custom:
             return exactRoots(root)
         }
     }
 
     private func homeRoots(_ root: AuthorizedRootSnapshot) -> ScanPlan {
+        do {
+            guard try probeDirectory(root.url) == .directory else {
+                return unavailablePlan(
+                    for: root,
+                    reason: "Authorized home directory is missing"
+                )
+            }
+        } catch {
+            return unavailablePlan(for: root, error: error)
+        }
+
         var candidates: [String: (url: URL, agents: Set<String>, entry: String)] = [:]
         var availableDispositions = [root.url.path: root.url]
+        var unavailableDispositions: [ScannedRoot] = []
         for definition in registry.definitions {
             for declaredPath in definition.globalRoots {
-                for url in expandedHomeURLs(declaredPath, relativeTo: root.url) {
-                    if isDirectory(url) {
-                        let key = "\(url.path)\u{1f}\(definition.entryFilename)"
-                        candidates[key, default: (url, [], definition.entryFilename)]
-                            .agents.insert(definition.id)
-                    } else {
-                        availableDispositions[url.path] = url
+                do {
+                    for url in try expandedHomeURLs(declaredPath, relativeTo: root.url) {
+                        switch try probeDirectory(url) {
+                        case .directory:
+                            let key = "\(url.path)\u{1f}\(definition.entryFilename)"
+                            candidates[key, default: (url, [], definition.entryFilename)]
+                                .agents.insert(definition.id)
+                        case .missing:
+                            availableDispositions[url.path] = url
+                        }
                     }
+                } catch {
+                    unavailableDispositions.append(
+                        ScannedRoot(
+                            id: root.id,
+                            url: root.url,
+                            availability: .unavailable(
+                                reason: "Unable to inspect authorized directory: \(error)"
+                            )
+                        )
+                    )
                 }
             }
         }
@@ -166,18 +205,22 @@ public final class IndexRefresher {
             }
         return ScanPlan(
             scanRoots: scanRoots,
-            absentRoots: availableDispositions.values.map {
+            dispositions: availableDispositions.values.map {
                 ScannedRoot(id: root.id, url: $0, availability: .available)
-            }
+            } + unavailableDispositions
         )
     }
 
     private func exactRoots(_ root: AuthorizedRootSnapshot) -> ScanPlan {
-        guard isDirectory(root.url) else {
-            return ScanPlan(
-                scanRoots: [],
-                absentRoots: [ScannedRoot(id: root.id, url: root.url, availability: .available)]
-            )
+        do {
+            guard try probeDirectory(root.url) == .directory else {
+                return unavailablePlan(
+                    for: root,
+                    reason: "Authorized directory is missing"
+                )
+            }
+        } catch {
+            return unavailablePlan(for: root, error: error)
         }
         let matching = registry.definitions.filter { definition in
             definition.globalRoots.contains(root.url.path)
@@ -192,7 +235,7 @@ public final class IndexRefresher {
                         agentIDs: [root.kind == .system ? "system" : "custom"]
                     ),
                 ],
-                absentRoots: []
+                dispositions: []
             )
         }
         return ScanPlan(
@@ -204,8 +247,70 @@ public final class IndexRefresher {
                     entryFilename: entryFilename
                 )
             },
-            absentRoots: []
+            dispositions: []
         )
+    }
+
+    private func projectRoots(_ root: AuthorizedRootSnapshot) -> ScanPlan {
+        do {
+            guard try probeDirectory(root.url) == .directory else {
+                return unavailablePlan(
+                    for: root,
+                    reason: "Authorized project directory is missing"
+                )
+            }
+        } catch {
+            return unavailablePlan(for: root, error: error)
+        }
+        return ScanPlan(
+            scanRoots: [.project(id: root.id, url: root.url, registry: registry)],
+            dispositions: []
+        )
+    }
+
+    private func unavailablePlan(
+        for root: AuthorizedRootSnapshot,
+        error: Error
+    ) -> ScanPlan {
+        unavailablePlan(
+            for: root,
+            reason: "Unable to inspect authorized directory: \(error)"
+        )
+    }
+
+    private func unavailablePlan(
+        for root: AuthorizedRootSnapshot,
+        reason: String
+    ) -> ScanPlan {
+        ScanPlan(
+            scanRoots: [],
+            dispositions: [
+                ScannedRoot(
+                    id: root.id,
+                    url: root.url,
+                    availability: .unavailable(reason: reason)
+                ),
+            ]
+        )
+    }
+
+    private func coalescedRoots(_ roots: [ScannedRoot]) -> [ScannedRoot] {
+        Dictionary(grouping: roots, by: \.id)
+            .sorted { $0.key < $1.key }
+            .map { id, roots in
+                if let unavailable = roots.first(where: {
+                    if case .unavailable = $0.availability { return true }
+                    return false
+                }), case .unavailable(let reason) = unavailable.availability {
+                    return ScannedRoot(
+                        id: id,
+                        url: unavailable.url,
+                        availability: .unavailable(reason: reason)
+                    )
+                }
+                let available = roots[0]
+                return ScannedRoot(id: id, url: available.url, availability: .available)
+            }
     }
 
     private func summary(before: [SkillSnapshot], after: [SkillSnapshot]) -> RefreshSummary {
@@ -228,11 +333,11 @@ public final class IndexRefresher {
         )
     }
 
-    private func isDirectory(_ url: URL) -> Bool {
-        fileSystem.isDirectory(url)
+    private func probeDirectory(_ url: URL) throws -> DirectoryProbe {
+        try fileSystem.probeDirectory(url)
     }
 
-    private func expandedHomeURLs(_ path: String, relativeTo home: URL) -> [URL] {
+    private func expandedHomeURLs(_ path: String, relativeTo home: URL) throws -> [URL] {
         guard path.hasPrefix("~/") else { return [] }
         let components = path.dropFirst(2).split(separator: "/").map(String.init)
         guard !components.isEmpty,
@@ -244,16 +349,23 @@ public final class IndexRefresher {
         for component in components {
             if component.contains("{") || component.contains("}") {
                 guard isValidTemplate(component) else { return [] }
-                candidates = candidates.flatMap { (parent: URL) -> [URL] in
-                    guard isContained(parent, in: home), isDirectory(parent) else {
-                        return [URL]()
+                var expanded: [URL] = []
+                for parent in candidates {
+                    guard isContained(parent, in: home) else {
+                        continue
                     }
-                    return directoryContents(parent).filter { child in
-                        segment(child.lastPathComponent, matches: component)
-                            && isContained(child, in: home)
-                            && isDirectory(child)
+                    guard try probeDirectory(parent) == .directory else { continue }
+                    for child in try directoryContents(parent) {
+                        guard segment(child.lastPathComponent, matches: component),
+                              isContained(child, in: home) else {
+                            continue
+                        }
+                        if try probeDirectory(child) == .directory {
+                            expanded.append(child)
+                        }
                     }
                 }
+                candidates = expanded
             } else {
                 candidates = candidates.map { $0.appending(path: component).standardizedFileURL }
             }
@@ -285,8 +397,8 @@ public final class IndexRefresher {
             && value.count > prefix.count + suffix.count
     }
 
-    private func directoryContents(_ url: URL) -> [URL] {
-        fileSystem.contentsOfDirectory(at: url)
+    private func directoryContents(_ url: URL) throws -> [URL] {
+        try fileSystem.contentsOfDirectory(at: url)
     }
 
     private func isContained(_ candidate: URL, in root: URL) -> Bool {

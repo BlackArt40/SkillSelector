@@ -79,6 +79,33 @@ final class IndexRefresherTests: XCTestCase {
         XCTAssertEqual(adapter.stoppedURLs.map(\.path), [project.path, project.path])
     }
 
+    func testInaccessibleAuthorizedProjectRetainsItsPriorInstallationsAsUnavailable() async throws {
+        let fixture = try RefreshFixture()
+        try fixture.writeSkill(at: "project/.cursor/skills/demo", name: "demo")
+        let project = fixture.home.appending(path: "project")
+        let adapter = FixtureBookmarkAdapter()
+        let container = try fixture.makeContainer()
+        let bookmarks = BookmarkStore(container: container, adapter: adapter)
+        _ = try bookmarks.save(url: project, kind: .project)
+        let index = SkillIndex(container: container)
+        let fileSystem = RecordingIndexRefresherFileSystem()
+        let refresher = IndexRefresher(
+            registry: BuiltInAgentRegistry.make(),
+            bookmarks: bookmarks,
+            index: index,
+            fileSystem: fileSystem
+        )
+
+        let first = try await refresher.refresh(.startup)
+        fileSystem.inaccessiblePaths.insert(project.standardizedFileURL.path)
+        let second = try await refresher.refresh(.manual)
+
+        XCTAssertEqual(first.added, 1)
+        XCTAssertEqual(second.unavailable, 1)
+        XCTAssertEqual(second.removed, 0)
+        XCTAssertEqual(try index.skills().first?.availability, .unavailable)
+    }
+
     func testFailedHomeBookmarkMarksPreviouslyIndexedSkillUnavailable() async throws {
         let fixture = try RefreshFixture()
         try fixture.writeSkill(at: ".claude/skills/demo", name: "demo")
@@ -132,6 +159,115 @@ final class IndexRefresherTests: XCTestCase {
         XCTAssertEqual(first.added, 1)
         XCTAssertEqual(second.unavailable, 1)
         XCTAssertEqual(try index.skills().first?.availability, .unavailable)
+    }
+
+    func testInaccessibleExactSystemAndCustomRootsRetainPriorInstallations() async throws {
+        let fixture = try RefreshFixture()
+        try fixture.writeSkill(at: "system/system-demo", name: "system-demo")
+        try fixture.writeSkill(at: "custom/custom-demo", name: "custom-demo")
+        let system = fixture.home.appending(path: "system")
+        let custom = fixture.home.appending(path: "custom")
+        let registry = AgentRegistry(definitions: [
+            AgentDefinition(
+                id: "system-agent",
+                displayName: "System Agent",
+                globalRoots: [system.path],
+                projectPatterns: []
+            ),
+        ])
+        let adapter = FixtureBookmarkAdapter()
+        let container = try fixture.makeContainer()
+        let bookmarks = BookmarkStore(container: container, adapter: adapter)
+        _ = try bookmarks.save(url: system, kind: .system)
+        _ = try bookmarks.save(url: custom, kind: .custom)
+        let index = SkillIndex(container: container)
+        let fileSystem = RecordingIndexRefresherFileSystem()
+        let refresher = IndexRefresher(
+            registry: registry,
+            bookmarks: bookmarks,
+            index: index,
+            fileSystem: fileSystem
+        )
+
+        let first = try await refresher.refresh(.startup)
+        fileSystem.inaccessiblePaths = Set([system.path, custom.path])
+        let second = try await refresher.refresh(.manual)
+        let skills = try index.skills()
+
+        XCTAssertEqual(first.added, 2)
+        XCTAssertEqual(second.unavailable, 2)
+        XCTAssertEqual(second.removed, 0)
+        XCTAssertEqual(skills.map(\.availability), [.unavailable, .unavailable])
+    }
+
+    func testInaccessibleAuthorizedHomeRetainsPriorInstallations() async throws {
+        let fixture = try RefreshFixture()
+        try fixture.writeSkill(at: ".claude/skills/demo", name: "demo")
+        let adapter = FixtureBookmarkAdapter()
+        let container = try fixture.makeContainer()
+        let bookmarks = BookmarkStore(container: container, adapter: adapter)
+        _ = try bookmarks.save(url: fixture.home, kind: .home)
+        let index = SkillIndex(container: container)
+        let fileSystem = RecordingIndexRefresherFileSystem()
+        let refresher = IndexRefresher(
+            registry: BuiltInAgentRegistry.make(),
+            bookmarks: bookmarks,
+            index: index,
+            fileSystem: fileSystem
+        )
+
+        let first = try await refresher.refresh(.startup)
+        fileSystem.inaccessiblePaths.insert(fixture.home.standardizedFileURL.path)
+        let second = try await refresher.refresh(.manual)
+
+        XCTAssertEqual(first.added, 1)
+        XCTAssertEqual(second.unavailable, 1)
+        XCTAssertEqual(second.removed, 0)
+        XCTAssertEqual(try index.skills().first?.availability, .unavailable)
+    }
+
+    func testUnavailableHomeChildIsNotDeletedByAvailableSiblingDisposition() async throws {
+        let fixture = try RefreshFixture()
+        try fixture.writeSkill(at: ".first/skills/first", name: "first")
+        try fixture.writeSkill(at: ".second/skills/second", name: "second")
+        let firstRoot = fixture.home.appending(path: ".first/skills")
+        let registry = AgentRegistry(definitions: [
+            AgentDefinition(
+                id: "first-agent",
+                displayName: "First Agent",
+                globalRoots: ["~/.first/skills"],
+                projectPatterns: []
+            ),
+            AgentDefinition(
+                id: "second-agent",
+                displayName: "Second Agent",
+                globalRoots: ["~/.second/skills"],
+                projectPatterns: []
+            ),
+        ])
+        let adapter = FixtureBookmarkAdapter()
+        let container = try fixture.makeContainer()
+        let bookmarks = BookmarkStore(container: container, adapter: adapter)
+        _ = try bookmarks.save(url: fixture.home, kind: .home)
+        let index = SkillIndex(container: container)
+        let fileSystem = RecordingIndexRefresherFileSystem()
+        let refresher = IndexRefresher(
+            registry: registry,
+            bookmarks: bookmarks,
+            index: index,
+            fileSystem: fileSystem
+        )
+
+        let first = try await refresher.refresh(.startup)
+        fileSystem.inaccessiblePaths.insert(firstRoot.path)
+        let second = try await refresher.refresh(.manual)
+        let skills = try index.skills()
+
+        XCTAssertEqual(first.added, 2)
+        XCTAssertEqual(second.removed, 0)
+        XCTAssertEqual(skills.map(\.name), ["first", "second"])
+        XCTAssertEqual(skills.first { $0.name == "first" }?.availability, .unavailable)
+        XCTAssertEqual(skills.first { $0.name == "second" }?.availability, .available)
     }
 
     func testDisappearingRegisteredHomeRootRemovesItsPriorInstallations() async throws {
@@ -279,24 +415,38 @@ private enum FixtureBookmarkError: Error {
 }
 
 private final class RecordingIndexRefresherFileSystem: IndexRefresherFileSystem {
+    var inaccessiblePaths: Set<String> = []
     private(set) var enumeratedURLs: [URL] = []
     private(set) var probedDirectoryURLs: [URL] = []
 
-    func isDirectory(_ url: URL) -> Bool {
-        probedDirectoryURLs.append(url.standardizedFileURL)
-        return (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
+    func probeDirectory(_ url: URL) throws -> DirectoryProbe {
+        let standardizedURL = url.standardizedFileURL
+        probedDirectoryURLs.append(standardizedURL)
+        if inaccessiblePaths.contains(standardizedURL.path) {
+            throw FixtureFileSystemError.inaccessible
+        }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: standardizedURL.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else {
+            return .missing
+        }
+        return .directory
     }
 
-    func contentsOfDirectory(at url: URL) -> [URL] {
+    func contentsOfDirectory(at url: URL) throws -> [URL] {
         enumeratedURLs.append(url.standardizedFileURL)
-        return (try? FileManager.default.contentsOfDirectory(
+        return try FileManager.default.contentsOfDirectory(
             at: url,
             includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
             options: []
-        )) ?? []
+        )
     }
 
     func resolvingSymlinks(in url: URL) -> URL {
         url.resolvingSymlinksInPath().standardizedFileURL
     }
+}
+
+private enum FixtureFileSystemError: Error {
+    case inaccessible
 }
