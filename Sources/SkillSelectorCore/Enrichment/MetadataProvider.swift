@@ -5,6 +5,7 @@ public typealias CommandRunning = ExternalCommandRunning
 public enum MetadataProviderKind: String, Codable, CaseIterable, Hashable, Sendable {
     case github
     case npm
+    case mcp
 }
 
 public struct MetadataQuery: Hashable, Sendable {

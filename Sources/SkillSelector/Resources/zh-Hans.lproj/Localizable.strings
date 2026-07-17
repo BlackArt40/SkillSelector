@@ -196,3 +196,13 @@
 "This candidate will also become the confirmed update source for this Skill." = "此候选也会成为该 Skill 已确认的更新来源。";
 "Trusted Metadata" = "可信元数据";
 "Uses local gh and npm tools only for Skills without custom, local, or remote descriptions." = "仅对缺少自定义、本机和远程简介的 Skill 使用本机 gh 与 npm 工具。";
+"Approve" = "批准";
+"Approve Exact Command" = "批准精确命令";
+"Approve Exact MCP Command" = "批准精确的 MCP 命令";
+"Confirmation required for every call" = "每次调用都需要确认";
+"Legacy SSE is not supported." = "不支持旧版 SSE。";
+"Load Tools" = "加载工具";
+"MCP Servers" = "MCP Server";
+"No MCP server configurations found." = "未找到 MCP Server 配置。";
+"Server read-only hint" = "Server 提供的只读提示";
+"Unable to load MCP tools." = "无法加载 MCP 工具。";

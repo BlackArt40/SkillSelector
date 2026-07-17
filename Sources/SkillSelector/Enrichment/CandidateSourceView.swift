@@ -162,6 +162,7 @@ struct CandidateSourceView: View {
         switch provider {
         case .github: "GitHub"
         case .npm: "npm"
+        case .mcp: "MCP"
         }
     }
 }

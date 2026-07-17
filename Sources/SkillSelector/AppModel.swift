@@ -111,6 +111,46 @@ final class AppModel {
         }
     }
 
+    func discoverMCPConfigurations() throws -> [MCPServerConfiguration] {
+        guard let bookmarks,
+              let homeRoot = try bookmarks.roots().first(where: { $0.kind == .home }) else {
+            return []
+        }
+        let access = try bookmarks.resolve(id: homeRoot.id)
+        defer { access.lease.close() }
+        return try MCPConfigDiscovery().discover(in: access.root.url)
+    }
+
+    func loadMCPTools(configuration: MCPServerConfiguration) async throws -> [MCPTool] {
+        guard let bookmarks,
+              let homeRoot = try bookmarks.roots().first(where: { $0.kind == .home }) else {
+            throw MCPClientError.disabled
+        }
+        let access = try bookmarks.resolve(id: homeRoot.id)
+        defer { access.lease.close() }
+        let client: any MCPClient
+        switch configuration.transport {
+        case .stdio:
+            client = StdioMCPClient(
+                configuration: configuration,
+                approval: CommandApproval(),
+                authorizedHomeURL: access.root.url
+            )
+        case .streamableHTTP:
+            client = HTTPMCPClient(configuration: configuration)
+        case .legacySSE:
+            throw MCPClientError.unsupportedTransport
+        }
+        do {
+            let tools = try await client.listTools()
+            await client.close()
+            return tools
+        } catch {
+            await client.close()
+            throw error
+        }
+    }
+
     func authorize(_ url: URL, as kind: AuthorizedRootKind) async {
         guard let bookmarks else {
             refreshState = .failed(L10n.string("Authorization storage is unavailable"))
@@ -488,9 +528,11 @@ final class AppModel {
             .npm,
             authorizedHomeAccess: npmHomeAccess
         )
+        let mcpHomeAccess = try? bookmarks.resolve(id: homeRoot.id)
         defer {
             gh.access?.close()
             npm.access?.close()
+            mcpHomeAccess?.lease.close()
         }
         var providers: [any MetadataProvider] = []
         if let access = gh.access {
@@ -504,6 +546,15 @@ final class AppModel {
                 toolAccess: access,
                 runner: commandRunner
             ))
+        }
+        if let mcpHomeAccess {
+            let provider = MCPMetadataProvider(
+                rootURL: mcpHomeAccess.root.url,
+                authorizedHomeURL: mcpHomeAccess.root.url
+            )
+            if provider.hasEnabledConfiguration() {
+                providers.append(provider)
+            }
         }
         guard !providers.isEmpty else {
             enrichmentError = gh.location.state == .unauthenticated

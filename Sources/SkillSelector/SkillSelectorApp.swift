@@ -46,6 +46,8 @@ struct SkillSelectorApp: App {
             VStack(alignment: .leading, spacing: 18) {
                 AuthorizationViews()
                 Divider()
+                MCPSettingsView()
+                Divider()
                 Toggle(
                     L10n.string("Enrich Missing Descriptions After Refresh"),
                     isOn: $model.enrichMissingDescriptionsAfterRefresh
@@ -58,7 +60,7 @@ struct SkillSelectorApp: App {
             }
                 .environment(model)
                 .padding(20)
-                .frame(width: 420)
+                .frame(width: 560)
                 .background(
                     SettingsWindowTitle(title: L10n.string("SkillSelector Settings"))
                 )

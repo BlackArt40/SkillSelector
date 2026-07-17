@@ -196,3 +196,13 @@
 "This candidate will also become the confirmed update source for this Skill." = "This candidate will also become the confirmed update source for this Skill.";
 "Trusted Metadata" = "Trusted Metadata";
 "Uses local gh and npm tools only for Skills without custom, local, or remote descriptions." = "Uses local gh and npm tools only for Skills without custom, local, or remote descriptions.";
+"Approve" = "Approve";
+"Approve Exact Command" = "Approve Exact Command";
+"Approve Exact MCP Command" = "Approve Exact MCP Command";
+"Confirmation required for every call" = "Confirmation required for every call";
+"Legacy SSE is not supported." = "Legacy SSE is not supported.";
+"Load Tools" = "Load Tools";
+"MCP Servers" = "MCP Servers";
+"No MCP server configurations found." = "No MCP server configurations found.";
+"Server read-only hint" = "Server read-only hint";
+"Unable to load MCP tools." = "Unable to load MCP tools.";
