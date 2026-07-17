@@ -1,0 +1,16 @@
+.DS_Store
+
+# Local Agent state and project-level Skill folders
+.agents/
+.claude/
+.codex/
+.opencode/
+.qoder/
+.codebuddy/
+.skills/
+
+# Local planning notes
+需求.md
+
+# Isolated implementation worktrees
+.worktrees/
