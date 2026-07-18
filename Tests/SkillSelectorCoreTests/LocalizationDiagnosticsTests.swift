@@ -103,6 +103,18 @@ final class LocalizationDiagnosticsTests: XCTestCase {
         XCTAssertEqual(Set(english.keys), Set(chinese.keys))
         XCTAssertEqual(english["SkillSelector Settings"], "SkillSelector Settings")
         XCTAssertEqual(chinese["SkillSelector Settings"], "SkillSelector 设置")
+        let automaticEnrichment = "Uses local gh, npm, and enabled read-only MCP tools only for Skills without custom, local, or remote descriptions."
+        XCTAssertEqual(english[automaticEnrichment], automaticEnrichment)
+        XCTAssertEqual(
+            chinese[automaticEnrichment],
+            "仅对缺少自定义、本机和远程简介的 Skill 使用本机 gh、npm 和已启用的只读 MCP 工具。"
+        )
+        let findMetadata = "Find trusted metadata with local gh, npm, and enabled read-only MCP tools"
+        XCTAssertEqual(english[findMetadata], findMetadata)
+        XCTAssertEqual(
+            chinese[findMetadata],
+            "使用本机 gh、npm 和已启用的只读 MCP 工具查找可信元数据"
+        )
     }
 
     func testLegacyParseIssueWithoutStructuredDiagnosticStillDecodes() throws {

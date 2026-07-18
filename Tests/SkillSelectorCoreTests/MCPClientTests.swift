@@ -63,6 +63,95 @@ final class MCPClientTests: XCTestCase {
         XCTAssertFalse(changedServer.isEnabled)
     }
 
+    func testCodexConfigurationFingerprintCoversEverySupportedServerFieldWithoutPersistingSecrets() throws {
+        try FileManager.default.createDirectory(
+            at: fixture.appendingPathComponent(".codex"),
+            withIntermediateDirectories: true
+        )
+        let configURL = fixture.appendingPathComponent(".codex/config.toml")
+        let baseline = """
+        [mcp_servers.local]
+        command = "/usr/bin/env"
+        args = ["printf", "arg-one"]
+        env = { API_TOKEN = "secret-env", MODE = "mode-one" }
+        cwd = "/tmp"
+        type = "stdio"
+        startup_timeout_sec = 10
+
+        [mcp_servers.remote]
+        url = "https://example.com/mcp"
+        type = "streamable-http"
+        headers = { Authorization = "secret-header", X_Mode = "header-one" }
+        """
+
+        func discover(_ text: String) throws -> [String: MCPServerConfiguration] {
+            try text.write(to: configURL, atomically: true, encoding: .utf8)
+            return Dictionary(uniqueKeysWithValues: try MCPConfigDiscovery().discover(in: fixture).map {
+                ($0.name, $0)
+            })
+        }
+
+        let initial = try discover(baseline)
+        let local = try XCTUnwrap(initial["local"])
+        let remote = try XCTUnwrap(initial["remote"])
+        let localApproval = try XCTUnwrap(local.commandApproval)
+        guard case .stdio(let executable, let arguments, let environment, let workingDirectory) = local.transport else {
+            return XCTFail("Expected Codex stdio configuration")
+        }
+        XCTAssertEqual(executable, "/usr/bin/env")
+        XCTAssertEqual(arguments, ["printf", "arg-one"])
+        XCTAssertEqual(environment, ["API_TOKEN": "secret-env", "MODE": "mode-one"])
+        XCTAssertEqual(workingDirectory, "/tmp")
+        guard case .streamableHTTP(let endpoint, let headers) = remote.transport else {
+            return XCTFail("Expected Codex Streamable HTTP configuration")
+        }
+        XCTAssertEqual(endpoint.absoluteString, "https://example.com/mcp")
+        XCTAssertEqual(headers, ["Authorization": "secret-header", "X_Mode": "header-one"])
+        for secret in ["secret-env", "secret-header"] {
+            XCTAssertFalse(local.id.contains(secret))
+            XCTAssertFalse(remote.id.contains(secret))
+            XCTAssertFalse(localApproval.fingerprint.contains(secret))
+            XCTAssertFalse(localApproval.configurationFingerprint?.contains(secret) ?? false)
+        }
+
+        let localVariations = [
+            baseline.replacingOccurrences(of: "/usr/bin/env", with: "/bin/echo"),
+            baseline.replacingOccurrences(of: "arg-one", with: "arg-two"),
+            baseline.replacingOccurrences(of: "mode-one", with: "mode-two"),
+            baseline.replacingOccurrences(of: "cwd = \"/tmp\"", with: "cwd = \"/var/tmp\""),
+            baseline.replacingOccurrences(of: "type = \"stdio\"", with: "type = \"custom-stdio\""),
+            baseline.replacingOccurrences(of: "startup_timeout_sec = 10", with: "startup_timeout_sec = 11"),
+        ]
+        for variation in localVariations {
+            let changed = try XCTUnwrap(try discover(variation)["local"])
+            XCTAssertNotEqual(changed.id, local.id)
+            XCTAssertNotEqual(changed.commandApproval?.fingerprint, localApproval.fingerprint)
+        }
+
+        let remoteVariations = [
+            baseline.replacingOccurrences(of: "https://example.com/mcp", with: "https://example.com/other"),
+            baseline.replacingOccurrences(of: "streamable-http", with: "custom-http"),
+            baseline.replacingOccurrences(of: "header-one", with: "header-two"),
+        ]
+        for variation in remoteVariations {
+            let changed = try XCTUnwrap(try discover(variation)["remote"])
+            XCTAssertNotEqual(changed.id, remote.id)
+        }
+
+        let defaults = UserDefaults(suiteName: "MCPConfigFingerprintTests-\(UUID().uuidString)")!
+        let preferences = MCPPreferenceStore(defaults: defaults)
+        let approval = CommandApproval(
+            store: UserDefaultsCommandApprovalStore(defaults: defaults, key: "approvals")
+        )
+        preferences.setServer(local.id, enabled: true)
+        approval.approve(localApproval)
+        let changed = try XCTUnwrap(
+            try discover(baseline.replacingOccurrences(of: "mode-one", with: "mode-two"))["local"]
+        )
+        XCTAssertFalse(preferences.isServerEnabled(changed.id))
+        XCTAssertEqual(approval.state(for: try XCTUnwrap(changed.commandApproval)), .approvalRequired)
+    }
+
     func testStdioListToolsInitializesWithSequentialIDsAndTerminatesProcess() async throws {
         let transcript = fixture.appendingPathComponent("transcript")
         let pidFile = fixture.appendingPathComponent("pid")
@@ -75,7 +164,7 @@ final class MCPClientTests: XCTestCase {
           printf '%s\n' "$line" >> "$1"
           case "$count" in
             1) printf '%s\n' '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-03-26","capabilities":{},"serverInfo":{"name":"fixture","version":"1"}}}' ;;
-            3) printf '%s\n' '{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"metadata_lookup","description":"Look up metadata","inputSchema":{"type":"object"},"annotations":{"readOnlyHint":true}}]}}' ;;
+            3) printf '%s\n' '{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"metadata_lookup","description":"Look up metadata","inputSchema":{"type":"object"},"annotations":{"readOnlyHint":true,"destructiveHint":false}}]}}' ;;
           esac
         done
         """)
@@ -305,7 +394,7 @@ final class MCPClientTests: XCTestCase {
                 payload = ""
             case "tools/list":
                 status = 200
-                payload = #"{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"metadata_lookup","description":"Lookup","inputSchema":{"type":"object"},"annotations":{"readOnlyHint":true}}]}}"#
+                payload = #"{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"metadata_lookup","description":"Lookup","inputSchema":{"type":"object"},"annotations":{"readOnlyHint":true,"destructiveHint":false}}]}}"#
             default:
                 XCTAssertEqual(request.httpMethod, "DELETE")
                 status = 200
@@ -351,7 +440,7 @@ final class MCPClientTests: XCTestCase {
             if method == "initialize" {
                 result = #"{"protocolVersion":"2025-03-26","capabilities":{},"serverInfo":{"name":"fixture","version":"1"}}"#
             } else if method == "tools/list" {
-                result = #"{"tools":[{"name":"metadata_lookup","inputSchema":{"type":"object"},"annotations":{"readOnlyHint":true}}]}"#
+                result = #"{"tools":[{"name":"metadata_lookup","inputSchema":{"type":"object"},"annotations":{"readOnlyHint":true,"destructiveHint":false}}]}"#
             } else {
                 result = #"{"content":[{"type":"text","text":"touch __MARKER__"}],"structuredContent":{"description":"HTTP source"}}"#
                     .replacingOccurrences(of: "__MARKER__", with: marker.path)
@@ -394,7 +483,7 @@ final class MCPClientTests: XCTestCase {
             name: "invalid",
             source: .generic,
             configurationURL: fixture,
-            transport: .streamableHTTP(URL(string: "ftp://example.com/mcp")!),
+            transport: .streamableHTTP(endpoint: URL(string: "ftp://example.com/mcp")!, headers: [:]),
             support: .supported,
             isEnabled: true
         )
@@ -446,6 +535,112 @@ final class MCPClientTests: XCTestCase {
             ).listTools(),
             expected: .timedOut
         )
+    }
+
+    func testHTTPCleanupHasIndependentHardDeadlineForSlowDripResponse() async throws {
+        let recorder = cleanupRecorder(
+            response: MCPURLProtocolResponse(
+                status: 200,
+                headers: [:],
+                data: Data(repeating: 0x31, count: 200),
+                chunkSize: 1,
+                chunkInterval: 0.01
+            )
+        )
+        let clock = ContinuousClock()
+        let start = clock.now
+        let tools = try await HTTPMCPClient(
+            configuration: httpConfiguration(enabled: true),
+            session: fixtureSession(recorder),
+            timeout: 2,
+            cleanupTimeout: 0.1
+        ).listTools()
+
+        XCTAssertEqual(tools.map(\.name), ["metadata_lookup"])
+        XCTAssertLessThan(start.duration(to: clock.now), .milliseconds(500))
+        XCTAssertLessThan(recorder.deliveredDeleteBytes, 200)
+    }
+
+    func testHTTPCleanupStopsStreamingWhenResponseExceedsBound() async throws {
+        let recorder = cleanupRecorder(
+            response: MCPURLProtocolResponse(
+                status: 200,
+                headers: [:],
+                data: Data(repeating: 0x31, count: 800),
+                chunkSize: 1,
+                chunkInterval: 0.001
+            )
+        )
+        let tools = try await HTTPMCPClient(
+            configuration: httpConfiguration(enabled: true),
+            session: fixtureSession(recorder),
+            timeout: 2,
+            maximumResponseBytes: 256,
+            cleanupTimeout: 2
+        ).listTools()
+
+        XCTAssertEqual(tools.map(\.name), ["metadata_lookup"])
+        XCTAssertLessThan(recorder.deliveredDeleteBytes, 800)
+    }
+
+    func testCancellingOuterTaskInterruptsHTTPCleanup() async throws {
+        let recorder = cleanupRecorder(
+            response: MCPURLProtocolResponse(
+                status: 200,
+                headers: [:],
+                data: Data(repeating: 0x31, count: 200),
+                chunkSize: 1,
+                chunkInterval: 0.01
+            )
+        )
+        let configuration = httpConfiguration(enabled: true)
+        let session = fixtureSession(recorder)
+        let task = Task {
+            try await HTTPMCPClient(
+                configuration: configuration,
+                session: session,
+                timeout: 3,
+                cleanupTimeout: 3
+            ).listTools()
+        }
+        for _ in 0..<100 where !recorder.hasDeleteRequest {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(recorder.hasDeleteRequest)
+
+        let clock = ContinuousClock()
+        let start = clock.now
+        task.cancel()
+        let tools = try await task.value
+
+        XCTAssertEqual(tools.map(\.name), ["metadata_lookup"])
+        XCTAssertLessThan(start.duration(to: clock.now), .milliseconds(500))
+        XCTAssertLessThan(recorder.deliveredDeleteBytes, 200)
+    }
+
+    func testToolSafetyRequiresExplicitReadOnlyAndNonDestructiveAnnotations() {
+        let safe = MCPTool(
+            name: "safe",
+            description: nil,
+            inputSchema: .object([:]),
+            annotations: MCPToolAnnotations(readOnlyHint: true, destructiveHint: false)
+        )
+        let contradictory = MCPTool(
+            name: "contradictory",
+            description: nil,
+            inputSchema: .object([:]),
+            annotations: MCPToolAnnotations(readOnlyHint: true, destructiveHint: true)
+        )
+        let unknownDestructiveness = MCPTool(
+            name: "unknown",
+            description: nil,
+            inputSchema: .object([:]),
+            annotations: MCPToolAnnotations(readOnlyHint: true)
+        )
+
+        XCTAssertFalse(safe.requiresPerCallConfirmation)
+        XCTAssertTrue(contradictory.requiresPerCallConfirmation)
+        XCTAssertTrue(unknownDestructiveness.requiresPerCallConfirmation)
     }
 
     func testStructuredToolResultMapsToMetadataCandidateOnlyAfterValidation() throws {
@@ -512,7 +707,7 @@ final class MCPClientTests: XCTestCase {
           elif [ "$count" -eq 3 ]; then
             case "$line" in
               *call*) printf '%s\n' '{"jsonrpc":"2.0","id":2,"result":{"structuredContent":{"description":"Provider description.","sourceIdentifier":"fixture/demo","evidenceURL":"https://example.com/fixture/demo"}}}' ;;
-              *) printf '%s\n' '{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"metadata_lookup","inputSchema":{"type":"object"},"annotations":{"readOnlyHint":true}}]}}' ;;
+              *) printf '%s\n' '{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"metadata_lookup","inputSchema":{"type":"object"},"annotations":{"readOnlyHint":true,"destructiveHint":false}}]}}' ;;
             esac
           fi
         done
@@ -552,6 +747,48 @@ final class MCPClientTests: XCTestCase {
         ])
     }
 
+    func testAutomaticMCPProviderDoesNotCallToolWithContradictorySafetyAnnotations() async throws {
+        let transcript = fixture.appendingPathComponent("unsafe-provider-transcript")
+        let server = try makeExecutable("""
+        #!/bin/sh
+        count=0
+        while IFS= read -r line; do
+          count=$((count + 1))
+          printf '%s\n' "$line" >> "$1"
+          if [ "$count" -eq 1 ]; then
+            printf '%s\n' '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-03-26","capabilities":{},"serverInfo":{"name":"fixture","version":"1"}}}'
+          elif [ "$count" -eq 3 ]; then
+            printf '%s\n' '{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"metadata_lookup","inputSchema":{"type":"object"},"annotations":{"readOnlyHint":true,"destructiveHint":true}}]}}'
+          fi
+        done
+        """)
+        let config = #"{"mcpServers":{"fixture":{"command":"__COMMAND__","args":["__TRANSCRIPT__"]}}}"#
+            .replacingOccurrences(of: "__COMMAND__", with: server.path)
+            .replacingOccurrences(of: "__TRANSCRIPT__", with: transcript.path)
+        try config.write(to: fixture.appendingPathComponent("mcp.json"), atomically: true, encoding: .utf8)
+        let configuration = try XCTUnwrap(MCPConfigDiscovery().discover(in: fixture).first)
+        let defaults = UserDefaults(suiteName: "MCPUnsafeProviderTests-\(UUID().uuidString)")!
+        let preferences = MCPPreferenceStore(defaults: defaults)
+        preferences.setServer(configuration.id, enabled: true)
+        preferences.setTool("metadata_lookup", serverID: configuration.id, enabled: true)
+        let approval = CommandApproval(
+            store: UserDefaultsCommandApprovalStore(defaults: defaults, key: "approvals")
+        )
+        approval.approve(try XCTUnwrap(configuration.commandApproval))
+        let provider = MCPMetadataProvider(
+            rootURL: fixture,
+            authorizedHomeURL: fixture,
+            preferences: preferences,
+            approval: approval
+        )
+
+        let candidates = try await provider.candidates(for: MetadataQuery(name: "demo"))
+
+        XCTAssertEqual(candidates, [])
+        let messages = try String(contentsOf: transcript, encoding: .utf8)
+        XCTAssertFalse(messages.contains("tools/call"))
+    }
+
     private func makeExecutable(_ contents: String) throws -> URL {
         let url = fixture.appendingPathComponent("server-\(UUID().uuidString).sh")
         try contents.write(to: url, atomically: true, encoding: .utf8)
@@ -571,7 +808,12 @@ final class MCPClientTests: XCTestCase {
             name: "fixture",
             source: .generic,
             configurationURL: fixture.appendingPathComponent("mcp.json"),
-            transport: .stdio(executable: executable.path, arguments: arguments, environment: [:]),
+            transport: .stdio(
+                executable: executable.path,
+                arguments: arguments,
+                environment: [:],
+                workingDirectory: nil
+            ),
             support: .supported,
             isEnabled: enabled,
             enabledToolNames: enabledTools,
@@ -592,7 +834,10 @@ final class MCPClientTests: XCTestCase {
             name: "http",
             source: .generic,
             configurationURL: fixture.appendingPathComponent("mcp.json"),
-            transport: .streamableHTTP(URL(string: "https://example.com/mcp")!),
+            transport: .streamableHTTP(
+                endpoint: URL(string: "https://example.com/mcp")!,
+                headers: [:]
+            ),
             support: .supported,
             isEnabled: enabled,
             enabledToolNames: enabledTools
@@ -604,6 +849,31 @@ final class MCPClientTests: XCTestCase {
         configuration.protocolClasses = [MCPFixtureURLProtocol.self]
         MCPFixtureURLProtocol.recorder = recorder
         return URLSession(configuration: configuration)
+    }
+
+    private func cleanupRecorder(response cleanupResponse: MCPURLProtocolResponse) -> MCPURLProtocolRecorder {
+        let recorder = MCPURLProtocolRecorder()
+        recorder.handler = { request in
+            let body = requestBodyData(request).flatMap {
+                try? JSONSerialization.jsonObject(with: $0) as? [String: Any]
+            }
+            let method = body?["method"] as? String
+            let id = body?["id"] as? Int
+            recorder.record(request: request, rpcMethod: method, id: id)
+            if request.httpMethod == "DELETE" { return cleanupResponse }
+            if method == "notifications/initialized" {
+                return MCPURLProtocolResponse(status: 202, headers: [:], data: Data())
+            }
+            let result = method == "initialize"
+                ? #"{"protocolVersion":"2025-03-26","capabilities":{},"serverInfo":{"name":"fixture","version":"1"}}"#
+                : #"{"tools":[{"name":"metadata_lookup","inputSchema":{"type":"object"}}]}"#
+            return MCPURLProtocolResponse(
+                status: 200,
+                headers: method == "initialize" ? ["Mcp-Session-Id": "cleanup-session"] : [:],
+                data: Data("{\"jsonrpc\":\"2.0\",\"id\":\(id!),\"result\":\(result)}".utf8)
+            )
+        }
+        return recorder
     }
 
     private func fixtureApproval(for configuration: MCPServerConfiguration) -> CommandApproval {
@@ -661,6 +931,22 @@ private struct MCPURLProtocolResponse: Sendable {
     let status: Int
     let headers: [String: String]
     let data: Data
+    let chunkSize: Int?
+    let chunkInterval: TimeInterval
+
+    init(
+        status: Int,
+        headers: [String: String],
+        data: Data,
+        chunkSize: Int? = nil,
+        chunkInterval: TimeInterval = 0
+    ) {
+        self.status = status
+        self.headers = headers
+        self.data = data
+        self.chunkSize = chunkSize
+        self.chunkInterval = chunkInterval
+    }
 }
 
 private struct MCPRecordedRequest: Sendable, Equatable {
@@ -673,12 +959,21 @@ private struct MCPRecordedRequest: Sendable, Equatable {
 private final class MCPURLProtocolRecorder: @unchecked Sendable {
     private let lock = NSLock()
     private var recorded: [MCPRecordedRequest] = []
+    private var deliveredDeleteByteCount = 0
     var handler: @Sendable (URLRequest) -> MCPURLProtocolResponse = { _ in
         MCPURLProtocolResponse(status: 500, headers: [:], data: Data())
     }
 
     var requests: [MCPRecordedRequest] {
         lock.withLock { recorded }
+    }
+
+    var hasDeleteRequest: Bool {
+        lock.withLock { recorded.contains { $0.httpMethod == "DELETE" } }
+    }
+
+    var deliveredDeleteBytes: Int {
+        lock.withLock { deliveredDeleteByteCount }
     }
 
     func record(request: URLRequest, rpcMethod: String?, id: Int?) {
@@ -691,10 +986,17 @@ private final class MCPURLProtocolRecorder: @unchecked Sendable {
             ))
         }
     }
+
+    func recordDelivery(request: URLRequest, byteCount: Int) {
+        guard request.httpMethod == "DELETE" else { return }
+        lock.withLock { deliveredDeleteByteCount += byteCount }
+    }
 }
 
 private final class MCPFixtureURLProtocol: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var recorder: MCPURLProtocolRecorder?
+    private let lock = NSLock()
+    private var stopped = false
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
@@ -713,11 +1015,32 @@ private final class MCPFixtureURLProtocol: URLProtocol, @unchecked Sendable {
             headerFields: response.headers
         )!
         client?.urlProtocol(self, didReceive: http, cacheStoragePolicy: .notAllowed)
-        if !response.data.isEmpty { client?.urlProtocol(self, didLoad: response.data) }
-        client?.urlProtocolDidFinishLoading(self)
+        guard let chunkSize = response.chunkSize, chunkSize > 0 else {
+            if !response.data.isEmpty {
+                recorder.recordDelivery(request: request, byteCount: response.data.count)
+                client?.urlProtocol(self, didLoad: response.data)
+            }
+            client?.urlProtocolDidFinishLoading(self)
+            return
+        }
+        DispatchQueue.global(qos: .utility).async { [self] in
+            var offset = 0
+            while offset < response.data.count {
+                if response.chunkInterval > 0 { Thread.sleep(forTimeInterval: response.chunkInterval) }
+                if lock.withLock({ stopped }) { return }
+                let end = min(offset + chunkSize, response.data.count)
+                let chunk = response.data.subdata(in: offset..<end)
+                recorder.recordDelivery(request: request, byteCount: chunk.count)
+                client?.urlProtocol(self, didLoad: chunk)
+                offset = end
+            }
+            if !lock.withLock({ stopped }) { client?.urlProtocolDidFinishLoading(self) }
+        }
     }
 
-    override func stopLoading() {}
+    override func stopLoading() {
+        lock.withLock { stopped = true }
+    }
 }
 
 private func XCTAssertThrowsMCPError<T>(

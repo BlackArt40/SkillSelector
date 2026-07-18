@@ -58,6 +58,7 @@ private final class StdioSession: @unchecked Sendable {
         executable: URL,
         arguments: [String],
         environment: [String: String],
+        workingDirectory: String?,
         authorizedHomeURL: URL?,
         maximumResponseBytes: Int,
         state: StdioRunState
@@ -100,6 +101,9 @@ private final class StdioSession: @unchecked Sendable {
         posix_spawn_file_actions_addclose(&actions, errorDescriptors[0])
         posix_spawn_file_actions_adddup2(&actions, errorDescriptors[1], STDERR_FILENO)
         posix_spawn_file_actions_addclose(&actions, errorDescriptors[1])
+        if let workingDirectory {
+            posix_spawn_file_actions_addchdir_np(&actions, workingDirectory)
+        }
         posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETPGROUP))
         posix_spawnattr_setpgroup(&attributes, 0)
         let argumentValues = [executable.path] + arguments
@@ -269,7 +273,7 @@ public final class StdioMCPClient: MCPClient, @unchecked Sendable {
     public func close() async {}
 
     private func exchange(method: String, params: MCPJSONValue = .object([:])) async throws -> MCPJSONValue {
-        let (executable, arguments, environment) = try validatedCommand()
+        let (executable, arguments, environment, workingDirectory) = try validatedCommand()
         guard timeout > 0, maximumResponseBytes > 0 else { throw MCPClientError.invalidResponse }
         let state = StdioRunState()
         return try await withTaskCancellationHandler(operation: {
@@ -280,6 +284,7 @@ public final class StdioMCPClient: MCPClient, @unchecked Sendable {
                             executable: executable,
                             arguments: arguments,
                             environment: environment,
+                            workingDirectory: workingDirectory,
                             authorizedHomeURL: self.authorizedHomeURL,
                             maximumResponseBytes: self.maximumResponseBytes,
                             state: state
@@ -320,10 +325,15 @@ public final class StdioMCPClient: MCPClient, @unchecked Sendable {
         })
     }
 
-    private func validatedCommand() throws -> (URL, [String], [String: String]) {
+    private func validatedCommand() throws -> (URL, [String], [String: String], String?) {
         guard configuration.isEnabled else { throw MCPClientError.disabled }
         guard configuration.support == .supported,
-              case .stdio(let rawExecutable, let arguments, let environment) = configuration.transport else {
+              case .stdio(
+                let rawExecutable,
+                let arguments,
+                let environment,
+                let workingDirectory
+              ) = configuration.transport else {
             throw MCPClientError.unsupportedTransport
         }
         guard let approved = configuration.commandApproval,
@@ -334,6 +344,6 @@ public final class StdioMCPClient: MCPClient, @unchecked Sendable {
         guard rawExecutable.hasPrefix("/"), FileManager.default.isExecutableFile(atPath: executable.path) else {
             throw MCPClientError.invalidExecutable(rawExecutable)
         }
-        return (executable, arguments, environment)
+        return (executable, arguments, environment, workingDirectory)
     }
 }

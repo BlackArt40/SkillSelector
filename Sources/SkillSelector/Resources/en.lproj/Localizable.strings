@@ -180,7 +180,7 @@
 "Enrich Selected Skill" = "Enrich Selected Skill";
 "Enrich Visible Skills" = "Enrich Visible Skills";
 "Find Metadata" = "Find Metadata";
-"Find trusted metadata with local gh and npm tools" = "Find trusted metadata with local gh and npm tools";
+"Find trusted metadata with local gh, npm, and enabled read-only MCP tools" = "Find trusted metadata with local gh, npm, and enabled read-only MCP tools";
 "GitHub CLI is not authenticated and npm is unavailable." = "GitHub CLI is not authenticated and npm is unavailable.";
 "GitHub CLI is not authenticated." = "GitHub CLI is not authenticated.";
 "Metadata Lookup Failed" = "Metadata Lookup Failed";
@@ -195,7 +195,7 @@
 "The metadata service rate limit was reached." = "The metadata service rate limit was reached.";
 "This candidate will also become the confirmed update source for this Skill." = "This candidate will also become the confirmed update source for this Skill.";
 "Trusted Metadata" = "Trusted Metadata";
-"Uses local gh and npm tools only for Skills without custom, local, or remote descriptions." = "Uses local gh and npm tools only for Skills without custom, local, or remote descriptions.";
+"Uses local gh, npm, and enabled read-only MCP tools only for Skills without custom, local, or remote descriptions." = "Uses local gh, npm, and enabled read-only MCP tools only for Skills without custom, local, or remote descriptions.";
 "Approve" = "Approve";
 "Approve Exact Command" = "Approve Exact Command";
 "Approve Exact MCP Command" = "Approve Exact MCP Command";

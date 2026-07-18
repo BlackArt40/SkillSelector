@@ -180,7 +180,7 @@
 "Enrich Selected Skill" = "补全所选 Skill";
 "Enrich Visible Skills" = "补全当前显示的 Skill";
 "Find Metadata" = "查找元数据";
-"Find trusted metadata with local gh and npm tools" = "使用本机 gh 和 npm 工具查找可信元数据";
+"Find trusted metadata with local gh, npm, and enabled read-only MCP tools" = "使用本机 gh、npm 和已启用的只读 MCP 工具查找可信元数据";
 "GitHub CLI is not authenticated and npm is unavailable." = "GitHub CLI 尚未认证，且 npm 不可用。";
 "GitHub CLI is not authenticated." = "GitHub CLI 尚未认证。";
 "Metadata Lookup Failed" = "元数据查找失败";
@@ -195,7 +195,7 @@
 "The metadata service rate limit was reached." = "已达到元数据服务的速率限制。";
 "This candidate will also become the confirmed update source for this Skill." = "此候选也会成为该 Skill 已确认的更新来源。";
 "Trusted Metadata" = "可信元数据";
-"Uses local gh and npm tools only for Skills without custom, local, or remote descriptions." = "仅对缺少自定义、本机和远程简介的 Skill 使用本机 gh 与 npm 工具。";
+"Uses local gh, npm, and enabled read-only MCP tools only for Skills without custom, local, or remote descriptions." = "仅对缺少自定义、本机和远程简介的 Skill 使用本机 gh、npm 和已启用的只读 MCP 工具。";
 "Approve" = "批准";
 "Approve Exact Command" = "批准精确命令";
 "Approve Exact MCP Command" = "批准精确的 MCP 命令";

@@ -198,7 +198,7 @@ struct MCPSettingsView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: tool.name)
                     .font(.system(.caption, design: .monospaced).weight(.medium))
-                Text(verbatim: tool.annotations?.readOnlyHint == true
+                Text(verbatim: !tool.requiresPerCallConfirmation
                     ? L10n.string("Server read-only hint")
                     : L10n.string("Confirmation required for every call"))
                     .font(.caption2)
@@ -218,9 +218,9 @@ struct MCPSettingsView: View {
 
     private func transportDisplay(_ transport: MCPTransport) -> String {
         switch transport {
-        case .stdio(let executable, let arguments, _):
+        case .stdio(let executable, let arguments, _, _):
             ([executable] + arguments).map(displayArgument).joined(separator: " ")
-        case .streamableHTTP(let url), .legacySSE(let url):
+        case .streamableHTTP(let url, _), .legacySSE(let url):
             url.absoluteString
         }
     }

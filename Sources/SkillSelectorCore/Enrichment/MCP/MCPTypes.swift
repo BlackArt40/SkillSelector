@@ -13,8 +13,13 @@ public enum MCPServerSupport: String, Codable, Hashable, Sendable {
 }
 
 public enum MCPTransport: Hashable, Sendable {
-    case stdio(executable: String, arguments: [String], environment: [String: String])
-    case streamableHTTP(URL)
+    case stdio(
+        executable: String,
+        arguments: [String],
+        environment: [String: String],
+        workingDirectory: String?
+    )
+    case streamableHTTP(endpoint: URL, headers: [String: String])
     case legacySSE(URL)
 }
 
@@ -162,7 +167,9 @@ public struct MCPTool: Codable, Hashable, Sendable, Identifiable {
         self.isEnabled = isEnabled
     }
 
-    public var requiresPerCallConfirmation: Bool { annotations?.readOnlyHint != true }
+    public var requiresPerCallConfirmation: Bool {
+        annotations?.readOnlyHint != true || annotations?.destructiveHint != false
+    }
 
     private enum CodingKeys: String, CodingKey {
         case name, description, inputSchema, annotations, isEnabled

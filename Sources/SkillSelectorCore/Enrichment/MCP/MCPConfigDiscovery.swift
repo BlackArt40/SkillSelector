@@ -68,25 +68,36 @@ public struct MCPConfigDiscovery: Sendable {
         }
         var sections: [String: [String: Any]] = [:]
         var currentName: String?
+        var currentNestedKey: String?
         for rawLine in text.split(whereSeparator: \.isNewline) {
             let line = stripTOMLComment(String(rawLine)).trimmingCharacters(in: .whitespaces)
             guard !line.isEmpty else { continue }
             if line.hasPrefix("["), line.hasSuffix("]") {
                 let section = String(line.dropFirst().dropLast())
                 if section.hasPrefix("mcp_servers.") {
-                    currentName = unquote(String(section.dropFirst("mcp_servers.".count)))
+                    let path = splitTOMLList(
+                        String(section.dropFirst("mcp_servers.".count)),
+                        separator: "."
+                    )
+                    currentName = path.first.map(unquote)
+                    currentNestedKey = path.dropFirst().first.map(unquote)
                     if let currentName { sections[currentName, default: [:]] = sections[currentName, default: [:]] }
                 } else {
                     currentName = nil
+                    currentNestedKey = nil
                 }
                 continue
             }
             guard let currentName, let equal = line.firstIndex(of: "=") else { continue }
-            let key = line[..<equal].trimmingCharacters(in: .whitespaces)
+            let key = unquote(line[..<equal].trimmingCharacters(in: .whitespaces))
             let value = line[line.index(after: equal)...].trimmingCharacters(in: .whitespaces)
-            if key == "args" { sections[currentName]?[key] = parseStringArray(value) }
-            else if key == "command" || key == "url" || key == "type" {
-                sections[currentName]?[key] = unquote(value)
+            let parsed = parseTOMLValue(value)
+            if let currentNestedKey {
+                var nested = sections[currentName]?[currentNestedKey] as? [String: Any] ?? [:]
+                nested[key] = parsed
+                sections[currentName]?[currentNestedKey] = nested
+            } else {
+                sections[currentName]?[key] = parsed
             }
         }
         return sections.compactMap { makeServer(name: $0.key, dictionary: $0.value, input: input) }
@@ -94,20 +105,18 @@ public struct MCPConfigDiscovery: Sendable {
 
     private func makeServer(name: String, dictionary: [String: Any], input: Input) -> MCPServerConfiguration? {
         let baseIdentifier = "\(input.source.rawValue):\(input.fingerprintPath):\(name)"
+        let configurationFingerprint = canonicalConfigurationFingerprint(
+            dictionary,
+            baseIdentifier: baseIdentifier
+        )
+        let identifier = "\(baseIdentifier):\(configurationFingerprint)"
         if let command = dictionary["command"] as? String, !command.isEmpty {
             let executable = resolvedExecutable(command)
             let arguments = dictionary["args"] as? [String] ?? []
-            let environment = (dictionary["env"] as? [String: Any])?.reduce(into: [String: String]()) {
-                if let value = $1.value as? String { $0[$1.key] = value }
-            } ?? [:]
-            let configurationFingerprint = CommandApproval.fingerprint(
-                executablePath: executable,
-                arguments: arguments + environment.sorted(by: { $0.key < $1.key }).map {
-                    "env:\($0.key)=\($0.value)"
-                },
-                configurationFingerprint: baseIdentifier
-            )
-            let identifier = "\(baseIdentifier):\(configurationFingerprint)"
+            let environment = stringDictionary(dictionary["env"])
+            let workingDirectory = (dictionary["cwd"] as? String).map {
+                resolvedPath($0, relativeTo: input.url.deletingLastPathComponent())
+            }
             let approval = ApprovedCommand(
                 executablePath: executable,
                 arguments: arguments,
@@ -118,7 +127,12 @@ public struct MCPConfigDiscovery: Sendable {
                 name: name,
                 source: input.source,
                 configurationURL: input.url,
-                transport: .stdio(executable: executable, arguments: arguments, environment: environment),
+                transport: .stdio(
+                    executable: executable,
+                    arguments: arguments,
+                    environment: environment,
+                    workingDirectory: workingDirectory
+                ),
                 support: .supported,
                 commandApproval: approval,
                 isPackageRunner: Self.packageRunners.contains(URL(fileURLWithPath: executable).lastPathComponent.lowercased())
@@ -127,18 +141,13 @@ public struct MCPConfigDiscovery: Sendable {
         guard let rawURL = dictionary["url"] as? String, let url = URL(string: rawURL) else { return nil }
         let type = (dictionary["type"] as? String)?.lowercased()
         let legacy = type == "sse" || url.path.lowercased().hasSuffix("/sse")
-        let configurationFingerprint = CommandApproval.fingerprint(
-            executablePath: rawURL,
-            arguments: [type ?? "streamable-http"],
-            configurationFingerprint: baseIdentifier
-        )
-        let identifier = "\(baseIdentifier):\(configurationFingerprint)"
+        let headers = stringDictionary(dictionary["headers"] ?? dictionary["http_headers"])
         return MCPServerConfiguration(
             id: identifier,
             name: name,
             source: input.source,
             configurationURL: input.url,
-            transport: legacy ? .legacySSE(url) : .streamableHTTP(url),
+            transport: legacy ? .legacySSE(url) : .streamableHTTP(endpoint: url, headers: headers),
             support: legacy ? .unsupportedLegacySSE : .supported
         )
     }
@@ -158,6 +167,34 @@ public struct MCPConfigDiscovery: Sendable {
         return value
     }
 
+    private func resolvedPath(_ value: String, relativeTo baseURL: URL) -> String {
+        let url = value.hasPrefix("/")
+            ? URL(fileURLWithPath: value)
+            : baseURL.appendingPathComponent(value)
+        return url.standardizedFileURL.path
+    }
+
+    private func stringDictionary(_ raw: Any?) -> [String: String] {
+        (raw as? [String: Any])?.reduce(into: [:]) { result, element in
+            if let value = element.value as? String { result[element.key] = value }
+        } ?? [:]
+    }
+
+    private func canonicalConfigurationFingerprint(
+        _ dictionary: [String: Any],
+        baseIdentifier: String
+    ) -> String {
+        let canonicalData = (try? JSONSerialization.data(
+            withJSONObject: dictionary,
+            options: [.sortedKeys, .withoutEscapingSlashes]
+        )) ?? Data()
+        return CommandApproval.fingerprint(
+            executablePath: "mcp-server-configuration",
+            arguments: [canonicalData.base64EncodedString()],
+            configurationFingerprint: baseIdentifier
+        )
+    }
+
     private func stripTOMLComment(_ value: String) -> String {
         var quoted = false
         var escaped = false
@@ -171,14 +208,65 @@ public struct MCPConfigDiscovery: Sendable {
         return value
     }
 
-    private func parseStringArray(_ value: String) -> [String] {
-        guard let data = value.data(using: .utf8),
-              let values = try? JSONSerialization.jsonObject(with: data) as? [String] else { return [] }
-        return values
+    private func parseTOMLValue(_ value: String) -> Any {
+        let trimmed = value.trimmingCharacters(in: .whitespaces)
+        if (trimmed.hasPrefix("\"") && trimmed.hasSuffix("\""))
+            || (trimmed.hasPrefix("'") && trimmed.hasSuffix("'")) {
+            return unquote(trimmed)
+        }
+        if trimmed.hasPrefix("["), trimmed.hasSuffix("]") {
+            let values = splitTOMLList(String(trimmed.dropFirst().dropLast()), separator: ",")
+                .map { parseTOMLValue($0) }
+            if values.allSatisfy({ $0 is String }) { return values.compactMap { $0 as? String } }
+            return values
+        }
+        if trimmed.hasPrefix("{"), trimmed.hasSuffix("}") {
+            var result: [String: Any] = [:]
+            for entry in splitTOMLList(String(trimmed.dropFirst().dropLast()), separator: ",") {
+                guard let equal = entry.firstIndex(of: "=") else { continue }
+                let key = unquote(entry[..<equal].trimmingCharacters(in: .whitespaces))
+                result[key] = parseTOMLValue(
+                    entry[entry.index(after: equal)...].trimmingCharacters(in: .whitespaces)
+                )
+            }
+            return result
+        }
+        if trimmed == "true" { return true }
+        if trimmed == "false" { return false }
+        if let integer = Int(trimmed) { return integer }
+        if let number = Double(trimmed) { return number }
+        return trimmed
+    }
+
+    private func splitTOMLList(_ value: String, separator: Character) -> [String] {
+        var values: [String] = []
+        var start = value.startIndex
+        var quotedBy: Character?
+        var escaped = false
+        var depth = 0
+        for index in value.indices {
+            let character = value[index]
+            if character == "\\" && quotedBy == "\"" { escaped.toggle(); continue }
+            if (character == "\"" || character == "'") && !escaped {
+                quotedBy = quotedBy == nil ? character : (quotedBy == character ? nil : quotedBy)
+            } else if quotedBy == nil {
+                if character == "[" || character == "{" { depth += 1 }
+                if character == "]" || character == "}" { depth -= 1 }
+                if character == separator && depth == 0 {
+                    values.append(String(value[start..<index]).trimmingCharacters(in: .whitespaces))
+                    start = value.index(after: index)
+                }
+            }
+            escaped = false
+        }
+        values.append(String(value[start...]).trimmingCharacters(in: .whitespaces))
+        return values.filter { !$0.isEmpty }
     }
 
     private func unquote(_ value: String) -> String {
-        guard value.count >= 2, value.first == "\"", value.last == "\"" else { return value }
+        guard value.count >= 2 else { return value }
+        if value.first == "'", value.last == "'" { return String(value.dropFirst().dropLast()) }
+        guard value.first == "\"", value.last == "\"" else { return value }
         if let data = value.data(using: .utf8),
            let decoded = try? JSONSerialization.jsonObject(with: data) as? String { return decoded }
         return String(value.dropFirst().dropLast())

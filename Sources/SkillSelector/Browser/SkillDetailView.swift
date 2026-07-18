@@ -101,7 +101,9 @@ struct SkillDetailView: View {
                             model.enrichmentCommandsDisabled
                                 || skill.availability != .available
                         )
-                        .help(L10n.string("Find trusted metadata with local gh and npm tools"))
+                        .help(L10n.string(
+                            "Find trusted metadata with local gh, npm, and enabled read-only MCP tools"
+                        ))
                     }
                     detailSection(L10n.string("File Operations")) {
                         fileOperationControls(skill)

@@ -19,6 +19,7 @@ public actor HTTPMCPClient: MCPClient {
     private let session: URLSession
     private let ownsSession: Bool
     private let timeout: TimeInterval
+    private let cleanupTimeout: TimeInterval
     private let maximumResponseBytes: Int
     private let confirmation: MCPToolConfirmation
     private var nextRequestID = 1
@@ -27,10 +28,12 @@ public actor HTTPMCPClient: MCPClient {
         configuration: MCPServerConfiguration,
         timeout: TimeInterval = 30,
         maximumResponseBytes: Int = 1_048_576,
+        cleanupTimeout: TimeInterval = 5,
         confirmation: @escaping MCPToolConfirmation = { _, _ in false }
     ) {
         self.configuration = configuration
         self.timeout = timeout
+        self.cleanupTimeout = cleanupTimeout
         self.maximumResponseBytes = maximumResponseBytes
         self.confirmation = confirmation
         session = URLSession(configuration: .ephemeral)
@@ -42,11 +45,13 @@ public actor HTTPMCPClient: MCPClient {
         session: URLSession,
         timeout: TimeInterval = 30,
         maximumResponseBytes: Int = 1_048_576,
+        cleanupTimeout: TimeInterval = 5,
         confirmation: @escaping MCPToolConfirmation = { _, _ in false }
     ) {
         self.configuration = configuration
         self.session = session
         self.timeout = timeout
+        self.cleanupTimeout = cleanupTimeout
         self.maximumResponseBytes = maximumResponseBytes
         self.confirmation = confirmation
         ownsSession = false
@@ -137,7 +142,7 @@ public actor HTTPMCPClient: MCPClient {
     private func validatedEndpoint() throws -> URL {
         guard configuration.isEnabled else { throw MCPClientError.disabled }
         guard configuration.support == .supported,
-              case .streamableHTTP(let endpoint) = configuration.transport else {
+              case .streamableHTTP(let endpoint, _) = configuration.transport else {
             throw MCPClientError.unsupportedTransport
         }
         guard let scheme = endpoint.scheme?.lowercased(),
@@ -169,8 +174,11 @@ public actor HTTPMCPClient: MCPClient {
         request.timeoutInterval = timeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if case .streamableHTTP(_, let headers) = configuration.transport {
+            for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
+        }
         if let sessionID { request.setValue(sessionID, forHTTPHeaderField: "Mcp-Session-Id") }
-        let payload = try await load(request)
+        let payload = try await load(request, deadline: timeout)
         guard (200..<300).contains(payload.statusCode) else {
             throw MCPClientError.serverError(
                 code: payload.statusCode,
@@ -184,10 +192,10 @@ public actor HTTPMCPClient: MCPClient {
         return payload
     }
 
-    private func load(_ request: URLRequest) async throws -> MCPHTTPPayload {
+    private func load(_ request: URLRequest, deadline: TimeInterval) async throws -> MCPHTTPPayload {
         let session = session
         let limit = maximumResponseBytes
-        let deadline = timeout
+        guard deadline > 0, limit > 0 else { throw MCPClientError.invalidResponse }
         do {
             return try await withThrowingTaskGroup(of: MCPHTTPPayload.self) { group in
                 group.addTask {
@@ -227,10 +235,12 @@ public actor HTTPMCPClient: MCPClient {
         guard let sessionID else { return }
         var request = URLRequest(url: endpoint)
         request.httpMethod = "DELETE"
-        request.timeoutInterval = min(timeout, 5)
+        request.timeoutInterval = cleanupTimeout
         request.setValue(sessionID, forHTTPHeaderField: "Mcp-Session-Id")
-        let session = session
-        _ = try? await Task.detached { try await session.data(for: request) }.value
+        if case .streamableHTTP(_, let headers) = configuration.transport {
+            for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
+        }
+        _ = try? await load(request, deadline: cleanupTimeout)
     }
 
     private func mapTransportError(_ error: Error) -> Error {

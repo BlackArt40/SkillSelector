@@ -53,7 +53,7 @@ struct SkillSelectorApp: App {
                     isOn: $model.enrichMissingDescriptionsAfterRefresh
                 )
                 Text(verbatim: L10n.string(
-                    "Uses local gh and npm tools only for Skills without custom, local, or remote descriptions."
+                    "Uses local gh, npm, and enabled read-only MCP tools only for Skills without custom, local, or remote descriptions."
                 ))
                 .font(.caption)
                 .foregroundStyle(.secondary)
