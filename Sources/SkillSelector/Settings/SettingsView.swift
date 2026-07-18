@@ -38,6 +38,11 @@ struct CustomAgentEditorState {
         entryFilename = "SKILL.md"
     }
 
+    mutating func resetIfEditing(removedID: String) {
+        guard selectedAgentID == removedID else { return }
+        reset()
+    }
+
     private func splitPaths(_ value: String) -> [String] {
         value.components(separatedBy: CharacterSet(charactersIn: ",\n"))
     }
@@ -204,9 +209,7 @@ struct SettingsView: View {
                     Button(role: .destructive) {
                         do {
                             try model.removeCustomAgent(id: agent.id)
-                            if customAgentEditor.selectedAgentID == agent.id {
-                                customAgentEditor.reset()
-                            }
+                            customAgentEditor.resetIfEditing(removedID: agent.id)
                         }
                         catch { settingsError = String(describing: error) }
                     } label: {

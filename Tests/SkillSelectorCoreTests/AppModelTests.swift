@@ -10,7 +10,12 @@ final class AppModelTests: XCTestCase {
         let suite = "AppModelCustomAgentTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
-        let container = try ModelContainer(for: SkillRecord.self, AuthorizedRootRecord.self)
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(
+            for: SkillRecord.self,
+            AuthorizedRootRecord.self,
+            configurations: configuration
+        )
         let index = SkillIndex(container: container)
         let registry = BuiltInAgentRegistry.make()
         let bookmarks = BookmarkStore(container: container)
@@ -52,6 +57,49 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(store.insertedIDs, [created.id])
         XCTAssertEqual(store.savedIDs, [created.id])
         XCTAssertNil(editor.selectedAgentID)
+        XCTAssertEqual(editor.entryFilename, "SKILL.md")
+    }
+
+    func testDeletingCurrentlyEditedCustomAgentResetsEditorState() throws {
+        let suite = "AppModelCustomAgentDeleteTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(
+            for: SkillRecord.self,
+            AuthorizedRootRecord.self,
+            configurations: configuration
+        )
+        let index = SkillIndex(container: container)
+        let registry = BuiltInAgentRegistry.make()
+        let bookmarks = BookmarkStore(container: container)
+        let refresher = IndexRefresher(registry: registry, bookmarks: bookmarks, index: index)
+        let store = RecordingAgentDefinitionStore()
+        let model = AppModel(
+            refresher: refresher,
+            index: index,
+            registry: registry,
+            defaults: defaults,
+            customAgentStore: store
+        )
+        try model.saveCustomAgent(
+            displayName: "To Delete",
+            globalRoots: ["~/.delete/skills"],
+            projectPatterns: [".delete/skills"],
+            entryFilename: "AGENT.md"
+        )
+        let definition = try XCTUnwrap(model.customAgentDefinitions.first)
+        var editor = CustomAgentEditorState()
+        editor.beginEditing(definition)
+
+        try model.removeCustomAgent(id: definition.id)
+        editor.resetIfEditing(removedID: definition.id)
+
+        XCTAssertTrue(model.customAgentDefinitions.isEmpty)
+        XCTAssertNil(editor.selectedAgentID)
+        XCTAssertEqual(editor.agentName, "")
+        XCTAssertEqual(editor.globalRoots, "")
+        XCTAssertEqual(editor.projectPatterns, "")
         XCTAssertEqual(editor.entryFilename, "SKILL.md")
     }
 }
