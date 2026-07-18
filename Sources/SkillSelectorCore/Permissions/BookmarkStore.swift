@@ -75,6 +75,14 @@ public struct AuthorizedRootAccess: Sendable {
     public let lease: AccessLease
 }
 
+private final class WeakAccessLease {
+    weak var value: AccessLease?
+
+    init(_ value: AccessLease) {
+        self.value = value
+    }
+}
+
 public enum BookmarkStoreError: Error, Equatable {
     case rootNotFound(String)
     case invalidRootKind(String)
@@ -84,6 +92,8 @@ public enum BookmarkStoreError: Error, Equatable {
 public final class BookmarkStore {
     private let context: ModelContext
     private let adapter: any BookmarkDataCreating
+    private let accessLock = NSLock()
+    private var activeAccesses: [String: [UUID: WeakAccessLease]] = [:]
 
     public init(
         container: ModelContainer,
@@ -133,7 +143,15 @@ public final class BookmarkStore {
 
         let didStart = adapter.startAccessing(url)
         let adapter = self.adapter
-        let lease = AccessLease(closeAction: didStart ? { adapter.stopAccessing(url) } : nil)
+        let accessID = UUID()
+        let rootID = record.id
+        let lease = AccessLease { [weak self] in
+            if didStart { adapter.stopAccessing(url) }
+            self?.removeActiveAccess(id: accessID, rootID: rootID)
+        }
+        accessLock.lock()
+        activeAccesses[rootID, default: [:]][accessID] = WeakAccessLease(lease)
+        accessLock.unlock()
         return AuthorizedRootAccess(
             root: AuthorizedRootSnapshot(id: record.id, url: url, kind: kind),
             lease: lease
@@ -156,8 +174,30 @@ public final class BookmarkStore {
         }
     }
 
+    public func revoke(id: String) throws {
+        guard let record = try record(id: id) else {
+            throw BookmarkStoreError.rootNotFound(id)
+        }
+        accessLock.lock()
+        let leases = activeAccesses.removeValue(forKey: id)?.values.compactMap(\.value) ?? []
+        accessLock.unlock()
+        leases.forEach { $0.close() }
+        context.delete(record)
+        try context.save()
+    }
+
     private func record(id: String) throws -> AuthorizedRootRecord? {
         try context.fetch(FetchDescriptor<AuthorizedRootRecord>())
             .first { $0.id == id }
+    }
+
+
+    private func removeActiveAccess(id: UUID, rootID: String) {
+        accessLock.lock()
+        activeAccesses[rootID]?[id] = nil
+        if activeAccesses[rootID]?.isEmpty == true {
+            activeAccesses[rootID] = nil
+        }
+        accessLock.unlock()
     }
 }

@@ -109,4 +109,24 @@ final class AgentRegistryTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(registry.definition(id: "codex")).displayName, "Custom Codex")
         XCTAssertEqual(try XCTUnwrap(registry.definition(id: "local-agent")).displayName, "Local Agent")
     }
+
+    func testCustomAgentStoreRoundTripsAndRemovesDefinitions() throws {
+        let suite = "AgentDefinitionStoreTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = UserDefaultsAgentDefinitionStore(defaults: defaults, key: "agents")
+        let definition = AgentDefinition(
+            id: "custom-local-agent",
+            displayName: "Local Agent",
+            globalRoots: ["~/.local-agent/skills"],
+            projectPatterns: [".local-agent/skills"]
+        )
+
+        try store.save(definition)
+        XCTAssertEqual(try store.definitions(), [definition])
+
+        try store.remove(id: definition.id)
+        XCTAssertTrue(try store.definitions().isEmpty)
+    }
+
 }

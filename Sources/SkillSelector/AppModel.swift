@@ -40,10 +40,13 @@ final class AppModel {
     private let refresher: IndexRefresher
     private let index: SkillIndex
     private let bookmarks: BookmarkStore?
-    private let registry: AgentRegistry
+    private var registry: AgentRegistry
+    private let builtInAgentDefinitions: [AgentDefinition]
+    private let customAgentStore: any AgentDefinitionStoring
     private let toolLocator: ToolLocator
     private let commandRunner: any CommandRunning
     private let defaults: UserDefaults
+    private let diagnosticStore: DiagnosticStore
     @ObservationIgnored private var activeRefresh: (id: UUID, task: Task<Void, Never>)?
     @ObservationIgnored private var pendingOperationContext: PendingOperationContext?
     @ObservationIgnored private var pendingUpdateContext: PendingUpdateContext?
@@ -56,7 +59,9 @@ final class AppModel {
     private(set) var snapshots: [SkillSnapshot] = []
     private(set) var authorizedRoots: [AuthorizedRootSnapshot] = []
     private(set) var rootsByID: [String: AuthorizedRootSnapshot] = [:]
-    let agentDefinitions: [AgentDefinition]
+    private(set) var agentDefinitions: [AgentDefinition]
+    private(set) var customAgentDefinitions: [AgentDefinition]
+    private(set) var toolStatuses: [ToolKind: ToolLocation] = [:]
     var pendingOperationPlan: FileOperationPlan?
     var operationError: String?
     private(set) var isOperating = false
@@ -74,6 +79,9 @@ final class AppModel {
             )
         }
     }
+    var refreshOnLaunch: Bool {
+        didSet { defaults.set(refreshOnLaunch, forKey: Self.refreshOnLaunchDefaultsKey) }
+    }
 
     init(
         refresher: IndexRefresher,
@@ -82,19 +90,33 @@ final class AppModel {
         registry: AgentRegistry,
         toolLocator: ToolLocator = ToolLocator(),
         commandRunner: any CommandRunning = ExternalCommandRunner(),
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = .standard,
+        customAgentStore: (any AgentDefinitionStoring)? = nil,
+        diagnosticStore: DiagnosticStore = .shared
     ) {
         self.refresher = refresher
         self.index = index
         self.bookmarks = bookmarks
-        self.registry = registry
+        builtInAgentDefinitions = registry.definitions
         self.toolLocator = toolLocator
         self.commandRunner = commandRunner
         self.defaults = defaults
+        self.diagnosticStore = diagnosticStore
+        let store = customAgentStore ?? UserDefaultsAgentDefinitionStore(defaults: defaults)
+        self.customAgentStore = store
+        let storedCustomDefinitions = (try? store.definitions()) ?? []
+        customAgentDefinitions = storedCustomDefinitions
+        var effectiveRegistry = registry
+        effectiveRegistry.merge(customDefinitions: storedCustomDefinitions)
+        self.registry = effectiveRegistry
         enrichMissingDescriptionsAfterRefresh = defaults.bool(
             forKey: Self.enrichAfterRefreshDefaultsKey
         )
-        agentDefinitions = registry.definitions
+        refreshOnLaunch = defaults.object(forKey: Self.refreshOnLaunchDefaultsKey) == nil
+            ? true
+            : defaults.bool(forKey: Self.refreshOnLaunchDefaultsKey)
+        agentDefinitions = effectiveRegistry.definitions
+        refresher.updateRegistry(effectiveRegistry)
         do {
             try reloadSnapshot()
         } catch {
@@ -108,11 +130,24 @@ final class AppModel {
 
     func checkEnvironmentOnLaunch() async {
         do {
-            guard try bookmarks?.roots().isEmpty == false else { return }
+            guard refreshOnLaunch, try bookmarks?.roots().isEmpty == false else { return }
             await checkEnvironment()
         } catch {
             refreshState = .failed(String(describing: error))
         }
+    }
+
+    func detectTools() async {
+        async let gh = toolLocator.locate(ToolKind.gh.rawValue)
+        async let npm = toolLocator.locate(ToolKind.npm.rawValue)
+        let values = await [gh, npm]
+        toolStatuses = Dictionary(uniqueKeysWithValues: values.map { ($0.kind, $0) })
+        diagnosticStore.record(
+            category: .commands,
+            code: "TOOLS_CHECKED",
+            message: "Checked gh and npm availability",
+            redactor: currentRedactor()
+        )
     }
 
     func discoverMCPConfigurations() throws -> [MCPServerConfiguration] {
@@ -170,9 +205,94 @@ final class AppModel {
             authorizedRoots = try bookmarks.roots()
             rootsByID = Dictionary(uniqueKeysWithValues: authorizedRoots.map { ($0.id, $0) })
             await refresh(.manual)
+            diagnosticStore.record(
+                category: .persistence,
+                code: "ROOT_AUTHORIZED",
+                message: "Authorized \(url.path)",
+                redactor: currentRedactor()
+            )
         } catch {
             refreshState = .failed(String(describing: error))
         }
+    }
+
+    func revokeAuthorization(id: String) async {
+        guard let bookmarks,
+              let root = authorizedRoots.first(where: { $0.id == id }) else { return }
+        await waitForActiveRefresh()
+        guard !fileOperationCommandsDisabled else { return }
+        do {
+            try index.apply(report: ScanReport(
+                roots: [ScannedRoot(
+                    id: root.id,
+                    url: root.url,
+                    availability: .unavailable(reason: "Authorization revoked")
+                )]
+            ))
+            try bookmarks.revoke(id: root.id)
+            try reloadSnapshot()
+            diagnosticStore.record(
+                category: .persistence,
+                code: "ROOT_REVOKED",
+                message: "Revoked \(root.url.path)",
+                redactor: currentRedactor(additionalRoots: [root])
+            )
+        } catch {
+            refreshState = .failed(currentRedactor().redact(String(describing: error)))
+        }
+    }
+
+    func saveCustomAgent(
+        displayName: String,
+        globalRoots: [String],
+        projectPatterns: [String],
+        entryFilename: String
+    ) throws {
+        let name = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        let slug = name.lowercased().map { character -> Character in
+            character.isLetter || character.isNumber ? character : "-"
+        }
+        let id = "custom-" + String(slug)
+            .split(separator: "-", omittingEmptySubsequences: true)
+            .joined(separator: "-")
+        let definition = AgentDefinition(
+            id: id,
+            displayName: name,
+            globalRoots: normalizedLines(globalRoots),
+            projectPatterns: normalizedLines(projectPatterns),
+            entryFilename: entryFilename.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? "SKILL.md"
+                : entryFilename.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+        try customAgentStore.save(definition)
+        try reloadAgentDefinitions()
+    }
+
+    func removeCustomAgent(id: String) throws {
+        try customAgentStore.remove(id: id)
+        try reloadAgentDefinitions()
+    }
+
+    func exportDiagnostics(to url: URL) async throws {
+        if toolStatuses.isEmpty { await detectTools() }
+        let input = DiagnosticExportInput(
+            appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+                ?? "development",
+            macOSVersion: ProcessInfo.processInfo.operatingSystemVersionString,
+            registryIDs: agentDefinitions.map(\.id),
+            roots: diagnosticRootSummaries(),
+            tools: ToolKind.allCases.map { kind in
+                let status = toolStatuses[kind]
+                return DiagnosticToolSummary(
+                    kind: kind,
+                    state: status?.state ?? .unavailable,
+                    version: status?.version
+                )
+            },
+            diagnostics: diagnosticStore.recent()
+        )
+        try DiagnosticExporter(redactor: currentRedactor()).write(input, to: url)
     }
 
     func refresh(_ trigger: RefreshTrigger) async {
@@ -406,10 +526,22 @@ final class AppModel {
                 try reloadSnapshot()
                 refreshState = .finished(summary)
                 updateError = nil
+                diagnosticStore.record(
+                    category: .updates,
+                    code: "UPDATE_COMPLETED",
+                    message: "Skill update completed",
+                    redactor: currentRedactor()
+                )
                 closePendingUpdate()
             }
         } catch {
             updateError = localizedUpdateError(error)
+            diagnosticStore.record(
+                category: .updates,
+                code: "UPDATE_FAILED",
+                message: updateError ?? "Skill update failed",
+                redactor: currentRedactor()
+            )
             closePendingUpdate()
         }
     }
@@ -566,8 +698,20 @@ final class AppModel {
             }
             refreshState = .finished(summary)
             operationError = nil
+            diagnosticStore.record(
+                category: .operations,
+                code: "OPERATION_COMPLETED",
+                message: "File operation completed",
+                redactor: currentRedactor()
+            )
         } catch {
             operationError = localizedOperationError(error)
+            diagnosticStore.record(
+                category: .operations,
+                code: "OPERATION_FAILED",
+                message: operationError ?? "File operation failed",
+                redactor: currentRedactor()
+            )
         }
     }
 
@@ -642,6 +786,12 @@ final class AppModel {
             let summary = try await refresher.refresh(trigger)
             try reloadSnapshot()
             refreshState = .finished(summary)
+            diagnosticStore.record(
+                category: .scanning,
+                code: "REFRESH_COMPLETED",
+                message: "Refresh completed",
+                redactor: currentRedactor()
+            )
             if enrichMissingDescriptionsAfterRefresh {
                 let refreshedSnapshots = snapshots
                 let missing = refreshedSnapshots.filter {
@@ -654,7 +804,14 @@ final class AppModel {
                 }
             }
         } catch {
-            refreshState = .failed(String(describing: error))
+            let redacted = currentRedactor().redact(String(describing: error))
+            refreshState = .failed(redacted)
+            diagnosticStore.record(
+                category: .scanning,
+                code: "REFRESH_FAILED",
+                message: redacted,
+                redactor: currentRedactor()
+            )
         }
     }
 
@@ -779,6 +936,12 @@ final class AppModel {
         enrichmentTotalCount = groups.count
         completedEnrichmentCount = 0
         enrichmentError = nil
+        diagnosticStore.record(
+            category: .enrichment,
+            code: "ENRICHMENT_READY",
+            message: "Metadata candidates are ready",
+            redactor: currentRedactor()
+        )
     }
 
     private func advanceEnrichmentQueue() {
@@ -817,6 +980,53 @@ final class AppModel {
 
     private static let enrichAfterRefreshDefaultsKey =
         "SkillSelector.enrichMissingDescriptionsAfterRefresh"
+    private static let refreshOnLaunchDefaultsKey = "SkillSelector.refreshOnLaunch"
+
+    private func reloadAgentDefinitions() throws {
+        customAgentDefinitions = try customAgentStore.definitions()
+        registry = AgentRegistry(
+            definitions: builtInAgentDefinitions,
+            customDefinitions: customAgentDefinitions
+        )
+        agentDefinitions = registry.definitions
+        refresher.updateRegistry(registry)
+    }
+
+    private func normalizedLines(_ values: [String]) -> [String] {
+        Array(Set(values.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty })).sorted()
+    }
+
+    private func currentRedactor(
+        additionalRoots: [AuthorizedRootSnapshot] = []
+    ) -> Redactor {
+        let roots = authorizedRoots + additionalRoots
+        let home = roots.first(where: { $0.kind == .home })?.url
+            ?? FileManager.default.homeDirectoryForCurrentUser
+        return Redactor(
+            homeDirectory: home,
+            projectDirectories: roots.filter { $0.kind == .project }.map(\.url)
+        )
+    }
+
+    private func diagnosticRootSummaries() -> [DiagnosticRootSummary] {
+        authorizedRoots.map { root in
+            let isAvailable: Bool
+            do {
+                guard let bookmarks else { throw AppModelDocumentError.authorizationStorageUnavailable }
+                let access = try bookmarks.resolve(id: root.id)
+                access.lease.close()
+                isAvailable = true
+            } catch {
+                isAvailable = false
+            }
+            return DiagnosticRootSummary(
+                id: root.id,
+                kind: root.kind,
+                isAvailable: isAvailable
+            )
+        }
+    }
 
     private func waitForActiveRefresh() async {
         guard let activeRefresh else { return }

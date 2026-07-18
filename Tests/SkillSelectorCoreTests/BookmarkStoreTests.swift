@@ -99,6 +99,35 @@ final class BookmarkStoreTests: XCTestCase {
         XCTAssertEqual(access.root.kind, .system)
     }
 
+    func testRevokeClosesActiveAccessAndRemovesPersistedBookmark() throws {
+        let adapter = BookmarkAdapterSpy()
+        let store = try makeStore(adapter: adapter)
+        let saved = try store.save(url: URL(fileURLWithPath: "/tmp/project"), kind: .project)
+        let access = try store.resolve(id: saved.id)
+
+        try store.revoke(id: saved.id)
+
+        XCTAssertEqual(adapter.stoppedURLs, [saved.url])
+        XCTAssertTrue(try store.roots().isEmpty)
+        access.lease.close()
+        XCTAssertEqual(adapter.stoppedURLs, [saved.url])
+        XCTAssertThrowsError(try store.resolve(id: saved.id)) { error in
+            XCTAssertEqual(error as? BookmarkStoreError, .rootNotFound(saved.id))
+        }
+    }
+
+    func testDroppingAccessStillClosesLeaseWithoutWaitingForRevoke() throws {
+        let adapter = BookmarkAdapterSpy()
+        let store = try makeStore(adapter: adapter)
+        let saved = try store.save(url: URL(fileURLWithPath: "/tmp/project"), kind: .project)
+
+        var access: AuthorizedRootAccess? = try store.resolve(id: saved.id)
+        XCTAssertNotNil(access)
+        access = nil
+
+        XCTAssertEqual(adapter.stoppedURLs, [saved.url])
+    }
+
     private func makeStore(adapter: BookmarkAdapterSpy) throws -> BookmarkStore {
         BookmarkStore(container: try makeContainer(), adapter: adapter)
     }

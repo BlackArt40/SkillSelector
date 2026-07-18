@@ -60,7 +60,7 @@ public struct RefreshSummary: Hashable, Sendable {
 }
 
 public final class IndexRefresher {
-    private let registry: AgentRegistry
+    private var registry: AgentRegistry
     private let bookmarks: BookmarkStore
     private let scanner: SkillScanner
     private let index: SkillIndex
@@ -91,6 +91,11 @@ public final class IndexRefresher {
         self.scanner = scanner
         self.index = index
         self.fileSystem = fileSystem
+    }
+
+    @MainActor
+    public func updateRegistry(_ registry: AgentRegistry) {
+        self.registry = registry
     }
 
     @MainActor
