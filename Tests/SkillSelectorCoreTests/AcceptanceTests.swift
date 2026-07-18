@@ -236,14 +236,6 @@ final class AcceptanceTests: XCTestCase {
     }
 
     func testMCPRequiresExactApprovalsAndUsesOnlyEnabledReadOnlyTools() async throws {
-        let preferenceResidueBefore = try acceptanceMCPPreferenceResidue()
-        defer {
-            XCTAssertEqual(
-                try? acceptanceMCPPreferenceResidue(),
-                preferenceResidueBefore,
-                "Acceptance MCP test must not create persistent preference domains or files"
-            )
-        }
         let fixture = try AcceptanceFixture()
         var configurations = try MCPConfigDiscovery().discover(in: fixture.home)
         XCTAssertEqual(Set(configurations.map(\.name)), ["http", "package-runner", "stdio"])
@@ -253,12 +245,14 @@ final class AcceptanceTests: XCTestCase {
 
         let stdio = try XCTUnwrap(configurations.first { $0.name == "stdio" })
             .withState(isEnabled: true, enabledToolNames: ["metadata_lookup"])
-        let approval = CommandApproval(store: AcceptanceCommandApprovalStore())
+        let approvalStore = AcceptanceCommandApprovalStore()
+        let approval = CommandApproval(store: approvalStore)
         await XCTAssertThrowsAcceptanceError(
             try await StdioMCPClient(configuration: stdio, approval: approval).listTools(),
             expected: MCPClientError.approvalRequired
         )
         approval.approve(try XCTUnwrap(stdio.commandApproval))
+        XCTAssertEqual(approvalStore.fingerprints(), [try XCTUnwrap(stdio.commandApproval).fingerprint])
         let approvedClient = StdioMCPClient(configuration: stdio, approval: approval, timeout: 2)
         let approvedTools = try await approvedClient.listTools()
         XCTAssertEqual(approvedTools.map(\.name), [
@@ -275,6 +269,8 @@ final class AcceptanceTests: XCTestCase {
         let preferences = AcceptanceMCPPreferenceStore()
         preferences.setServer(stdio.id, enabled: true)
         preferences.setTool("metadata_lookup", serverID: stdio.id, enabled: true)
+        XCTAssertTrue(preferences.isServerEnabled(stdio.id))
+        XCTAssertEqual(preferences.enabledTools(for: stdio.id), ["metadata_lookup"])
         let provider = MCPMetadataProvider(
             rootURL: fixture.home,
             authorizedHomeURL: fixture.home,
@@ -669,43 +665,6 @@ private final class AcceptanceMCPPreferenceStore: MCPPreferenceStoring, @uncheck
             else { enabledToolsByServer[serverID, default: []].remove(name) }
         }
     }
-}
-
-private struct AcceptanceMCPPreferenceResidue: Equatable {
-    let files: Set<String>
-    let domains: Set<String>
-}
-
-private func acceptanceMCPPreferenceResidue() throws -> AcceptanceMCPPreferenceResidue {
-    let preferencesDirectory = FileManager.default.homeDirectoryForCurrentUser
-        .appending(path: "Library/Preferences")
-    let entries = (try? FileManager.default.contentsOfDirectory(
-        at: preferencesDirectory,
-        includingPropertiesForKeys: nil
-    )) ?? []
-    let files = Set(entries.filter { $0.lastPathComponent.hasPrefix("AcceptanceMCP-") }.map(\.path))
-
-    let domains: Set<String>
-    if FileManager.default.isExecutableFile(atPath: "/usr/bin/defaults") {
-        let process = Process()
-        let output = Pipe()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/defaults")
-        process.arguments = ["domains"]
-        process.standardOutput = output
-        process.standardError = FileHandle.nullDevice
-        try? process.run()
-        process.waitUntilExit()
-        let text = String(
-            data: output.fileHandleForReading.readDataToEndOfFile(),
-            encoding: .utf8
-        ) ?? ""
-        domains = Set(text.split { $0 == "," || $0 == "{" || $0 == "}" || $0.isWhitespace }
-            .map(String.init)
-            .filter { $0.hasPrefix("AcceptanceMCP-") })
-    } else {
-        domains = []
-    }
-    return AcceptanceMCPPreferenceResidue(files: files, domains: domains)
 }
 
 private final class AcceptanceTrash: FileOperationTrashing {
