@@ -3,21 +3,22 @@ import XCTest
 @testable import SkillSelectorCore
 
 final class SkillScannerTests: XCTestCase {
-    func testSharedRootProducesOneInstallationWithManyAgents() async throws {
+    func testProjectTraversalUsesFolderOwnerAndLeavesSharedPatternsOwnerless() async throws {
         let fixture = try ScanFixture()
-        try fixture.writeSkill(at: ".agents/skills/demo", name: "demo", description: "Demo")
+        try fixture.writeSkill(at: ".codex/skills/codex-only", name: "codex-only")
+        try fixture.writeSkill(at: ".claude/skills/claude-only", name: "claude-only")
+        try fixture.writeSkill(at: ".agents/skills/shared", name: "shared")
+        try fixture.writeSkill(at: ".agents/skills-code/shared-mode", name: "shared-mode")
 
-        let report = await SkillScanner().scan(
-            fixture.rootsForSharedAgents(["cursor", "gemini-cli"])
-        )
+        let report = await SkillScanner().scan([fixture.projectRoot])
+        let skills = Dictionary(uniqueKeysWithValues: report.installations.map {
+            ($0.document.name ?? "", $0)
+        })
 
-        XCTAssertEqual(report.installations.count, 1)
-        XCTAssertEqual(report.installations[0].agentIDs, ["cursor", "gemini-cli"])
-        XCTAssertEqual(
-            report.installations[0].agentIDsByRoot,
-            ["cursor": ["cursor"], "gemini-cli": ["gemini-cli"]]
-        )
-        XCTAssertEqual(report.installations[0].document.name, "demo")
+        XCTAssertEqual(skills["codex-only"]?.agentIDs, ["codex"])
+        XCTAssertEqual(skills["claude-only"]?.agentIDs, ["claude-code"])
+        XCTAssertEqual(skills["shared"]?.agentIDs, [])
+        XCTAssertEqual(skills["shared-mode"]?.agentIDs, [])
     }
 
     func testProjectTraversalFindsNestedPatternsAndSkipsHeavyDirectories() async throws {

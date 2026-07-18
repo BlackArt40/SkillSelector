@@ -194,34 +194,35 @@ public final class IndexRefresher {
         var candidates: [String: (url: URL, agents: Set<String>, entry: String)] = [:]
         var availableDispositions = [root.url.path: root.url]
         var unavailableDispositions: [ScannedRoot] = []
-        for definition in registry.definitions {
-            for declaredPath in definition.globalRoots {
-                do {
-                    for url in try expandedHomeURLs(declaredPath, relativeTo: root.url) {
-                        switch try probeDirectory(url) {
-                        case .directory:
-                            let key = "\(url.path)\u{1f}\(definition.entryFilename)"
-                            candidates[key, default: (url, [], definition.entryFilename)]
-                                .agents.insert(definition.id)
-                        case .missing:
-                            availableDispositions[url.path] = url
+        for declaration in registry.globalDeclarations {
+            do {
+                for url in try expandedHomeURLs(declaration.value, relativeTo: root.url) {
+                    switch try probeDirectory(url) {
+                    case .directory:
+                        let key = "\(url.path)\u{1f}\(declaration.entryFilename)"
+                        var candidate = candidates[key, default: (url, [], declaration.entryFilename)]
+                        if let agentID = declaration.agentID {
+                            candidate.agents.insert(agentID)
                         }
+                        candidates[key] = candidate
+                    case .missing:
+                        availableDispositions[url.path] = url
                     }
-                } catch {
-                    let detail = String(describing: error)
-                    let diagnostic = StructuredDiagnostic(
-                        code: .unableToInspectAuthorizedDirectory,
-                        arguments: [detail]
-                    )
-                    unavailableDispositions.append(
-                        ScannedRoot(
-                            id: root.id,
-                            url: root.url,
-                            availability: .unavailable(reason: diagnostic.fallbackMessage),
-                            unavailableDiagnostic: diagnostic
-                        )
-                    )
                 }
+            } catch {
+                let detail = String(describing: error)
+                let diagnostic = StructuredDiagnostic(
+                    code: .unableToInspectAuthorizedDirectory,
+                    arguments: [detail]
+                )
+                unavailableDispositions.append(
+                    ScannedRoot(
+                        id: root.id,
+                        url: root.url,
+                        availability: .unavailable(reason: diagnostic.fallbackMessage),
+                        unavailableDiagnostic: diagnostic
+                    )
+                )
             }
         }
         let scanRoots = candidates
@@ -253,8 +254,8 @@ public final class IndexRefresher {
         } catch {
             return unavailablePlan(for: root, error: error)
         }
-        let matching = registry.definitions.filter { definition in
-            definition.globalRoots.contains(root.url.path)
+        let matching = registry.globalDeclarations.filter { declaration in
+            declaration.value == root.url.path
         }
         let grouped = Dictionary(grouping: matching, by: \.entryFilename)
         if grouped.isEmpty {
@@ -270,11 +271,11 @@ public final class IndexRefresher {
             )
         }
         return ScanPlan(
-            scanRoots: grouped.sorted { $0.key < $1.key }.map { entryFilename, definitions in
+            scanRoots: grouped.sorted { $0.key < $1.key }.map { entryFilename, declarations in
                 ScanRoot.skillDirectory(
                     id: root.id,
                     url: root.url,
-                    agentIDs: Set(definitions.map(\.id)),
+                    agentIDs: Set(declarations.compactMap(\.agentID)),
                     entryFilename: entryFilename
                 )
             },

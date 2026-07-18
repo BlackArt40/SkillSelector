@@ -87,10 +87,10 @@ public struct SkillScanner: Sendable {
                     issues = [invalidEntryFilenameIssue(entryFilename)]
                 }
             case .project(let registry):
-                let validation = validatedDefinitions(registry.definitions)
+                let validation = validatedDeclarations(registry.projectDeclarations)
                 installations = try scanProject(
                     root,
-                    definitions: validation.definitions,
+                    declarations: validation.declarations,
                     authorizedURLs: authorizedURLs
                 )
                 issues = validation.issues
@@ -156,7 +156,7 @@ public struct SkillScanner: Sendable {
 
     private func scanProject(
         _ root: ScanRoot,
-        definitions: [AgentDefinition],
+        declarations: [SkillRootDeclaration],
         authorizedURLs: [URL]
     ) throws -> [ScannedSkill] {
         var installations: [ScannedSkill] = []
@@ -164,7 +164,7 @@ public struct SkillScanner: Sendable {
             root.url,
             relativeComponents: [],
             root: root,
-            definitions: definitions,
+            declarations: declarations,
             authorizedURLs: authorizedURLs,
             installations: &installations
         )
@@ -175,7 +175,7 @@ public struct SkillScanner: Sendable {
         _ directory: URL,
         relativeComponents: [String],
         root: ScanRoot,
-        definitions: [AgentDefinition],
+        declarations: [SkillRootDeclaration],
         authorizedURLs: [URL],
         installations: inout [ScannedSkill]
     ) throws {
@@ -184,7 +184,7 @@ public struct SkillScanner: Sendable {
                installationURL: directory,
                entries: matchingEntries(
                    in: relativeComponents,
-                   definitions: definitions
+                   declarations: declarations
                ),
                rootID: root.id,
                authorizedURLs: authorizedURLs,
@@ -207,7 +207,7 @@ public struct SkillScanner: Sendable {
                     installationURL: child,
                     entries: matchingEntries(
                         in: childComponents,
-                        definitions: definitions
+                        declarations: declarations
                     ),
                     rootID: root.id,
                     authorizedURLs: authorizedURLs,
@@ -221,7 +221,7 @@ public struct SkillScanner: Sendable {
                     child,
                     relativeComponents: childComponents,
                     root: root,
-                    definitions: definitions,
+                    declarations: declarations,
                     authorizedURLs: authorizedURLs,
                     installations: &installations
                 )
@@ -231,24 +231,21 @@ public struct SkillScanner: Sendable {
 
     private func matchingEntries(
         in skillDirectoryComponents: [String],
-        definitions: [AgentDefinition]
+        declarations: [SkillRootDeclaration]
     ) -> [(agentIDs: Set<String>, entryFilename: String)] {
         let parentComponents = Array(skillDirectoryComponents.dropLast())
-        let matches = definitions.flatMap { definition in
-            definition.projectPatterns.compactMap { pattern -> (String, String)? in
-                let components = pattern.split(separator: "/").map(String.init)
-                guard pathSuffix(parentComponents, matches: components) else { return nil }
-                return (definition.id, definition.entryFilename)
-            }
+        let matches = declarations.compactMap { declaration -> (Set<String>, String)? in
+            let components = declaration.value.split(separator: "/").map(String.init)
+            guard pathSuffix(parentComponents, matches: components) else { return nil }
+            return (declaration.agentID.map { Set([$0]) } ?? [], declaration.entryFilename)
         }
 
-        let entries = Dictionary(grouping: matches, by: { $0.1 })
-        return entries.keys.sorted(by: { lhs, rhs in
-            if lhs == "SKILL.md" { return true }
-            if rhs == "SKILL.md" { return false }
-            return lhs < rhs
-        }).map { entryFilename in
-            (Set(entries[entryFilename, default: []].map(\.0)), entryFilename)
+        return Dictionary(grouping: matches, by: { $0.1 }).map { entryFilename, values in
+            (values.reduce(into: Set<String>()) { $0.formUnion($1.0) }, entryFilename)
+        }.sorted { lhs, rhs in
+            if lhs.entryFilename == "SKILL.md" { return true }
+            if rhs.entryFilename == "SKILL.md" { return false }
+            return lhs.entryFilename < rhs.entryFilename
         }
     }
 
@@ -484,18 +481,18 @@ public struct SkillScanner: Sendable {
             && !entryFilename.contains("\\")
     }
 
-    private func validatedDefinitions(
-        _ definitions: [AgentDefinition]
-    ) -> (definitions: [AgentDefinition], issues: [ScanIssue]) {
-        var valid: [AgentDefinition] = []
+    private func validatedDeclarations(
+        _ declarations: [SkillRootDeclaration]
+    ) -> (declarations: [SkillRootDeclaration], issues: [ScanIssue]) {
+        var valid: [SkillRootDeclaration] = []
         var issues: [ScanIssue] = []
-        for definition in definitions {
-            if Self.isValidEntryFilename(definition.entryFilename) {
-                valid.append(definition)
+        for declaration in declarations {
+            if Self.isValidEntryFilename(declaration.entryFilename) {
+                valid.append(declaration)
             } else {
                 issues.append(invalidEntryFilenameIssue(
-                    definition.entryFilename,
-                    agentID: definition.id
+                    declaration.entryFilename,
+                    agentID: declaration.agentID
                 ))
             }
         }

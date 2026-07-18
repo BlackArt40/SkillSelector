@@ -5,6 +5,64 @@ import XCTest
 
 @MainActor
 final class IndexRefresherTests: XCTestCase {
+    func testHomeRefreshUsesCanonicalOwnersAndLeavesSharedAgentsEmpty() async throws {
+        let fixture = try RefreshFixture()
+        try fixture.writeSkill(at: ".codex/skills/codex-only", name: "codex-only")
+        try fixture.writeSkill(at: ".claude/skills/claude-only", name: "claude-only")
+        try fixture.writeSkill(at: ".agents/skills/shared", name: "shared")
+        let container = try fixture.makeContainer()
+        let bookmarks = BookmarkStore(container: container, adapter: FixtureBookmarkAdapter())
+        _ = try bookmarks.save(url: fixture.home, kind: .home)
+        let index = SkillIndex(container: container)
+        let refresher = IndexRefresher(
+            registry: BuiltInAgentRegistry.make(),
+            bookmarks: bookmarks,
+            index: index
+        )
+
+        _ = try await refresher.refresh(.startup)
+        let skills = Dictionary(uniqueKeysWithValues: try index.skills().map { ($0.name, $0) })
+
+        XCTAssertEqual(skills["codex-only"]?.agentIDs, ["codex"])
+        XCTAssertEqual(skills["claude-only"]?.agentIDs, ["claude-code"])
+        XCTAssertEqual(skills["shared"]?.agentIDs, [])
+        XCTAssertEqual(skills["shared"]?.rootIDs.count, 1)
+    }
+
+    func testAccessibleRefreshRemovesLegacyCompatibilityAssociations() async throws {
+        let fixture = try RefreshFixture()
+        try fixture.writeSkill(at: ".agents/skills/shared", name: "shared")
+        let container = try fixture.makeContainer()
+        let bookmarks = BookmarkStore(container: container, adapter: FixtureBookmarkAdapter())
+        let homeRoot = try bookmarks.save(url: fixture.home, kind: .home)
+        let index = SkillIndex(container: container)
+        let sharedURL = fixture.home.appending(path: ".agents/skills/shared")
+        try index.apply(report: ScanReport(
+            installations: [
+                ScannedSkill(
+                    installation: SkillInstallation(path: sharedURL),
+                    document: ParsedSkillDocument(name: "shared"),
+                    agentIDsByRoot: [homeRoot.id: ["cursor", "gemini-cli"]],
+                    entryFilename: "SKILL.md"
+                ),
+            ],
+            roots: [
+                ScannedRoot(id: homeRoot.id, url: fixture.home, availability: .available),
+            ]
+        ))
+        let refresher = IndexRefresher(
+            registry: BuiltInAgentRegistry.make(),
+            bookmarks: bookmarks,
+            index: index
+        )
+
+        _ = try await refresher.refresh(.manual)
+        let refreshed = try XCTUnwrap(index.skills().first { $0.name == "shared" })
+
+        XCTAssertEqual(refreshed.agentIDs, [])
+        XCTAssertEqual(refreshed.rootIDs, [homeRoot.id])
+    }
+
     func testHomeRefreshEnumeratesOnlyRegistryDeclaredGlobalRoots() async throws {
         let fixture = try RefreshFixture()
         try fixture.writeSkill(at: ".claude/skills/known", name: "known")
