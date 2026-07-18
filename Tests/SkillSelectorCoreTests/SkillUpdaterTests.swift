@@ -591,7 +591,7 @@ final class SkillUpdaterTests: XCTestCase {
         )) { XCTAssertEqual($0 as? PackageDigestError, .sourceChanged("victim.txt")) }
     }
 
-    func testPackageDigestRejectsSameSizeInPlaceMutationAfterOpeningFile() throws {
+    func testPackageDigestRejectsSameSizeInPlaceMutationAfterInitialDescriptorStatus() throws {
         let root = try makeSkill(name: "demo")
         let victim = root.appending(path: "victim.txt")
         defer { try? FileManager.default.removeItem(at: root.deletingLastPathComponent()) }
@@ -599,7 +599,7 @@ final class SkillUpdaterTests: XCTestCase {
 
         XCTAssertThrowsError(try PackageDigest.compute(
             at: root,
-            hooks: PackageDigestHooks(afterFileOpen: { path in
+            hooks: PackageDigestHooks(afterBeforeReadStatus: { path in
                 guard path == "victim.txt" else { return }
                 let handle = try FileHandle(forWritingTo: victim)
                 try handle.write(contentsOf: Data("after!".utf8))
@@ -608,7 +608,7 @@ final class SkillUpdaterTests: XCTestCase {
         )) { XCTAssertEqual($0 as? PackageDigestError, .sourceChanged("victim.txt")) }
     }
 
-    func testPackageDigestRejectsPathReplacementAfterOpeningFile() throws {
+    func testPackageDigestRejectsPathReplacementAfterInitialDescriptorStatus() throws {
         let root = try makeSkill(name: "demo")
         let victim = root.appending(path: "victim.txt")
         let replacement = root.deletingLastPathComponent().appending(path: "replacement.txt")
@@ -618,7 +618,7 @@ final class SkillUpdaterTests: XCTestCase {
 
         XCTAssertThrowsError(try PackageDigest.compute(
             at: root,
-            hooks: PackageDigestHooks(afterFileOpen: { path in
+            hooks: PackageDigestHooks(afterBeforeReadStatus: { path in
                 guard path == "victim.txt" else { return }
                 try FileManager.default.removeItem(at: victim)
                 try FileManager.default.moveItem(at: replacement, to: victim)
@@ -664,7 +664,7 @@ final class SkillUpdaterTests: XCTestCase {
         )) { XCTAssertEqual($0 as? PackageDigestError, .tooManyFiles) }
     }
 
-    func testPackageDigestStopsWhenOpenFileGrowsPastPerFileLimit() throws {
+    func testPackageDigestStopsWhenOpenFileGrowsPastPerFileLimitAfterInitialDescriptorStatus() throws {
         let root = try makeSkill(name: "demo")
         let growing = root.appending(path: "growing.bin")
         defer { try? FileManager.default.removeItem(at: root.deletingLastPathComponent()) }
@@ -673,7 +673,7 @@ final class SkillUpdaterTests: XCTestCase {
         XCTAssertThrowsError(try PackageDigest.compute(
             at: root,
             limits: PackageDigestLimits(maximumFileBytes: 64, maximumTotalBytes: 1_000, maximumFileCount: 10),
-            hooks: PackageDigestHooks(afterFileOpen: { path in
+            hooks: PackageDigestHooks(afterBeforeReadStatus: { path in
                 guard path == "growing.bin" else { return }
                 let handle = try FileHandle(forWritingTo: growing)
                 try handle.seekToEnd()

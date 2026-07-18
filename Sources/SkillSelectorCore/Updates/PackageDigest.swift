@@ -33,17 +33,20 @@ struct PackageDigestHooks {
     var directoryChildDiscovered: (() -> Void)?
     var beforeFileOpen: ((String) throws -> Void)?
     var afterFileOpen: ((String) throws -> Void)?
+    var afterBeforeReadStatus: ((String) throws -> Void)?
 
     init(
         entryDiscovered: (() -> Void)? = nil,
         directoryChildDiscovered: (() -> Void)? = nil,
         beforeFileOpen: ((String) throws -> Void)? = nil,
-        afterFileOpen: ((String) throws -> Void)? = nil
+        afterFileOpen: ((String) throws -> Void)? = nil,
+        afterBeforeReadStatus: ((String) throws -> Void)? = nil
     ) {
         self.entryDiscovered = entryDiscovered
         self.directoryChildDiscovered = directoryChildDiscovered
         self.beforeFileOpen = beforeFileOpen
         self.afterFileOpen = afterFileOpen
+        self.afterBeforeReadStatus = afterBeforeReadStatus
     }
 }
 
@@ -112,6 +115,7 @@ public struct PackageDigest: Codable, Hashable, Sendable, CustomStringConvertibl
                 guard sameSourceState(beforeReadStatus, entry.status) else {
                     throw PackageDigestError.sourceChanged(entry.path)
                 }
+                try hooks.afterBeforeReadStatus?(entry.path)
                 append(UInt64(beforeReadStatus.st_size), to: &hasher)
                 let readCount = try hash(
                     descriptor,
