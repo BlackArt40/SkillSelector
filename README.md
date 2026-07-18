@@ -24,7 +24,7 @@ GitHub queries use your local `gh` command. npm access is read-only. MCP Servers
 swift test
 swift build
 zsh Scripts/package-dmg.sh 0.1.0
-zsh Tests/Packaging/package-smoke.sh
+zsh Tests/Packaging/package-smoke.sh 0.1.0
 ```
 
 Packaging writes `dist/SkillSelector.app`, `dist/SkillSelector.dmg`, and the versioned GitHub Release asset `dist/SkillSelector-0.1.0.dmg`.

@@ -15,7 +15,7 @@ SkillSelector releases are GitHub Release assets. They are ad-hoc signed, App Sa
    ```zsh
    VERSION=0.1.0
    zsh Scripts/package-dmg.sh "$VERSION"
-   zsh Tests/Packaging/package-smoke.sh
+   zsh Tests/Packaging/package-smoke.sh "$VERSION"
    ```
 
    This creates `dist/SkillSelector.app`, a stable local smoke-test image at `dist/SkillSelector.dmg`, and the versioned release asset `dist/SkillSelector-$VERSION.dmg`.
