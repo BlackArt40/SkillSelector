@@ -517,28 +517,22 @@ public final class SkillFileOperator: @unchecked Sendable {
         }
 
         for authorized in authorizedRoots {
-            let definitions: [AgentDefinition]
+            let declarations: [SkillRootDeclaration]
             switch authorized.kind {
             case .home:
-                definitions = registry.definitions.filter { definition in
-                    definition.globalRoots.contains { globalRoot in
-                        matchesHomeRoot(candidate, declaration: globalRoot, home: authorized.url)
-                    }
+                declarations = registry.globalDeclarations.filter {
+                    matchesHomeRoot(candidate, declaration: $0.value, home: authorized.url)
                 }
             case .project:
-                definitions = registry.definitions.filter { definition in
-                    definition.projectPatterns.contains { pattern in
-                        pathSuffix(candidate, relativeTo: authorized.url, matches: pattern)
-                    }
+                declarations = registry.projectDeclarations.filter {
+                    pathSuffix(candidate, relativeTo: authorized.url, matches: $0.value)
                 }
             case .system, .custom:
-                definitions = registry.definitions.filter { definition in
-                    definition.globalRoots.contains { declaration in
-                        guard declaration.hasPrefix("/") else { return false }
-                        return URL(fileURLWithPath: declaration).standardizedFileURL.path == candidate.path
-                    }
+                declarations = registry.globalDeclarations.filter {
+                    guard $0.value.hasPrefix("/") else { return false }
+                    return URL(fileURLWithPath: $0.value).standardizedFileURL.path == candidate.path
                 }
-                if definitions.isEmpty, candidate.path == authorized.url.standardizedFileURL.path {
+                if declarations.isEmpty, candidate.path == authorized.url.standardizedFileURL.path {
                     return RegisteredRootMatch(
                         root: authorized,
                         url: candidate,
@@ -547,13 +541,13 @@ public final class SkillFileOperator: @unchecked Sendable {
                     )
                 }
             }
-            guard !definitions.isEmpty else { continue }
-            let sameEntry = definitions.filter { $0.entryFilename == entryFilename }
-            let selected = sameEntry.isEmpty ? definitions : sameEntry
+            guard !declarations.isEmpty else { continue }
+            let sameEntry = declarations.filter { $0.entryFilename == entryFilename }
+            let selected = sameEntry.isEmpty ? declarations : sameEntry
             return RegisteredRootMatch(
                 root: authorized,
                 url: candidate,
-                agentIDs: selected.map(\.id).sorted(),
+                agentIDs: Array(Set(selected.compactMap(\.agentID))).sorted(),
                 entryFilename: selected.first?.entryFilename ?? entryFilename
             )
         }
@@ -712,7 +706,7 @@ public final class SkillFileOperator: @unchecked Sendable {
     }
 
     private func registryFingerprint(_ registry: AgentRegistry) -> String {
-        registry.definitions.map { definition in
+        let definitionRecords = registry.definitions.map { definition in
             [
                 definition.id,
                 definition.displayName,
@@ -721,7 +715,13 @@ public final class SkillFileOperator: @unchecked Sendable {
                 definition.entryFilename,
                 String(definition.isLegacy),
             ].joined(separator: "\u{1f}")
-        }.sorted().joined(separator: "\u{1e}")
+        }
+        let declarations = registry.globalDeclarations.map {
+            "global\u{1f}\($0.value)\u{1f}\($0.entryFilename)\u{1f}\($0.agentID ?? "")"
+        } + registry.projectDeclarations.map {
+            "project\u{1f}\($0.value)\u{1f}\($0.entryFilename)\u{1f}\($0.agentID ?? "")"
+        }
+        return (definitionRecords + declarations).sorted().joined(separator: "\u{1e}")
     }
 
     private func linkPlan(

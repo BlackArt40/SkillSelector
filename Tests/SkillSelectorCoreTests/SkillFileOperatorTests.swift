@@ -27,10 +27,12 @@ final class SkillFileOperatorTests: XCTestCase {
             AgentDefinition(
                 id: "codex",
                 displayName: "Codex",
-                globalRoots: ["~/.codex/skills", "~/.agents/skills"],
-                projectPatterns: [".codex/skills", ".agents/skills"]
+                globalRoots: ["~/.codex/skills"],
+                projectPatterns: [".codex/skills"]
             ),
-        ])
+        ],
+        sharedGlobalRoots: ["~/.agents/skills"],
+        sharedProjectPatterns: [".agents/skills"])
         trash = RecordingTrash(root: trashRoot)
     }
 
@@ -66,6 +68,18 @@ final class SkillFileOperatorTests: XCTestCase {
         ) { error in
             XCTAssertEqual(error as? SkillFileOperatorError, .invalidOrConsumedPlan)
         }
+    }
+
+    func testSharedDestinationIsRegisteredWithoutAgentAssociation() throws {
+        let source = try makeSkill(in: destinationRoot, name: "owned")
+
+        let plan = try makeOperator().plan(
+            request(.copy, source: source, destination: sourceRoot)
+        )
+
+        XCTAssertEqual(plan.destinationURL, sourceRoot.appending(path: "owned").standardizedFileURL)
+        XCTAssertEqual(plan.destinationAgentIDs, [])
+        XCTAssertEqual(plan.entryFilename, "SKILL.md")
     }
 
     func testMovePreservesMetadataIntentAndMovesOnlyAfterConfirmation() async throws {
@@ -202,7 +216,7 @@ final class SkillFileOperatorTests: XCTestCase {
 
         XCTAssertEqual(
             try operatorUnderTest.plan(request(.copy, source: source, destination: valid)).destinationAgentIDs,
-            ["codex"]
+            []
         )
         XCTAssertThrowsError(try operatorUnderTest.plan(request(.copy, source: source, destination: prefixLookalike))) {
             XCTAssertEqual($0 as? SkillFileOperatorError, .unregisteredDestination)
@@ -628,7 +642,9 @@ final class SkillFileOperatorTests: XCTestCase {
                 globalRoots: [system.path],
                 projectPatterns: []
             ),
-        ])
+        ],
+        sharedGlobalRoots: registry.sharedGlobalRoots,
+        sharedProjectPatterns: registry.sharedProjectPatterns)
         roots.append(AuthorizedRootSnapshot(id: "system", url: system, kind: .system))
         roots.append(AuthorizedRootSnapshot(id: "custom", url: custom, kind: .custom))
         let operatorUnderTest = makeOperator()
@@ -675,7 +691,10 @@ final class SkillFileOperatorTests: XCTestCase {
         let registryPlan = try registryChanged.plan(
             request(.copy, source: replacementSource, destination: destinationRoot)
         )
-        registry = AgentRegistry(definitions: [])
+        registry = AgentRegistry(
+            definitions: registry.definitions,
+            sharedProjectPatterns: [".agents/skills"]
+        )
         await XCTAssertThrowsErrorAsync(
             try await registryChanged.execute(registryPlan, confirmation: registryPlan.confirmationToken)
         ) { XCTAssertEqual($0 as? SkillFileOperatorError, .registryChanged) }
