@@ -243,6 +243,9 @@
 "This update confirmation is no longer valid." = "This update confirmation is no longer valid.";
 "diagnostic.digestUnavailable" = "Content digest is unavailable because the Skill package exceeds safety limits";
 "Add Custom Agent" = "Add Custom Agent";
+"Edit Custom Agent" = "Edit Custom Agent";
+"Update Custom Agent" = "Update Custom Agent";
+"Cancel Editing" = "Cancel Editing";
 "Agent Name" = "Agent Name";
 "Authorized Directories" = "Authorized Directories";
 "Check Tools" = "Check Tools";

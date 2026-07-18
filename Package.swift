@@ -16,6 +16,9 @@ let package = Package(
             dependencies: ["SkillSelectorCore"],
             resources: [.process("Resources")]
         ),
-        .testTarget(name: "SkillSelectorCoreTests", dependencies: ["SkillSelectorCore"]),
+        .testTarget(
+            name: "SkillSelectorCoreTests",
+            dependencies: ["SkillSelectorCore", "SkillSelector"]
+        ),
     ]
 )

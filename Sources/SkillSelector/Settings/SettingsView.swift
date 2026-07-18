@@ -3,12 +3,49 @@ import SkillSelectorCore
 import SwiftUI
 import UniformTypeIdentifiers
 
+@MainActor
+struct CustomAgentEditorState {
+    var selectedAgentID: String?
+    var agentName = ""
+    var globalRoots = ""
+    var projectPatterns = ""
+    var entryFilename = "SKILL.md"
+
+    mutating func beginEditing(_ definition: AgentDefinition) {
+        selectedAgentID = definition.id
+        agentName = definition.displayName
+        globalRoots = definition.globalRoots.joined(separator: ", ")
+        projectPatterns = definition.projectPatterns.joined(separator: ", ")
+        entryFilename = definition.entryFilename
+    }
+
+    mutating func save(using model: AppModel) throws {
+        try model.saveCustomAgent(
+            displayName: agentName,
+            globalRoots: splitPaths(globalRoots),
+            projectPatterns: splitPaths(projectPatterns),
+            entryFilename: entryFilename,
+            existingID: selectedAgentID
+        )
+        reset()
+    }
+
+    mutating func reset() {
+        selectedAgentID = nil
+        agentName = ""
+        globalRoots = ""
+        projectPatterns = ""
+        entryFilename = "SKILL.md"
+    }
+
+    private func splitPaths(_ value: String) -> [String] {
+        value.components(separatedBy: CharacterSet(charactersIn: ",\n"))
+    }
+}
+
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
-    @State private var agentName = ""
-    @State private var globalRoots = ""
-    @State private var projectPatterns = ""
-    @State private var entryFilename = "SKILL.md"
+    @State private var customAgentEditor = CustomAgentEditorState()
     @State private var settingsError: String?
     @State private var exportStatus: String?
 
@@ -156,8 +193,21 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
+                    Button {
+                        customAgentEditor.beginEditing(agent)
+                    } label: {
+                        Image(systemName: "pencil")
+                    }
+                    .buttonStyle(.borderless)
+                    .help(L10n.string("Edit Custom Agent"))
+                    .accessibilityLabel(L10n.string("Edit Custom Agent"))
                     Button(role: .destructive) {
-                        do { try model.removeCustomAgent(id: agent.id) }
+                        do {
+                            try model.removeCustomAgent(id: agent.id)
+                            if customAgentEditor.selectedAgentID == agent.id {
+                                customAgentEditor.reset()
+                            }
+                        }
                         catch { settingsError = String(describing: error) }
                     } label: {
                         Image(systemName: "trash")
@@ -170,40 +220,43 @@ struct SettingsView: View {
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
                 GridRow {
                     Text(verbatim: L10n.string("Name"))
-                    TextField(L10n.string("Agent Name"), text: $agentName)
+                    TextField(L10n.string("Agent Name"), text: $customAgentEditor.agentName)
                 }
                 GridRow {
                     Text(verbatim: L10n.string("Global Roots"))
-                    TextField(L10n.string("Comma-separated paths"), text: $globalRoots)
+                    TextField(L10n.string("Comma-separated paths"), text: $customAgentEditor.globalRoots)
                 }
                 GridRow {
                     Text(verbatim: L10n.string("Project Patterns"))
-                    TextField(L10n.string("Comma-separated paths"), text: $projectPatterns)
+                    TextField(L10n.string("Comma-separated paths"), text: $customAgentEditor.projectPatterns)
                 }
                 GridRow {
                     Text(verbatim: L10n.string("Entry Filename"))
-                    TextField("SKILL.md", text: $entryFilename)
+                    TextField("SKILL.md", text: $customAgentEditor.entryFilename)
                 }
             }
-            Button {
-                do {
-                    try model.saveCustomAgent(
-                        displayName: agentName,
-                        globalRoots: splitPaths(globalRoots),
-                        projectPatterns: splitPaths(projectPatterns),
-                        entryFilename: entryFilename
+            HStack {
+                Button {
+                    do {
+                        try customAgentEditor.save(using: model)
+                    } catch {
+                        settingsError = String(describing: error)
+                    }
+                } label: {
+                    Label(
+                        L10n.string(customAgentEditor.selectedAgentID == nil
+                            ? "Add Custom Agent"
+                            : "Update Custom Agent"),
+                        systemImage: customAgentEditor.selectedAgentID == nil ? "plus" : "checkmark"
                     )
-                    agentName = ""
-                    globalRoots = ""
-                    projectPatterns = ""
-                    entryFilename = "SKILL.md"
-                } catch {
-                    settingsError = String(describing: error)
                 }
-            } label: {
-                Label(L10n.string("Add Custom Agent"), systemImage: "plus")
+                .disabled(customAgentEditor.agentName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                if customAgentEditor.selectedAgentID != nil {
+                    Button(L10n.string("Cancel Editing")) {
+                        customAgentEditor.reset()
+                    }
+                }
             }
-            .disabled(agentName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
     }
 
@@ -274,10 +327,6 @@ struct SettingsView: View {
                 settingsError = String(describing: error)
             }
         }
-    }
-
-    private func splitPaths(_ value: String) -> [String] {
-        value.components(separatedBy: CharacterSet(charactersIn: ",\n"))
     }
 
     private func rootTitle(_ kind: AuthorizedRootKind) -> String {

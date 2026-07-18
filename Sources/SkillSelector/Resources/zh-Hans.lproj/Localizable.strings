@@ -243,6 +243,9 @@
 "This update confirmation is no longer valid." = "此更新确认已失效。";
 "diagnostic.digestUnavailable" = "Skill 包超过安全限制，无法生成内容摘要";
 "Add Custom Agent" = "添加自定义 Agent";
+"Edit Custom Agent" = "编辑自定义 Agent";
+"Update Custom Agent" = "更新自定义 Agent";
+"Cancel Editing" = "取消编辑";
 "Agent Name" = "Agent 名称";
 "Authorized Directories" = "已授权目录";
 "Check Tools" = "检查工具";

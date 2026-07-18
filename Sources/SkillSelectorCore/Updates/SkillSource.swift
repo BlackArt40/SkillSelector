@@ -278,7 +278,12 @@ public struct SkillSource: Codable, Hashable, Sendable {
                 directory.deleteLastPathComponent()
                 continue
             }
-            let commonDirectory = commonGitDirectory(from: gitDirectory) ?? gitDirectory
+            let commonDirectory: URL
+            switch commonGitDirectory(from: gitDirectory) {
+            case .absent: commonDirectory = gitDirectory
+            case .valid(let directory): commonDirectory = directory
+            case .invalid: return nil
+            }
             guard let text = readGitText(commonDirectory.appending(path: "config")),
                   let remote = gitRemoteURL(in: text) else { return nil }
             let relative = installationURL.standardizedFileURL.path
@@ -298,8 +303,8 @@ public struct SkillSource: Codable, Hashable, Sendable {
         for installationURL: URL,
         authorizedRootURL: URL
     ) throws -> SkillSource? {
-        let ceiling = authorizedRootURL.standardizedFileURL
-        let installation = installationURL.standardizedFileURL
+        let ceiling = physicalURL(authorizedRootURL)
+        let installation = physicalURL(installationURL)
         guard isContained(installation, in: ceiling) else { return nil }
         var directory = installation
         if (try? directory.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) != true {
@@ -312,7 +317,12 @@ public struct SkillSource: Codable, Hashable, Sendable {
                 directory.deleteLastPathComponent()
                 continue
             }
-            let commonDirectory = commonGitDirectory(from: gitDirectory, ceiling: ceiling) ?? gitDirectory
+            let commonDirectory: URL
+            switch commonGitDirectory(from: gitDirectory, ceiling: ceiling) {
+            case .absent: commonDirectory = gitDirectory
+            case .valid(let directory): commonDirectory = directory
+            case .invalid: return nil
+            }
             guard let text = readGitText(commonDirectory.appending(path: "config")),
                   let remote = gitRemoteURL(in: text) else { return nil }
             let relative = installation.path
@@ -401,22 +411,36 @@ private func gitDirectory(from marker: URL, ceiling: URL? = nil) -> URL? {
     guard status.st_mode & S_IFMT == S_IFREG,
           let value = readGitText(marker),
           let path = gitDirectoryPath(in: value, relativeTo: marker.deletingLastPathComponent()),
-          isGitMetadataDirectory(path),
-          ceiling.map({ isContained(path, in: $0) }) ?? true else {
+          ceiling.map({ isContained(path, in: $0) }) ?? true,
+          isGitMetadataDirectory(path) else {
         return nil
     }
     return path
 }
 
-private func commonGitDirectory(from gitDirectory: URL, ceiling: URL? = nil) -> URL? {
+private enum CommonGitDirectoryResolution {
+    case absent
+    case valid(URL)
+    case invalid
+}
+
+private func commonGitDirectory(
+    from gitDirectory: URL,
+    ceiling: URL? = nil
+) -> CommonGitDirectoryResolution {
     let marker = gitDirectory.appending(path: "commondir")
-    guard let value = readGitText(marker),
-          let path = gitDirectoryPath(in: value, relativeTo: gitDirectory),
-          isGitMetadataDirectory(path),
-          ceiling.map({ isContained(path, in: $0) }) ?? true else {
-        return nil
+    var status = stat()
+    guard marker.path.withCString({ Darwin.lstat($0, &status) }) == 0 else {
+        return .absent
     }
-    return path
+    guard status.st_mode & S_IFMT == S_IFREG,
+          let value = readGitText(marker),
+          let path = gitDirectoryPath(in: value, relativeTo: gitDirectory),
+          ceiling.map({ isContained(path, in: $0) }) ?? true,
+          isGitMetadataDirectory(path) else {
+        return .invalid
+    }
+    return .valid(path)
 }
 
 private func gitDirectoryPath(in text: String, relativeTo base: URL) -> URL? {
@@ -445,10 +469,14 @@ private func isGitMetadataDirectory(_ url: URL) -> Bool {
 }
 
 private func isContained(_ candidate: URL, in root: URL) -> Bool {
-    let candidateComponents = candidate.standardizedFileURL.pathComponents
-    let rootComponents = root.standardizedFileURL.pathComponents
+    let candidateComponents = physicalURL(candidate).pathComponents
+    let rootComponents = physicalURL(root).pathComponents
     return candidateComponents.count >= rootComponents.count
         && Array(candidateComponents.prefix(rootComponents.count)) == rootComponents
+}
+
+private func physicalURL(_ url: URL) -> URL {
+    url.standardizedFileURL.resolvingSymlinksInPath().standardizedFileURL
 }
 
 private func readGitText(_ url: URL) -> String? {

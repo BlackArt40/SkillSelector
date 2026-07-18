@@ -201,6 +201,91 @@ final class SkillUpdaterTests: XCTestCase {
         ))
     }
 
+    func testAuthorizationUsesPhysicalContainmentForSymlinkedGitMetadataAncestor() throws {
+        let root = temporaryDirectory()
+        let outside = root.deletingLastPathComponent().appending(path: "physical-escape")
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            try? FileManager.default.removeItem(at: outside)
+        }
+        let skill = root.appending(path: "project/skills/demo")
+        let outsideGit = outside.appending(path: ".git")
+        try FileManager.default.createDirectory(at: skill, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: outsideGit, withIntermediateDirectories: true)
+        try Data("[remote \"origin\"]\n  url = https://github.com/acme/physical-escape.git\n".utf8)
+            .write(to: outsideGit.appending(path: "config"))
+        try Data("ref: refs/heads/main\n".utf8).write(to: outsideGit.appending(path: "HEAD"))
+        try FileManager.default.createSymbolicLink(
+            at: root.appending(path: "redirect"),
+            withDestinationURL: outside
+        )
+        try Data("gitdir: ../redirect/.git\n".utf8)
+            .write(to: root.appending(path: "project/.git"))
+
+        XCTAssertEqual(
+            try XCTUnwrap(SkillSource.containingGitRepository(for: skill)).repository,
+            "acme/physical-escape"
+        )
+        XCTAssertNil(try SkillSource.containingGitRepository(
+            for: skill,
+            authorizedRootURL: root
+        ))
+
+        let physicalRoot = root.deletingLastPathComponent().appending(path: "physical-authorized")
+        defer { try? FileManager.default.removeItem(at: physicalRoot) }
+        let authorizedAlias = root.appending(path: "authorized-alias")
+        let physicalSkill = physicalRoot.appending(path: "repository/skills/demo")
+        let physicalGit = physicalRoot.appending(path: "repository/.git")
+        try FileManager.default.createDirectory(at: physicalSkill, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: physicalGit, withIntermediateDirectories: true)
+        try Data("[remote \"origin\"]\n  url = https://github.com/acme/physical-authorized.git\n".utf8)
+            .write(to: physicalGit.appending(path: "config"))
+        try Data("ref: refs/heads/main\n".utf8).write(to: physicalGit.appending(path: "HEAD"))
+        try FileManager.default.createSymbolicLink(at: authorizedAlias, withDestinationURL: physicalRoot)
+
+        XCTAssertEqual(
+            try XCTUnwrap(SkillSource.containingGitRepository(
+                for: physicalSkill,
+                authorizedRootURL: authorizedAlias
+            )).repository,
+            "acme/physical-authorized"
+        )
+    }
+
+    func testEscapingCommondirDoesNotFallBackToValidWorktreeLocalConfig() throws {
+        let root = temporaryDirectory()
+        let outside = root.deletingLastPathComponent().appending(path: "commondir-escape")
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            try? FileManager.default.removeItem(at: outside)
+        }
+        let worktree = root.appending(path: "worktree")
+        let skill = worktree.appending(path: "skills/demo")
+        let worktreeGit = root.appending(path: "metadata/.git/worktrees/demo")
+        let outsideGit = outside.appending(path: ".git")
+        try FileManager.default.createDirectory(at: skill, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: worktreeGit, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: outsideGit, withIntermediateDirectories: true)
+        try Data("[remote \"origin\"]\n  url = https://github.com/acme/external.git\n".utf8)
+            .write(to: outsideGit.appending(path: "config"))
+        try Data("ref: refs/heads/release\n".utf8).write(to: worktreeGit.appending(path: "HEAD"))
+        try Data("[remote \"origin\"]\n  url = https://github.com/acme/local.git\n".utf8)
+            .write(to: worktreeGit.appending(path: "config"))
+        try FileManager.default.createSymbolicLink(
+            at: root.appending(path: "redirect"),
+            withDestinationURL: outside
+        )
+        try Data("\(root.appending(path: "redirect/.git").path)\n".utf8)
+            .write(to: worktreeGit.appending(path: "commondir"))
+        try Data("gitdir: ../metadata/.git/worktrees/demo\n".utf8)
+            .write(to: worktree.appending(path: ".git"))
+
+        XCTAssertNil(try SkillSource.containingGitRepository(
+            for: skill,
+            authorizedRootURL: root
+        ))
+    }
+
     func testDigestIsStableSortedAndIncludesExecutableBitsAndLinkTargets() throws {
         let root = try makeSkill(name: "demo")
         defer { try? FileManager.default.removeItem(at: root.deletingLastPathComponent()) }
