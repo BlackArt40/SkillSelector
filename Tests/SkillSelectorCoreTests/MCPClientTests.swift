@@ -152,6 +152,55 @@ final class MCPClientTests: XCTestCase {
         XCTAssertEqual(approval.state(for: try XCTUnwrap(changed.commandApproval)), .approvalRequired)
     }
 
+    func testCodexMultilineValuesAndDeepTablesChangeConfigurationIdentity() throws {
+        try FileManager.default.createDirectory(
+            at: fixture.appendingPathComponent(".codex"),
+            withIntermediateDirectories: true
+        )
+        let configURL = fixture.appendingPathComponent(".codex/config.toml")
+        let baseline = """
+        [mcp_servers.example]
+        command = "/usr/bin/env"
+        args = [
+          "printf",
+          "one",
+        ]
+
+        [mcp_servers.example.extra.one]
+        enabled = true
+        """
+
+        func discover(_ text: String) throws -> MCPServerConfiguration {
+            try text.write(to: configURL, atomically: true, encoding: .utf8)
+            return try XCTUnwrap(MCPConfigDiscovery().discover(in: fixture).first)
+        }
+
+        let initial = try discover(baseline)
+        let initialApproval = try XCTUnwrap(initial.commandApproval)
+        guard case .stdio(_, let initialArguments, _, _) = initial.transport else {
+            return XCTFail("Expected a stdio MCP server")
+        }
+        XCTAssertEqual(initialArguments, ["printf", "one"])
+
+        let argumentsChanged = try discover(baseline.replacingOccurrences(
+            of: "  \"one\",\n",
+            with: "  \"one\",\n  \"two\",\n"
+        ))
+        guard case .stdio(_, let changedArguments, _, _) = argumentsChanged.transport else {
+            return XCTFail("Expected a stdio MCP server")
+        }
+        XCTAssertEqual(changedArguments, ["printf", "one", "two"])
+        XCTAssertNotEqual(argumentsChanged.id, initial.id)
+        XCTAssertNotEqual(argumentsChanged.commandApproval?.fingerprint, initialApproval.fingerprint)
+
+        let deepTableChanged = try discover(baseline.replacingOccurrences(
+            of: "[mcp_servers.example.extra.one]",
+            with: "[mcp_servers.example.extra.two]"
+        ))
+        XCTAssertNotEqual(deepTableChanged.id, initial.id)
+        XCTAssertNotEqual(deepTableChanged.commandApproval?.fingerprint, initialApproval.fingerprint)
+    }
+
     func testStdioListToolsInitializesWithSequentialIDsAndTerminatesProcess() async throws {
         let transcript = fixture.appendingPathComponent("transcript")
         let pidFile = fixture.appendingPathComponent("pid")

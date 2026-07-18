@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 public struct MCPConfigDiscovery: Sendable {
@@ -67,12 +68,32 @@ public struct MCPConfigDiscovery: Sendable {
             throw MCPConfigDiscoveryError.invalidConfiguration(input.url)
         }
         var sections: [String: [String: Any]] = [:]
+        var serverBlocks: [String: String] = [:]
         var currentName: String?
-        var currentNestedKey: String?
-        for rawLine in text.split(whereSeparator: \.isNewline) {
-            let line = stripTOMLComment(String(rawLine)).trimmingCharacters(in: .whitespaces)
-            guard !line.isEmpty else { continue }
+        var currentNestedPath: [String] = []
+        var pendingAssignment = ""
+
+        func applyPendingAssignment() {
+            defer { pendingAssignment = "" }
+            guard let currentName,
+                  let equal = firstTOMLEquals(in: pendingAssignment) else { return }
+            let key = unquote(pendingAssignment[..<equal].trimmingCharacters(in: .whitespacesAndNewlines))
+            let value = pendingAssignment[pendingAssignment.index(after: equal)...]
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let parsed = parseTOMLValue(value)
+            setTOMLValue(
+                parsed,
+                for: currentNestedPath + [key],
+                in: &sections[currentName, default: [:]]
+            )
+        }
+
+        // Keep physical lines for the identity digest while accumulating
+        // multiline values for the limited configuration fields we execute.
+        for rawLine in text.components(separatedBy: "\n") {
+            let line = stripTOMLComment(String(rawLine)).trimmingCharacters(in: .whitespacesAndNewlines)
             if line.hasPrefix("["), line.hasSuffix("]") {
+                applyPendingAssignment()
                 let section = String(line.dropFirst().dropLast())
                 if section.hasPrefix("mcp_servers.") {
                     let path = splitTOMLList(
@@ -80,34 +101,48 @@ public struct MCPConfigDiscovery: Sendable {
                         separator: "."
                     )
                     currentName = path.first.map(unquote)
-                    currentNestedKey = path.dropFirst().first.map(unquote)
-                    if let currentName { sections[currentName, default: [:]] = sections[currentName, default: [:]] }
+                    currentNestedPath = path.dropFirst().map(unquote)
+                    if let currentName {
+                        sections[currentName, default: [:]] = sections[currentName, default: [:]]
+                        serverBlocks[currentName, default: ""] += rawLine + "\n"
+                    }
                 } else {
                     currentName = nil
-                    currentNestedKey = nil
+                    currentNestedPath = []
                 }
                 continue
             }
-            guard let currentName, let equal = line.firstIndex(of: "=") else { continue }
-            let key = unquote(line[..<equal].trimmingCharacters(in: .whitespaces))
-            let value = line[line.index(after: equal)...].trimmingCharacters(in: .whitespaces)
-            let parsed = parseTOMLValue(value)
-            if let currentNestedKey {
-                var nested = sections[currentName]?[currentNestedKey] as? [String: Any] ?? [:]
-                nested[key] = parsed
-                sections[currentName]?[currentNestedKey] = nested
-            } else {
-                sections[currentName]?[key] = parsed
+            if let currentName {
+                serverBlocks[currentName, default: ""] += rawLine + "\n"
+            }
+            guard currentName != nil, !line.isEmpty else { continue }
+            pendingAssignment += pendingAssignment.isEmpty ? line : "\n\(line)"
+            if tomlValueIsComplete(pendingAssignment) {
+                applyPendingAssignment()
             }
         }
-        return sections.compactMap { makeServer(name: $0.key, dictionary: $0.value, input: input) }
+        applyPendingAssignment()
+        return sections.compactMap {
+            makeServer(
+                name: $0.key,
+                dictionary: $0.value,
+                input: input,
+                sourceDigest: sha256Hex(serverBlocks[$0.key, default: ""])
+            )
+        }
     }
 
-    private func makeServer(name: String, dictionary: [String: Any], input: Input) -> MCPServerConfiguration? {
+    private func makeServer(
+        name: String,
+        dictionary: [String: Any],
+        input: Input,
+        sourceDigest: String? = nil
+    ) -> MCPServerConfiguration? {
         let baseIdentifier = "\(input.source.rawValue):\(input.fingerprintPath):\(name)"
         let configurationFingerprint = canonicalConfigurationFingerprint(
             dictionary,
-            baseIdentifier: baseIdentifier
+            baseIdentifier: baseIdentifier,
+            sourceDigest: sourceDigest
         )
         let identifier = "\(baseIdentifier):\(configurationFingerprint)"
         if let command = dictionary["command"] as? String, !command.isEmpty {
@@ -182,17 +217,24 @@ public struct MCPConfigDiscovery: Sendable {
 
     private func canonicalConfigurationFingerprint(
         _ dictionary: [String: Any],
-        baseIdentifier: String
+        baseIdentifier: String,
+        sourceDigest: String? = nil
     ) -> String {
         let canonicalData = (try? JSONSerialization.data(
             withJSONObject: dictionary,
             options: [.sortedKeys, .withoutEscapingSlashes]
         )) ?? Data()
+        var identityArguments = [canonicalData.base64EncodedString()]
+        if let sourceDigest { identityArguments.append(sourceDigest) }
         return CommandApproval.fingerprint(
             executablePath: "mcp-server-configuration",
-            arguments: [canonicalData.base64EncodedString()],
+            arguments: identityArguments,
             configurationFingerprint: baseIdentifier
         )
+    }
+
+    private func sha256Hex(_ value: String) -> String {
+        SHA256.hash(data: Data(value.utf8)).map { String(format: "%02x", $0) }.joined()
     }
 
     private func stripTOMLComment(_ value: String) -> String {
@@ -209,7 +251,7 @@ public struct MCPConfigDiscovery: Sendable {
     }
 
     private func parseTOMLValue(_ value: String) -> Any {
-        let trimmed = value.trimmingCharacters(in: .whitespaces)
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         if (trimmed.hasPrefix("\"") && trimmed.hasSuffix("\""))
             || (trimmed.hasPrefix("'") && trimmed.hasSuffix("'")) {
             return unquote(trimmed)
@@ -253,14 +295,60 @@ public struct MCPConfigDiscovery: Sendable {
                 if character == "[" || character == "{" { depth += 1 }
                 if character == "]" || character == "}" { depth -= 1 }
                 if character == separator && depth == 0 {
-                    values.append(String(value[start..<index]).trimmingCharacters(in: .whitespaces))
+                    values.append(String(value[start..<index]).trimmingCharacters(in: .whitespacesAndNewlines))
                     start = value.index(after: index)
                 }
             }
             escaped = false
         }
-        values.append(String(value[start...]).trimmingCharacters(in: .whitespaces))
+        values.append(String(value[start...]).trimmingCharacters(in: .whitespacesAndNewlines))
         return values.filter { !$0.isEmpty }
+    }
+
+    private func firstTOMLEquals(in value: String) -> String.Index? {
+        var quotedBy: Character?
+        var escaped = false
+        for index in value.indices {
+            let character = value[index]
+            if character == "\\" && quotedBy == "\"" { escaped.toggle(); continue }
+            if (character == "\"" || character == "'") && !escaped {
+                quotedBy = quotedBy == nil ? character : (quotedBy == character ? nil : quotedBy)
+            } else if character == "=" && quotedBy == nil {
+                return index
+            }
+            escaped = false
+        }
+        return nil
+    }
+
+    private func tomlValueIsComplete(_ assignment: String) -> Bool {
+        guard let equal = firstTOMLEquals(in: assignment) else { return false }
+        let value = assignment[assignment.index(after: equal)...]
+        var quotedBy: Character?
+        var escaped = false
+        var nesting = 0
+        for character in value {
+            if character == "\\" && quotedBy == "\"" { escaped.toggle(); continue }
+            if (character == "\"" || character == "'") && !escaped {
+                quotedBy = quotedBy == nil ? character : (quotedBy == character ? nil : quotedBy)
+            } else if quotedBy == nil {
+                if character == "[" || character == "{" { nesting += 1 }
+                if character == "]" || character == "}" { nesting -= 1 }
+            }
+            escaped = false
+        }
+        return quotedBy == nil && nesting == 0
+    }
+
+    private func setTOMLValue(_ value: Any, for path: [String], in dictionary: inout [String: Any]) {
+        guard let key = path.first else { return }
+        guard path.count > 1 else {
+            dictionary[key] = value
+            return
+        }
+        var nested = dictionary[key] as? [String: Any] ?? [:]
+        setTOMLValue(value, for: Array(path.dropFirst()), in: &nested)
+        dictionary[key] = nested
     }
 
     private func unquote(_ value: String) -> String {
