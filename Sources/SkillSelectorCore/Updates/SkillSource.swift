@@ -58,6 +58,25 @@ public struct SkillSourceDiscovery: Hashable, Sendable {
         var seen = Set<String>()
         return result.filter { seen.insert($0.binding).inserted }
     }
+
+    public func candidates(
+        for installationURL: URL,
+        document: ParsedSkillDocument,
+        authorizedRootURL: URL
+    ) -> [SkillSource] {
+        var result: [SkillSource] = []
+        if let source = try? SkillSource.embeddedMetadata(document: document) {
+            result.append(source)
+        }
+        if let source = try? SkillSource.containingGitRepository(
+            for: installationURL,
+            authorizedRootURL: authorizedRootURL
+        ) {
+            result.append(source)
+        }
+        var seen = Set<String>()
+        return result.filter { seen.insert($0.binding).inserted }
+    }
 }
 
 public enum SkillSourceKind: String, Codable, Hashable, Sendable {
@@ -275,6 +294,40 @@ public struct SkillSource: Codable, Hashable, Sendable {
         return nil
     }
 
+    public static func containingGitRepository(
+        for installationURL: URL,
+        authorizedRootURL: URL
+    ) throws -> SkillSource? {
+        let ceiling = authorizedRootURL.standardizedFileURL
+        let installation = installationURL.standardizedFileURL
+        guard isContained(installation, in: ceiling) else { return nil }
+        var directory = installation
+        if (try? directory.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) != true {
+            directory.deleteLastPathComponent()
+        }
+        while isContained(directory, in: ceiling) {
+            let gitMarker = directory.appending(path: ".git")
+            guard let gitDirectory = gitDirectory(from: gitMarker, ceiling: ceiling) else {
+                if directory.path == ceiling.path { break }
+                directory.deleteLastPathComponent()
+                continue
+            }
+            let commonDirectory = commonGitDirectory(from: gitDirectory, ceiling: ceiling) ?? gitDirectory
+            guard let text = readGitText(commonDirectory.appending(path: "config")),
+                  let remote = gitRemoteURL(in: text) else { return nil }
+            let relative = installation.path
+                .dropFirst(directory.path.count)
+                .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            let branch = gitBranch(in: gitDirectory) ?? "main"
+            return try containingGitRemote(
+                remote: remote,
+                relativePath: relative.isEmpty ? "." : String(relative),
+                reference: .branch(branch)
+            )
+        }
+        return nil
+    }
+
     private static func validate(
         repository: String,
         subdirectory: String,
@@ -338,24 +391,29 @@ private func gitBranch(in gitDirectory: URL) -> String? {
 
 private let maximumGitMetadataBytes = 64 * 1_024
 
-private func gitDirectory(from marker: URL) -> URL? {
+private func gitDirectory(from marker: URL, ceiling: URL? = nil) -> URL? {
     var status = stat()
     guard marker.path.withCString({ Darwin.lstat($0, &status) }) == 0 else { return nil }
-    if status.st_mode & S_IFMT == S_IFDIR { return marker.standardizedFileURL }
+    if status.st_mode & S_IFMT == S_IFDIR {
+        let directory = marker.standardizedFileURL
+        return ceiling.map { isContained(directory, in: $0) } ?? true ? directory : nil
+    }
     guard status.st_mode & S_IFMT == S_IFREG,
           let value = readGitText(marker),
           let path = gitDirectoryPath(in: value, relativeTo: marker.deletingLastPathComponent()),
-          isGitMetadataDirectory(path) else {
+          isGitMetadataDirectory(path),
+          ceiling.map({ isContained(path, in: $0) }) ?? true else {
         return nil
     }
     return path
 }
 
-private func commonGitDirectory(from gitDirectory: URL) -> URL? {
+private func commonGitDirectory(from gitDirectory: URL, ceiling: URL? = nil) -> URL? {
     let marker = gitDirectory.appending(path: "commondir")
     guard let value = readGitText(marker),
           let path = gitDirectoryPath(in: value, relativeTo: gitDirectory),
-          isGitMetadataDirectory(path) else {
+          isGitMetadataDirectory(path),
+          ceiling.map({ isContained(path, in: $0) }) ?? true else {
         return nil
     }
     return path
@@ -384,6 +442,13 @@ private func isGitMetadataDirectory(_ url: URL) -> Bool {
     var status = stat()
     return url.path.withCString({ Darwin.lstat($0, &status) }) == 0
         && status.st_mode & S_IFMT == S_IFDIR
+}
+
+private func isContained(_ candidate: URL, in root: URL) -> Bool {
+    let candidateComponents = candidate.standardizedFileURL.pathComponents
+    let rootComponents = root.standardizedFileURL.pathComponents
+    return candidateComponents.count >= rootComponents.count
+        && Array(candidateComponents.prefix(rootComponents.count)) == rootComponents
 }
 
 private func readGitText(_ url: URL) -> String? {

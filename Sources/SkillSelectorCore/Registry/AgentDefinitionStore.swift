@@ -2,8 +2,13 @@ import Foundation
 
 public protocol AgentDefinitionStoring: Sendable {
     func definitions() throws -> [AgentDefinition]
+    func insert(_ definition: AgentDefinition) throws
     func save(_ definition: AgentDefinition) throws
     func remove(id: String) throws
+}
+
+public enum AgentDefinitionStoreError: Error, Equatable, Sendable {
+    case duplicateIdentifier(String)
 }
 
 public final class UserDefaultsAgentDefinitionStore: AgentDefinitionStoring, @unchecked Sendable {
@@ -33,6 +38,15 @@ public final class UserDefaultsAgentDefinitionStore: AgentDefinitionStoring, @un
         } else {
             values.append(definition)
         }
+        try persist(values)
+    }
+
+    public func insert(_ definition: AgentDefinition) throws {
+        var values = try definitions()
+        guard !values.contains(where: { $0.id == definition.id }) else {
+            throw AgentDefinitionStoreError.duplicateIdentifier(definition.id)
+        }
+        values.append(definition)
         try persist(values)
     }
 

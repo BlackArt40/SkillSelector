@@ -8,6 +8,7 @@ public enum SkillUpdateError: Error, Equatable, Sendable {
     case invalidRemoteResponse
     case truncatedRepositoryTree
     case remotePackageTooLarge
+    case alreadyUpToDate
     case proposalExpired
     case proposalAlreadyConsumed
     case stagedPackageChanged
@@ -112,6 +113,11 @@ public enum UpdateResult: Hashable, Sendable {
     }
 }
 
+public enum UpdateCheckResult: Hashable, Sendable {
+    case updateAvailable(UpdateProposal)
+    case upToDate
+}
+
 public struct FetchedSkillPackage: Hashable, Sendable {
     public let packageURL: URL
     public let resolvedReference: String?
@@ -124,6 +130,21 @@ public struct FetchedSkillPackage: Hashable, Sendable {
 
 public protocol SkillPackageFetching: Sendable {
     func fetch(_ source: SkillSource, into destination: URL) async throws -> FetchedSkillPackage
+    func fetch(
+        _ source: SkillSource,
+        into destination: URL,
+        entryFilename: String
+    ) async throws -> FetchedSkillPackage
+}
+
+public extension SkillPackageFetching {
+    func fetch(
+        _ source: SkillSource,
+        into destination: URL,
+        entryFilename: String
+    ) async throws -> FetchedSkillPackage {
+        try await fetch(source, into: destination)
+    }
 }
 
 public protocol SkillPackageReplacing: Sendable {
@@ -183,6 +204,13 @@ public final class SkillUpdater: @unchecked Sendable {
     }
 
     public func check(_ request: UpdateRequest) async throws -> UpdateProposal {
+        switch try await checkResult(request) {
+        case .updateAvailable(let proposal): return proposal
+        case .upToDate: throw SkillUpdateError.alreadyUpToDate
+        }
+    }
+
+    public func checkResult(_ request: UpdateRequest) async throws -> UpdateCheckResult {
         let actualTarget = try validatedTarget(for: request)
         let localDigest = try PackageDigest.compute(at: actualTarget)
         let temporaryDirectory = FileManager.default.temporaryDirectory
@@ -190,13 +218,21 @@ public final class SkillUpdater: @unchecked Sendable {
         let packageDestination = temporaryDirectory.appending(path: "package")
         try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
         do {
-            let fetched = try await fetcher.fetch(request.source, into: packageDestination)
-            let validated = try validator.validate(
-                fetched.packageURL,
-                requiredName: request.requiredName
+            let fetched = try await fetcher.fetch(
+                request.source,
+                into: packageDestination,
+                entryFilename: request.entryFilename
             )
+            let validated = try PackageValidator(
+                limits: validator.limits,
+                entryFilename: request.entryFilename
+            ).validate(fetched.packageURL, requiredName: request.requiredName)
             let remoteManifest = try PackageManifest.read(at: validated.packageURL)
             let localManifest = try PackageManifest.read(at: actualTarget)
+            guard validated.digest != localDigest else {
+                try? FileManager.default.removeItem(at: temporaryDirectory)
+                return .upToDate
+            }
             let proposal = UpdateProposal(
                 id: UUID(),
                 source: request.source,
@@ -221,7 +257,7 @@ public final class SkillUpdater: @unchecked Sendable {
                     temporaryDirectory: temporaryDirectory
                 )
             }
-            return proposal
+            return .updateAvailable(proposal)
         } catch {
             try? FileManager.default.removeItem(at: temporaryDirectory)
             throw error
@@ -424,6 +460,7 @@ public struct LiveSkillPackageFetcher: SkillPackageFetching {
     private let executableURL: URL?
     private let runner: any CommandRunning
     private let authorizedHomeURL: URL?
+    private let session: URLSession
 
     public init(
         executableURL: URL,
@@ -433,12 +470,14 @@ public struct LiveSkillPackageFetcher: SkillPackageFetching {
         self.executableURL = executableURL.standardizedFileURL
         self.authorizedHomeURL = authorizedHomeURL?.standardizedFileURL
         self.runner = runner
+        session = .shared
     }
 
     public init() {
         executableURL = nil
         authorizedHomeURL = nil
         runner = ExternalCommandRunner()
+        session = .shared
     }
 
     public init(toolAccess: ToolAccess, runner: any CommandRunning = ExternalCommandRunner()) {
@@ -449,12 +488,27 @@ public struct LiveSkillPackageFetcher: SkillPackageFetching {
         )
     }
 
+    public init(session: URLSession) {
+        executableURL = nil
+        authorizedHomeURL = nil
+        runner = ExternalCommandRunner()
+        self.session = session
+    }
+
     public func fetch(_ source: SkillSource, into destination: URL) async throws -> FetchedSkillPackage {
+        try await fetch(source, into: destination, entryFilename: "SKILL.md")
+    }
+
+    public func fetch(
+        _ source: SkillSource,
+        into destination: URL,
+        entryFilename: String
+    ) async throws -> FetchedSkillPackage {
         switch source.kind {
         case .github:
             return try await fetchGitHub(source, into: destination)
         case .directPackage:
-            return try await fetchDirect(source, into: destination)
+            return try await fetchDirect(source, into: destination, entryFilename: entryFilename)
         }
     }
 
@@ -557,11 +611,15 @@ public struct LiveSkillPackageFetcher: SkillPackageFetching {
         return FetchedSkillPackage(packageURL: destination, resolvedReference: commit)
     }
 
-    private func fetchDirect(_ source: SkillSource, into destination: URL) async throws -> FetchedSkillPackage {
+    private func fetchDirect(
+        _ source: SkillSource,
+        into destination: URL,
+        entryFilename: String
+    ) async throws -> FetchedSkillPackage {
         guard let url = source.directPackageURL else {
             throw SkillUpdateError.unsupportedSource
         }
-        let (bytes, response) = try await URLSession.shared.bytes(from: url)
+        let (bytes, response) = try await session.bytes(from: url)
         guard let http = response as? HTTPURLResponse,
               (200..<300).contains(http.statusCode),
               http.url?.scheme?.lowercased() == "https",
@@ -579,9 +637,9 @@ public struct LiveSkillPackageFetcher: SkillPackageFetching {
             data.append(byte)
         }
         if data.starts(with: [0x50, 0x4b, 0x03, 0x04]) {
-            try SafeZIPExtractor.extract(data, into: destination, validator: PackageValidator())
+            try SafeZIPExtractor.extract(data, into: destination, validator: PackageValidator(entryFilename: entryFilename))
             if FileManager.default.fileExists(
-                atPath: destination.appending(path: "SKILL.md").path
+                atPath: destination.appending(path: entryFilename).path
             ) {
                 return FetchedSkillPackage(packageURL: destination)
             }
@@ -592,18 +650,18 @@ public struct LiveSkillPackageFetcher: SkillPackageFetching {
             )
             if children.count == 1,
                children[0].hasDirectoryPath,
-               FileManager.default.fileExists(
-                   atPath: children[0].appending(path: "SKILL.md").path
+                FileManager.default.fileExists(
+                    atPath: children[0].appending(path: entryFilename).path
                ) {
                 return FetchedSkillPackage(packageURL: children[0])
             }
-            throw PackageValidationError.missingEntryFile("SKILL.md")
+            throw PackageValidationError.missingEntryFile(entryFilename)
         }
         guard String(data: data, encoding: .utf8) != nil else {
             throw SkillUpdateError.invalidRemoteResponse
         }
         try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
-        try data.write(to: destination.appending(path: "SKILL.md"), options: .atomic)
+        try data.write(to: destination.appending(path: entryFilename), options: .atomic)
         return FetchedSkillPackage(packageURL: destination)
     }
 

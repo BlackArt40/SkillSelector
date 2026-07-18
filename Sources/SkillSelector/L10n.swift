@@ -3,6 +3,15 @@ import SkillSelectorCore
 
 enum L10n {
     private static let missingValue = "__SKILLSELECTOR_MISSING_LOCALIZATION__"
+    private static let resourceBundle: Bundle = {
+        if let url = Bundle.main.url(
+            forResource: "SkillSelector_SkillSelector",
+            withExtension: "bundle"
+        ), let bundle = Bundle(url: url) {
+            return bundle
+        }
+        return Bundle.module
+    }()
     private static let selectedBundle = languageBundle(
         preferredLanguages: Locale.preferredLanguages
     )
@@ -35,14 +44,14 @@ enum L10n {
 
     private static func languageBundle(preferredLanguages: [String]) -> Bundle {
         let localization = LocalizationSelection.preferredLocalization(
-            available: Bundle.module.localizations,
+            available: resourceBundle.localizations,
             preferredLanguages: preferredLanguages
         )
-        guard let url = Bundle.module.url(
+        guard let url = resourceBundle.url(
             forResource: localization,
             withExtension: "lproj"
         ), let bundle = Bundle(url: url) else {
-            return Bundle.module
+            return resourceBundle
         }
         return bundle
     }

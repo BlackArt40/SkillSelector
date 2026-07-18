@@ -247,26 +247,25 @@ final class AppModel {
         displayName: String,
         globalRoots: [String],
         projectPatterns: [String],
-        entryFilename: String
+        entryFilename: String,
+        existingID: String? = nil
     ) throws {
         let name = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return }
-        let slug = name.lowercased().map { character -> Character in
-            character.isLetter || character.isNumber ? character : "-"
-        }
-        let id = "custom-" + String(slug)
-            .split(separator: "-", omittingEmptySubsequences: true)
-            .joined(separator: "-")
-        let definition = AgentDefinition(
-            id: id,
+        let definition = AgentDefinition.custom(
             displayName: name,
             globalRoots: normalizedLines(globalRoots),
             projectPatterns: normalizedLines(projectPatterns),
             entryFilename: entryFilename.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 ? "SKILL.md"
-                : entryFilename.trimmingCharacters(in: .whitespacesAndNewlines)
+                : entryFilename.trimmingCharacters(in: .whitespacesAndNewlines),
+            id: existingID
         )
-        try customAgentStore.save(definition)
+        if existingID == nil {
+            try customAgentStore.insert(definition)
+        } else {
+            try customAgentStore.save(definition)
+        }
         try reloadAgentDefinitions()
     }
 
@@ -469,7 +468,7 @@ final class AppModel {
                     }
                 }
             )
-            let proposal = try await updater.check(UpdateRequest(
+            let checkResult = try await updater.checkResult(UpdateRequest(
                 installationURL: documentAccess.request.installationURL,
                 resolvedTargetURL: documentAccess.request.resolvedTargetURL,
                 entryFilename: skill.entryFilename,
@@ -479,17 +478,22 @@ final class AppModel {
                 authorizedRootURLs: documentAccess.request.authorizedRootURLs,
                 refreshRootIDs: operationAccessRootIDs(for: skill, destinationRootURL: nil)
             ))
-            pendingUpdateContext = PendingUpdateContext(
-                updater: updater,
-                rootIDs: updateRootIDs,
-                authorizedRoots: authorizationSnapshot,
-                leases: heldUpdateLeases,
-                toolAccess: ghAccess
-            )
-            pendingUpdateProposal = proposal
-            transfersDocumentLeases = true
-            transfersToolAccess = true
-            updateError = nil
+            switch checkResult {
+            case .updateAvailable(let proposal):
+                pendingUpdateContext = PendingUpdateContext(
+                    updater: updater,
+                    rootIDs: updateRootIDs,
+                    authorizedRoots: authorizationSnapshot,
+                    leases: heldUpdateLeases,
+                    toolAccess: ghAccess
+                )
+                pendingUpdateProposal = proposal
+                transfersDocumentLeases = true
+                transfersToolAccess = true
+                updateError = nil
+            case .upToDate:
+                updateError = L10n.string("Skill is already up to date.")
+            }
         } catch {
             updateError = localizedUpdateError(error)
         }
@@ -1266,6 +1270,7 @@ final class AppModel {
         }
         if let error = error as? SkillUpdateError {
             return switch error {
+            case .alreadyUpToDate: L10n.string("Skill is already up to date.")
             case .unsupportedSource: L10n.string("The update source or GitHub CLI is unavailable.")
             case .unauthorizedInstallation: L10n.string("The update target is not authorized.")
             case .resolvedTargetMismatch: L10n.string("The symbolic link target changed.")

@@ -136,6 +136,71 @@ final class SkillUpdaterTests: XCTestCase {
         XCTAssertEqual(source.binding, "github:acme/submodule:skills/nested:branch:custom")
     }
 
+    func testContainingRepositoryDiscoveryRespectsAuthorizationCeilingForRepositoriesAndWorktrees() throws {
+        let root = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let repository = root.appending(path: "repository")
+        let repositorySkill = repository.appending(path: "skills/demo")
+        try FileManager.default.createDirectory(at: repositorySkill, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: repository.appending(path: ".git"), withIntermediateDirectories: true)
+        try Data("[remote \"origin\"]\n  url = https://github.com/acme/contained.git\n".utf8)
+            .write(to: repository.appending(path: ".git/config"))
+        try Data("ref: refs/heads/main\n".utf8).write(to: repository.appending(path: ".git/HEAD"))
+        XCTAssertEqual(
+            try XCTUnwrap(SkillSource.containingGitRepository(
+                for: repositorySkill,
+                authorizedRootURL: root
+            )).binding,
+            "github:acme/contained:skills/demo:branch:main"
+        )
+
+        let commonGit = root.appending(path: "metadata/.git")
+        let worktreeGit = commonGit.appending(path: "worktrees/demo")
+        let worktree = root.appending(path: "worktree")
+        let worktreeSkill = worktree.appending(path: "skills/demo")
+        try FileManager.default.createDirectory(at: worktreeGit, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: worktreeSkill, withIntermediateDirectories: true)
+        try Data("[remote \"origin\"]\n  url = https://github.com/acme/worktree.git\n".utf8)
+            .write(to: commonGit.appending(path: "config"))
+        try Data("ref: refs/heads/release\n".utf8).write(to: worktreeGit.appending(path: "HEAD"))
+        try Data("../..\n".utf8).write(to: worktreeGit.appending(path: "commondir"))
+        try Data("gitdir: ../metadata/.git/worktrees/demo\n".utf8)
+            .write(to: worktree.appending(path: ".git"))
+        XCTAssertEqual(
+            try XCTUnwrap(SkillSource.containingGitRepository(
+                for: worktreeSkill,
+                authorizedRootURL: root
+            )).binding,
+            "github:acme/worktree:skills/demo:branch:release"
+        )
+
+        let escapingSkill = root.appending(path: "escaping/skills/demo")
+        let outsideGit = root.deletingLastPathComponent().appending(path: "outside/.git")
+        try FileManager.default.createDirectory(at: escapingSkill, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: outsideGit, withIntermediateDirectories: true)
+        try Data("[remote \"origin\"]\n  url = https://github.com/acme/outside.git\n".utf8)
+            .write(to: outsideGit.appending(path: "config"))
+        try Data("gitdir: \(outsideGit.path)\n".utf8)
+            .write(to: root.appending(path: "escaping/.git"))
+        XCTAssertNil(try SkillSource.containingGitRepository(
+            for: escapingSkill,
+            authorizedRootURL: root
+        ))
+
+        let parentGit = root.deletingLastPathComponent().appending(path: ".git")
+        try FileManager.default.createDirectory(at: parentGit, withIntermediateDirectories: true)
+        try Data("[remote \"origin\"]\n  url = https://github.com/acme/parent.git\n".utf8)
+            .write(to: parentGit.appending(path: "config"))
+        try Data("ref: refs/heads/main\n".utf8).write(to: parentGit.appending(path: "HEAD"))
+        let ungittedSkill = root.appending(path: "ungitted/skills/demo")
+        try FileManager.default.createDirectory(at: ungittedSkill, withIntermediateDirectories: true)
+        XCTAssertNil(try SkillSource.containingGitRepository(
+            for: ungittedSkill,
+            authorizedRootURL: root
+        ))
+    }
+
     func testDigestIsStableSortedAndIncludesExecutableBitsAndLinkTargets() throws {
         let root = try makeSkill(name: "demo")
         defer { try? FileManager.default.removeItem(at: root.deletingLastPathComponent()) }
@@ -319,6 +384,79 @@ final class SkillUpdaterTests: XCTestCase {
         XCTAssertEqual(proposal.changes.map(\.path), ["SKILL.md", "added.txt", "deleted.txt"])
         XCTAssertEqual(proposal.changes.map(\.kind), [.changed, .added, .deleted])
         XCTAssertNotEqual(proposal.baselineDigest, proposal.remoteDigest)
+    }
+
+    func testCustomEntryFilenameFlowsThroughGitHubDirectFetchAndValidation() async throws {
+        let entryFilename = "AGENT.md"
+        let installed = try makeCustomEntrySkill(name: "demo", entryFilename: entryFilename, body: "old")
+        let remote = try makeCustomEntrySkill(name: "demo", entryFilename: entryFilename, body: "new")
+        defer {
+            try? FileManager.default.removeItem(at: installed.deletingLastPathComponent())
+            try? FileManager.default.removeItem(at: remote.deletingLastPathComponent())
+        }
+
+        let updater = SkillUpdater(fetcher: FixturePackageFetcher(packageURL: remote))
+        let proposal = try await updater.check(UpdateRequest(
+            installationURL: installed,
+            entryFilename: entryFilename,
+            requiredName: "demo",
+            source: source(),
+            indexedDigest: try PackageDigest.compute(at: installed),
+            authorizedRootURLs: [installed.deletingLastPathComponent()]
+        ))
+        XCTAssertEqual(proposal.remoteDigest, try PackageDigest.compute(at: remote))
+
+        let githubRunner = UpdateFixtureRunner(results: [
+            commandResult("abcdef0123456789\n"),
+            commandResult(#"{"tree":[{"path":"skills/demo/AGENT.md","mode":"100644","type":"blob","sha":"entry","size":41}],"truncated":false}"#),
+            commandResult("---\nname: demo\ndescription: test\n---\n"),
+        ])
+        let githubDestination = temporaryDirectory().appending(path: "github")
+        defer { try? FileManager.default.removeItem(at: githubDestination.deletingLastPathComponent()) }
+        _ = try await LiveSkillPackageFetcher(
+            executableURL: URL(fileURLWithPath: "/usr/bin/gh"),
+            runner: githubRunner
+        ).fetch(source(), into: githubDestination, entryFilename: entryFilename)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: githubDestination.appending(path: entryFilename).path))
+
+        let rawSession = directPackageSession(protocolClass: DirectRawPackageURLProtocol.self)
+        let rawDestination = temporaryDirectory().appending(path: "raw")
+        defer { try? FileManager.default.removeItem(at: rawDestination.deletingLastPathComponent()) }
+        _ = try await LiveSkillPackageFetcher(session: rawSession).fetch(
+            try SkillSource.directPackage(URL(string: "https://fixture.invalid/demo")!, provenance: .rememberedBinding),
+            into: rawDestination,
+            entryFilename: entryFilename
+        )
+        XCTAssertTrue(FileManager.default.fileExists(atPath: rawDestination.appending(path: entryFilename).path))
+
+        let zipSession = directPackageSession(protocolClass: DirectZIPPackageURLProtocol.self)
+        let zipDestination = temporaryDirectory().appending(path: "zip")
+        defer { try? FileManager.default.removeItem(at: zipDestination.deletingLastPathComponent()) }
+        _ = try await LiveSkillPackageFetcher(session: zipSession).fetch(
+            try SkillSource.directPackage(URL(string: "https://fixture.invalid/demo.zip")!, provenance: .rememberedBinding),
+            into: zipDestination,
+            entryFilename: entryFilename
+        )
+        XCTAssertTrue(FileManager.default.fileExists(atPath: zipDestination.appending(path: entryFilename).path))
+    }
+
+    func testEqualRemoteDigestReturnsUpToDateAndCleansStaging() async throws {
+        let installed = try makeSkill(name: "demo", body: "unchanged")
+        let remote = try makeSkill(name: "demo", body: "unchanged")
+        defer {
+            try? FileManager.default.removeItem(at: installed.deletingLastPathComponent())
+            try? FileManager.default.removeItem(at: remote.deletingLastPathComponent())
+        }
+        let fetcher = RecordingFixturePackageFetcher(packageURL: remote)
+        let updater = SkillUpdater(fetcher: fetcher)
+
+        let result = try await updater.checkResult(request(installed: installed))
+
+        XCTAssertEqual(result, .upToDate)
+        XCTAssertEqual(fetcher.destinations.count, 1)
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: try XCTUnwrap(fetcher.destinations.first).deletingLastPathComponent().path
+        ))
     }
 
     func testTagAndCommitSourcesArePinned() throws {
@@ -721,6 +859,51 @@ final class SkillUpdaterTests: XCTestCase {
         try Data("---\nname: \(name)\ndescription: test\n---\n\n\(body)\n".utf8)
             .write(to: directory.appending(path: "SKILL.md"))
     }
+
+    private func makeCustomEntrySkill(name: String, entryFilename: String, body: String) throws -> URL {
+        let parent = temporaryDirectory()
+        let skill = parent.appending(path: "skill")
+        try FileManager.default.createDirectory(at: skill, withIntermediateDirectories: true)
+        try Data("---\nname: \(name)\ndescription: test\n---\n\n\(body)\n".utf8)
+            .write(to: skill.appending(path: entryFilename))
+        return skill
+    }
+}
+
+private func directPackageSession(protocolClass: URLProtocol.Type) -> URLSession {
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.protocolClasses = [protocolClass]
+    return URLSession(configuration: configuration)
+}
+
+private class FixtureDirectPackageURLProtocol: URLProtocol {
+    class var body: Data { Data() }
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        let response = HTTPURLResponse(
+            url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil
+        )!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: type(of: self).body)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
+}
+
+private final class DirectRawPackageURLProtocol: FixtureDirectPackageURLProtocol {
+    override class var body: Data { Data("---\nname: demo\ndescription: test\n---\n".utf8) }
+}
+
+private final class DirectZIPPackageURLProtocol: FixtureDirectPackageURLProtocol {
+    override class var body: Data {
+        storedZIP(entries: [
+            ("AGENT.md", Data("---\nname: demo\ndescription: test\n---\n".utf8), 0o100644),
+        ])
+    }
 }
 
 private final class FixturePackageFetcher: SkillPackageFetching, @unchecked Sendable {
@@ -735,6 +918,22 @@ private final class FixturePackageFetcher: SkillPackageFetching, @unchecked Send
     func fetch(_ source: SkillSource, into destination: URL) async throws -> FetchedSkillPackage {
         try FileManager.default.copyItem(at: packageURL, to: destination)
         return FetchedSkillPackage(packageURL: destination, resolvedReference: resolvedReference)
+    }
+}
+
+private final class RecordingFixturePackageFetcher: SkillPackageFetching, @unchecked Sendable {
+    let packageURL: URL
+    private let lock = NSLock()
+    private var recordedDestinations: [URL] = []
+
+    init(packageURL: URL) { self.packageURL = packageURL }
+
+    var destinations: [URL] { lock.withLock { recordedDestinations } }
+
+    func fetch(_ source: SkillSource, into destination: URL) async throws -> FetchedSkillPackage {
+        lock.withLock { recordedDestinations.append(destination) }
+        try FileManager.default.copyItem(at: packageURL, to: destination)
+        return FetchedSkillPackage(packageURL: destination)
     }
 }
 

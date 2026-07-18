@@ -132,7 +132,8 @@ public struct SkillScanner: Sendable {
             agentIDs: agentIDs,
             entryFilename: entryFilename,
             rootID: root.id,
-            authorizedURLs: authorizedURLs
+            authorizedURLs: authorizedURLs,
+            sourceDiscoveryRootURL: root.url
         ) {
             return [rootSkill]
         }
@@ -147,7 +148,8 @@ public struct SkillScanner: Sendable {
                 agentIDs: agentIDs,
                 entryFilename: entryFilename,
                 rootID: root.id,
-                authorizedURLs: authorizedURLs
+                authorizedURLs: authorizedURLs,
+                sourceDiscoveryRootURL: root.url
             )
         }
     }
@@ -185,7 +187,8 @@ public struct SkillScanner: Sendable {
                    definitions: definitions
                ),
                rootID: root.id,
-               authorizedURLs: authorizedURLs
+               authorizedURLs: authorizedURLs,
+               sourceDiscoveryRootURL: root.url
            ) {
             installations.append(candidate)
             return
@@ -207,7 +210,8 @@ public struct SkillScanner: Sendable {
                         definitions: definitions
                     ),
                     rootID: root.id,
-                    authorizedURLs: authorizedURLs
+                    authorizedURLs: authorizedURLs,
+                    sourceDiscoveryRootURL: root.url
                 ) else {
                     continue
                 }
@@ -252,7 +256,8 @@ public struct SkillScanner: Sendable {
         installationURL: URL,
         entries: [(agentIDs: Set<String>, entryFilename: String)],
         rootID: String,
-        authorizedURLs: [URL]
+        authorizedURLs: [URL],
+        sourceDiscoveryRootURL: URL
     ) -> ScannedSkill? {
         var result: ScannedSkill?
         for match in entries {
@@ -261,7 +266,8 @@ public struct SkillScanner: Sendable {
                 agentIDs: match.agentIDs,
                 entryFilename: match.entryFilename,
                 rootID: rootID,
-                authorizedURLs: authorizedURLs
+                authorizedURLs: authorizedURLs,
+                sourceDiscoveryRootURL: sourceDiscoveryRootURL
             ) else {
                 continue
             }
@@ -302,7 +308,8 @@ public struct SkillScanner: Sendable {
         agentIDs: Set<String>,
         entryFilename: String,
         rootID: String,
-        authorizedURLs: [URL]
+        authorizedURLs: [URL],
+        sourceDiscoveryRootURL: URL
     ) -> ScannedSkill? {
         guard Self.isValidEntryFilename(entryFilename) else { return nil }
 
@@ -398,7 +405,8 @@ public struct SkillScanner: Sendable {
             digest: digest,
             discoveredSourceBindings: SkillSourceDiscovery().candidates(
                 for: contentDirectory,
-                document: document
+                document: document,
+                authorizedRootURL: sourceDiscoveryRootURL
             ).map(\.binding)
         )
     }

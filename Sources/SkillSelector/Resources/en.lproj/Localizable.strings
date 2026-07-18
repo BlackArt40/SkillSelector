@@ -224,6 +224,7 @@
 "Linked Installations" = "Linked Installations";
 "Local changes were detected after the indexed version." = "Local changes were detected after the indexed version.";
 "No content changes" = "No content changes";
+"Skill is already up to date." = "Skill is already up to date.";
 "Reference" = "Reference";
 "Selected Reference" = "Selected Reference";
 "Resolved Commit" = "Resolved Commit";

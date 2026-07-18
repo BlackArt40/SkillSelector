@@ -1,12 +1,17 @@
 import SkillSelectorCore
 import SwiftData
 import SwiftUI
+import Darwin
 
 @main
 struct SkillSelectorApp: App {
     @State private var model: AppModel
 
     init() {
+        if CommandLine.arguments.contains("--verify-localization-resource") {
+            print(L10n.string("SkillSelector"))
+            Darwin.exit(EXIT_SUCCESS)
+        }
         let container: ModelContainer
         do {
             container = try ModelContainer(

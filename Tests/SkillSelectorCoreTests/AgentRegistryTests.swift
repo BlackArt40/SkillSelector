@@ -129,4 +129,46 @@ final class AgentRegistryTests: XCTestCase {
         XCTAssertTrue(try store.definitions().isEmpty)
     }
 
+    func testCustomAgentsUsePersistentUUIDIdentifiersAndRejectLegacyInsertionCollisions() throws {
+        let first = AgentDefinition.custom(
+            displayName: "A B",
+            globalRoots: [],
+            projectPatterns: []
+        )
+        let second = AgentDefinition.custom(
+            displayName: "A-B",
+            globalRoots: [],
+            projectPatterns: []
+        )
+        XCTAssertNotEqual(first.id, second.id)
+        XCTAssertNotNil(UUID(uuidString: String(first.id.dropFirst("custom-".count))))
+        XCTAssertNotNil(UUID(uuidString: String(second.id.dropFirst("custom-".count))))
+
+        let suite = "AgentDefinitionStoreCollisionTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = UserDefaultsAgentDefinitionStore(defaults: defaults, key: "agents")
+        let legacy = AgentDefinition(
+            id: "custom-a-b",
+            displayName: "A B",
+            globalRoots: [],
+            projectPatterns: []
+        )
+        try store.insert(legacy)
+        XCTAssertThrowsError(try store.insert(AgentDefinition(
+            id: legacy.id,
+            displayName: "A-B",
+            globalRoots: [],
+            projectPatterns: []
+        ))) { error in
+            XCTAssertEqual(error as? AgentDefinitionStoreError, .duplicateIdentifier(legacy.id))
+        }
+
+        var edited = legacy
+        edited.displayName = "Renamed"
+        try store.save(edited)
+        XCTAssertEqual(try store.definitions().map(\.id), [legacy.id])
+        XCTAssertEqual(try store.definitions().first?.displayName, "Renamed")
+    }
+
 }

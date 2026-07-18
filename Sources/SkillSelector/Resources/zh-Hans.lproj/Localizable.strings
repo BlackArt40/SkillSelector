@@ -224,6 +224,7 @@
 "Linked Installations" = "链接安装位置";
 "Local changes were detected after the indexed version." = "检测到索引版本之后产生的本机更改。";
 "No content changes" = "内容没有变化";
+"Skill is already up to date." = "Skill 已是最新版本。";
 "Reference" = "引用";
 "Selected Reference" = "选定引用";
 "Resolved Commit" = "解析后的提交";
