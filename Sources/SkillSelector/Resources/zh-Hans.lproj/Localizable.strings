@@ -270,6 +270,3 @@
 "Remove Custom Agent" = "移除自定义 Agent";
 "Revoke Authorization" = "撤销授权";
 "Settings Error" = "设置错误";
-"Legacy Agents" = "旧版 Agent";
-"Legacy agents only appear in the sidebar when detected or manually enabled." = "旧版 Agent 仅在检测到或手动启用后显示在侧边栏中。";
-"No legacy agents detected." = "未检测到旧版 Agent。";

@@ -82,18 +82,6 @@ final class AppModel {
     var refreshOnLaunch: Bool {
         didSet { defaults.set(refreshOnLaunch, forKey: Self.refreshOnLaunchDefaultsKey) }
     }
-    var manuallyEnabledLegacyAgentIDs: Set<String> {
-        didSet {
-            defaults.set(
-                Array(manuallyEnabledLegacyAgentIDs),
-                forKey: Self.manuallyEnabledLegacyAgentIDsKey
-            )
-        }
-    }
-    var visibleAgentIDs: Set<String> {
-        detectedAgentIDs.union(manuallyEnabledLegacyAgentIDs)
-    }
-    private(set) var detectedAgentIDs: Set<String> = []
 
     init(
         refresher: IndexRefresher,
@@ -127,10 +115,6 @@ final class AppModel {
         refreshOnLaunch = defaults.object(forKey: Self.refreshOnLaunchDefaultsKey) == nil
             ? true
             : defaults.bool(forKey: Self.refreshOnLaunchDefaultsKey)
-        let storedLegacyIDs = defaults.stringArray(
-            forKey: Self.manuallyEnabledLegacyAgentIDsKey
-        ) ?? []
-        manuallyEnabledLegacyAgentIDs = Set(storedLegacyIDs)
         agentDefinitions = effectiveRegistry.definitions
         refresher.updateRegistry(effectiveRegistry)
         do {
@@ -288,14 +272,6 @@ final class AppModel {
     func removeCustomAgent(id: String) throws {
         try customAgentStore.remove(id: id)
         try reloadAgentDefinitions()
-    }
-
-    func toggleLegacyAgent(_ agentID: String) {
-        if manuallyEnabledLegacyAgentIDs.contains(agentID) {
-            manuallyEnabledLegacyAgentIDs.remove(agentID)
-        } else {
-            manuallyEnabledLegacyAgentIDs.insert(agentID)
-        }
     }
 
     func exportDiagnostics(to url: URL) async throws {
@@ -1010,8 +986,6 @@ final class AppModel {
     private static let enrichAfterRefreshDefaultsKey =
         "SkillSelector.enrichMissingDescriptionsAfterRefresh"
     private static let refreshOnLaunchDefaultsKey = "SkillSelector.refreshOnLaunch"
-    private static let manuallyEnabledLegacyAgentIDsKey =
-        "SkillSelector.manuallyEnabledLegacyAgentIDs"
 
     private func reloadAgentDefinitions() throws {
         customAgentDefinitions = try customAgentStore.definitions()
@@ -1090,7 +1064,6 @@ final class AppModel {
         let updatedSnapshots = try index.skills()
         let updatedRoots = try bookmarks?.roots() ?? []
         snapshots = updatedSnapshots
-        detectedAgentIDs = Set(updatedSnapshots.flatMap(\.agentIDs))
         authorizedRoots = updatedRoots
         rootsByID = Dictionary(uniqueKeysWithValues: updatedRoots.map { ($0.id, $0) })
         if let selection,

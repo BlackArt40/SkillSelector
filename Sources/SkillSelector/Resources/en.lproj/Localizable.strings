@@ -270,6 +270,3 @@
 "Remove Custom Agent" = "Remove Custom Agent";
 "Revoke Authorization" = "Revoke Authorization";
 "Settings Error" = "Settings Error";
-"Legacy Agents" = "Legacy Agents";
-"Legacy agents only appear in the sidebar when detected or manually enabled." = "Legacy agents only appear in the sidebar when detected or manually enabled.";
-"No legacy agents detected." = "No legacy agents detected.";

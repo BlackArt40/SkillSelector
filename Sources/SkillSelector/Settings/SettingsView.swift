@@ -96,15 +96,6 @@ struct SettingsView: View {
                 Divider()
 
                 settingsSection(
-                    title: L10n.string("Legacy Agents"),
-                    systemImage: "clock.arrow.circlepath"
-                ) {
-                    legacyAgents
-                }
-
-                Divider()
-
-                settingsSection(
                     title: L10n.string("Local Tools"),
                     systemImage: "terminal"
                 ) {
@@ -266,35 +257,6 @@ struct SettingsView: View {
                 if customAgentEditor.selectedAgentID != nil {
                     Button(L10n.string("Cancel Editing")) {
                         customAgentEditor.reset()
-                    }
-                }
-            }
-        }
-    }
-
-    private var legacyAgents: some View {
-        let legacyDefs = model.agentDefinitions.filter(\.isLegacy)
-        return VStack(alignment: .leading, spacing: 8) {
-            if legacyDefs.isEmpty {
-                Text(verbatim: L10n.string("No legacy agents detected."))
-                    .foregroundStyle(.secondary)
-            } else {
-                Text(verbatim: L10n.string(
-                    "Legacy agents only appear in the sidebar when detected or manually enabled."
-                ))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                ForEach(legacyDefs) { agent in
-                    Toggle(isOn: Binding(
-                        get: { model.manuallyEnabledLegacyAgentIDs.contains(agent.id) },
-                        set: { _ in model.toggleLegacyAgent(agent.id) }
-                    )) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(verbatim: agent.displayName).fontWeight(.medium)
-                            Text(verbatim: agent.id)
-                                .font(.system(.caption, design: .monospaced))
-                                .foregroundStyle(.secondary)
-                        }
                     }
                 }
             }

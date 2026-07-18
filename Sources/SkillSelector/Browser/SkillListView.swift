@@ -22,6 +22,7 @@ struct SkillListView: View {
             Divider()
             content
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .navigationTitle(L10n.string("Skills"))
         .searchable(
             text: $searchText,

@@ -22,7 +22,7 @@ struct RootView: View {
         let agentNamesByID = Dictionary(
             uniqueKeysWithValues: model.agentDefinitions.map { ($0.id, $0.displayName) }
         )
-        let visibleAgentIDs = model.visibleAgentIDs
+        let detectedAgentIDs = Set(model.snapshots.flatMap(\.agentIDs))
         let selectedSkill = model.selection.flatMap { selection in
             model.snapshots.first { $0.path == selection.path }
         }
@@ -32,7 +32,7 @@ struct RootView: View {
                 destination: $destination,
                 roots: model.authorizedRoots,
                 definitions: model.agentDefinitions,
-                detectedAgentIDs: visibleAgentIDs
+                detectedAgentIDs: detectedAgentIDs
             )
             .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 260)
         } content: {
