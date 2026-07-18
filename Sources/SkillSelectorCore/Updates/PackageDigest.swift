@@ -5,6 +5,7 @@ import Foundation
 public enum PackageDigestError: Error, Equatable, Sendable {
     case packageMissing
     case unsupportedItem(String)
+    case sourceChanged(String)
     case fileTooLarge(String)
     case totalBytesExceeded
     case tooManyFiles
@@ -29,15 +30,18 @@ public struct PackageDigestLimits: Hashable, Sendable {
 /// Test-only observation points for filesystem race regression coverage.
 struct PackageDigestHooks {
     var entryDiscovered: (() -> Void)?
+    var directoryChildDiscovered: (() -> Void)?
     var beforeFileOpen: ((String) throws -> Void)?
     var afterFileOpen: ((String) throws -> Void)?
 
     init(
         entryDiscovered: (() -> Void)? = nil,
+        directoryChildDiscovered: (() -> Void)? = nil,
         beforeFileOpen: ((String) throws -> Void)? = nil,
         afterFileOpen: ((String) throws -> Void)? = nil
     ) {
         self.entryDiscovered = entryDiscovered
+        self.directoryChildDiscovered = directoryChildDiscovered
         self.beforeFileOpen = beforeFileOpen
         self.afterFileOpen = afterFileOpen
     }
@@ -80,7 +84,10 @@ public struct PackageDigest: Codable, Hashable, Sendable, CustomStringConvertibl
             append(Data(entry.path.utf8), to: &hasher)
             append(Data(entry.kind.rawValue.utf8), to: &hasher)
             append(Data(entry.isExecutable ? "1".utf8 : "0".utf8), to: &hasher)
-            if entry.kind == .symbolicLink {
+            switch entry.kind {
+            case .directory:
+                break
+            case .symbolicLink:
                 let content = try readLink(
                     entry.path,
                     rootFD: rootFD,
@@ -89,21 +96,23 @@ public struct PackageDigest: Codable, Hashable, Sendable, CustomStringConvertibl
                 try validate(byteCount: Int64(content.count), path: entry.path, limits: limits, totalBytes: &totalBytes)
                 append(UInt64(content.count), to: &hasher)
                 hasher.update(data: content)
-            } else {
+            case .file:
                 try hooks.beforeFileOpen?(entry.path)
                 let descriptor = try openRegular(entry.path, rootFD: rootFD, expected: entry.status)
                 defer { Darwin.close(descriptor) }
                 try hooks.afterFileOpen?(entry.path)
-                var openedStatus = stat()
-                guard Darwin.fstat(descriptor, &openedStatus) == 0,
-                      sameObject(openedStatus, entry.status),
-                      openedStatus.st_mode & S_IFMT == S_IFREG else {
-                    throw PackageDigestError.unsupportedItem(entry.path)
+                let beforeReadStatus = try descriptorStatus(descriptor, path: entry.path)
+                guard sameObject(beforeReadStatus, entry.status),
+                      beforeReadStatus.st_mode & S_IFMT == S_IFREG else {
+                    throw PackageDigestError.sourceChanged(entry.path)
                 }
-                guard openedStatus.st_size <= limits.maximumFileBytes else {
+                guard beforeReadStatus.st_size <= limits.maximumFileBytes else {
                     throw PackageDigestError.fileTooLarge(entry.path)
                 }
-                append(UInt64(openedStatus.st_size), to: &hasher)
+                guard sameSourceState(beforeReadStatus, entry.status) else {
+                    throw PackageDigestError.sourceChanged(entry.path)
+                }
+                append(UInt64(beforeReadStatus.st_size), to: &hasher)
                 let readCount = try hash(
                     descriptor,
                     path: entry.path,
@@ -111,12 +120,11 @@ public struct PackageDigest: Codable, Hashable, Sendable, CustomStringConvertibl
                     limits: limits,
                     totalBytes: &totalBytes
                 )
-                var finalStatus = stat()
-                guard Darwin.fstat(descriptor, &finalStatus) == 0,
-                      sameObject(finalStatus, openedStatus),
-                      finalStatus.st_size == openedStatus.st_size,
-                      finalStatus.st_size == readCount else {
-                    throw PackageDigestError.unsupportedItem(entry.path)
+                let afterReadStatus = try descriptorStatus(descriptor, path: entry.path)
+                guard sameSourceState(afterReadStatus, beforeReadStatus),
+                      afterReadStatus.st_size == readCount,
+                      try currentPathMatches(entry.path, rootFD: rootFD, expected: beforeReadStatus) else {
+                    throw PackageDigestError.sourceChanged(entry.path)
                 }
             }
         }
@@ -138,7 +146,13 @@ public struct PackageDigest: Codable, Hashable, Sendable, CustomStringConvertibl
         hooks: PackageDigestHooks
     ) throws -> [DigestEntry] {
         var result: [DigestEntry] = []
-        for name in try directoryNames(rootFD) {
+        let names = try directoryNames(
+            rootFD,
+            maximumCount: limits.maximumFileCount - fileCount,
+            hooks: hooks
+        )
+        fileCount += names.count
+        for name in names {
             if name == ".git" || PackageManifest.excludedNames.contains(name) {
                 continue
             }
@@ -151,6 +165,12 @@ public struct PackageDigest: Codable, Hashable, Sendable, CustomStringConvertibl
                 : "\(relativePrefix)/\(name)"
             switch status.st_mode & S_IFMT {
             case S_IFDIR:
+                result.append(DigestEntry(
+                    path: relativePath,
+                    kind: .directory,
+                    isExecutable: false,
+                    status: status
+                ))
                 let childFD = try openDirectory(name, relativeTo: rootFD, expected: status)
                 defer { Darwin.close(childFD) }
                 result += try digestEntries(
@@ -161,7 +181,7 @@ public struct PackageDigest: Codable, Hashable, Sendable, CustomStringConvertibl
                     hooks: hooks
                 )
             case S_IFREG:
-                try addEntry(path: relativePath, status: status, kind: .file, limits: limits, fileCount: &fileCount, hooks: hooks)
+                try validateEntry(path: relativePath, status: status, kind: .file, limits: limits)
                 result.append(DigestEntry(
                     path: relativePath,
                     kind: .file,
@@ -169,7 +189,7 @@ public struct PackageDigest: Codable, Hashable, Sendable, CustomStringConvertibl
                     status: status
                 ))
             case S_IFLNK:
-                try addEntry(path: relativePath, status: status, kind: .symbolicLink, limits: limits, fileCount: &fileCount, hooks: hooks)
+                try validateEntry(path: relativePath, status: status, kind: .symbolicLink, limits: limits)
                 result.append(DigestEntry(
                     path: relativePath,
                     kind: .symbolicLink,
@@ -183,18 +203,13 @@ public struct PackageDigest: Codable, Hashable, Sendable, CustomStringConvertibl
         return result
     }
 
-    private static func addEntry(
+    private static func validateEntry(
         path: String,
         status: stat,
         kind: PackageManifestEntry.Kind,
-        limits: PackageDigestLimits,
-        fileCount: inout Int,
-        hooks: PackageDigestHooks
+        limits: PackageDigestLimits
     ) throws {
-        guard fileCount < limits.maximumFileCount else { throw PackageDigestError.tooManyFiles }
         guard status.st_size <= limits.maximumFileBytes else { throw PackageDigestError.fileTooLarge(path) }
-        fileCount += 1
-        hooks.entryDiscovered?()
     }
 
     private static func openDirectory(at url: URL) throws -> Int32 {
@@ -214,20 +229,31 @@ public struct PackageDigest: Codable, Hashable, Sendable, CustomStringConvertibl
         return descriptor
     }
 
-    private static func directoryNames(_ descriptor: Int32) throws -> [String] {
+    private static func directoryNames(
+        _ descriptor: Int32,
+        maximumCount: Int,
+        hooks: PackageDigestHooks
+    ) throws -> [String] {
         let duplicate = Darwin.dup(descriptor)
         guard duplicate >= 0, let directory = Darwin.fdopendir(duplicate) else {
             if duplicate >= 0 { Darwin.close(duplicate) }
             throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
         }
         defer { Darwin.closedir(directory) }
+        let boundedCount = max(0, maximumCount)
         var names: [String] = []
         errno = 0
         while let entry = Darwin.readdir(directory) {
             let name = withUnsafePointer(to: &entry.pointee.d_name) {
                 String(cString: UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self))
             }
-            if name != "." && name != ".." { names.append(name) }
+            guard name != ".", name != ".." else {
+                continue
+            }
+            names.append(name)
+            hooks.directoryChildDiscovered?()
+            guard names.count <= boundedCount else { throw PackageDigestError.tooManyFiles }
+            hooks.entryDiscovered?()
         }
         guard errno == 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
         return names.sorted { $0.utf8.lexicographicallyPrecedes($1.utf8) }
@@ -246,13 +272,13 @@ public struct PackageDigest: Codable, Hashable, Sendable, CustomStringConvertibl
         }
         let name = components.last ?? ""
         let descriptor = name.withCString { Darwin.openat(parentFD, $0, O_RDONLY | O_NOFOLLOW | O_CLOEXEC) }
-        guard descriptor >= 0 else { throw PackageDigestError.unsupportedItem(path) }
+        guard descriptor >= 0 else { throw PackageDigestError.sourceChanged(path) }
         var opened = stat()
         guard Darwin.fstat(descriptor, &opened) == 0,
-              sameObject(opened, expected),
+              sameSourceState(opened, expected),
               opened.st_mode & S_IFMT == S_IFREG else {
             Darwin.close(descriptor)
-            throw PackageDigestError.unsupportedItem(path)
+            throw PackageDigestError.sourceChanged(path)
         }
         return descriptor
     }
@@ -277,10 +303,10 @@ public struct PackageDigest: Codable, Hashable, Sendable, CustomStringConvertibl
         }
         var current = stat()
         guard name.withCString({ Darwin.fstatat(parentFD, $0, &current, AT_SYMLINK_NOFOLLOW) }) == 0,
-              sameObject(current, expected),
+              sameSourceState(current, expected),
               current.st_mode & S_IFMT == S_IFLNK,
               count == Int(current.st_size) else {
-            throw PackageDigestError.unsupportedItem(path)
+            throw PackageDigestError.sourceChanged(path)
         }
         return Data(buffer.prefix(count))
     }
@@ -327,8 +353,33 @@ public struct PackageDigest: Codable, Hashable, Sendable, CustomStringConvertibl
         totalBytes += byteCount
     }
 
+    private static func descriptorStatus(_ descriptor: Int32, path: String) throws -> stat {
+        var status = stat()
+        guard Darwin.fstat(descriptor, &status) == 0 else {
+            throw PackageDigestError.sourceChanged(path)
+        }
+        return status
+    }
+
+    private static func currentPathMatches(_ path: String, rootFD: Int32, expected: stat) throws -> Bool {
+        var status = stat()
+        let result = path.withCString { Darwin.fstatat(rootFD, $0, &status, AT_SYMLINK_NOFOLLOW) }
+        guard result == 0 else { return false }
+        return sameSourceState(status, expected)
+    }
+
     private static func sameObject(_ lhs: stat, _ rhs: stat) -> Bool {
         lhs.st_dev == rhs.st_dev && lhs.st_ino == rhs.st_ino
+    }
+
+    private static func sameSourceState(_ lhs: stat, _ rhs: stat) -> Bool {
+        sameObject(lhs, rhs)
+            && lhs.st_mode & S_IFMT == rhs.st_mode & S_IFMT
+            && lhs.st_size == rhs.st_size
+            && lhs.st_mtimespec.tv_sec == rhs.st_mtimespec.tv_sec
+            && lhs.st_mtimespec.tv_nsec == rhs.st_mtimespec.tv_nsec
+            && lhs.st_ctimespec.tv_sec == rhs.st_ctimespec.tv_sec
+            && lhs.st_ctimespec.tv_nsec == rhs.st_ctimespec.tv_nsec
     }
 
     private static func append(_ value: UInt64, to hasher: inout SHA256) {
@@ -344,7 +395,7 @@ public struct PackageDigest: Codable, Hashable, Sendable, CustomStringConvertibl
 }
 
 struct PackageManifestEntry: Hashable, Sendable {
-    enum Kind: String, Hashable, Sendable { case file, symbolicLink }
+    enum Kind: String, Hashable, Sendable { case directory, file, symbolicLink }
     let path: String
     let kind: Kind
     let isExecutable: Bool
@@ -393,6 +444,12 @@ enum PackageManifest {
                 : "\(relativePrefix)/\(child.lastPathComponent)"
             switch status.st_mode & S_IFMT {
             case S_IFDIR:
+                result.append(PackageManifestEntry(
+                    path: relativePath,
+                    kind: .directory,
+                    isExecutable: false,
+                    content: Data()
+                ))
                 try walk(directory: child, relativePrefix: relativePath, result: &result)
             case S_IFREG:
                 let bytes = try Data(contentsOf: child, options: [.mappedIfSafe])

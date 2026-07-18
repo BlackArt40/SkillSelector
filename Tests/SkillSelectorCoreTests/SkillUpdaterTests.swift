@@ -588,7 +588,80 @@ final class SkillUpdaterTests: XCTestCase {
                 try FileManager.default.removeItem(at: victim)
                 try FileManager.default.createSymbolicLink(at: victim, withDestinationURL: outside)
             })
-        )) { XCTAssertEqual($0 as? PackageDigestError, .unsupportedItem("victim.txt")) }
+        )) { XCTAssertEqual($0 as? PackageDigestError, .sourceChanged("victim.txt")) }
+    }
+
+    func testPackageDigestRejectsSameSizeInPlaceMutationAfterOpeningFile() throws {
+        let root = try makeSkill(name: "demo")
+        let victim = root.appending(path: "victim.txt")
+        defer { try? FileManager.default.removeItem(at: root.deletingLastPathComponent()) }
+        try Data("before".utf8).write(to: victim)
+
+        XCTAssertThrowsError(try PackageDigest.compute(
+            at: root,
+            hooks: PackageDigestHooks(afterFileOpen: { path in
+                guard path == "victim.txt" else { return }
+                let handle = try FileHandle(forWritingTo: victim)
+                try handle.write(contentsOf: Data("after!".utf8))
+                try handle.close()
+            })
+        )) { XCTAssertEqual($0 as? PackageDigestError, .sourceChanged("victim.txt")) }
+    }
+
+    func testPackageDigestRejectsPathReplacementAfterOpeningFile() throws {
+        let root = try makeSkill(name: "demo")
+        let victim = root.appending(path: "victim.txt")
+        let replacement = root.deletingLastPathComponent().appending(path: "replacement.txt")
+        defer { try? FileManager.default.removeItem(at: root.deletingLastPathComponent()) }
+        try Data("inside".utf8).write(to: victim)
+        try Data("inside".utf8).write(to: replacement)
+
+        XCTAssertThrowsError(try PackageDigest.compute(
+            at: root,
+            hooks: PackageDigestHooks(afterFileOpen: { path in
+                guard path == "victim.txt" else { return }
+                try FileManager.default.removeItem(at: victim)
+                try FileManager.default.moveItem(at: replacement, to: victim)
+            })
+        )) { XCTAssertEqual($0 as? PackageDigestError, .sourceChanged("victim.txt")) }
+    }
+
+    func testPackageDigestStopsReadingSingleDirectoryBeforeCollectingBeyondLimit() throws {
+        let root = try makeSkill(name: "demo")
+        defer { try? FileManager.default.removeItem(at: root.deletingLastPathComponent()) }
+        for index in 0..<100 {
+            try FileManager.default.createDirectory(
+                at: root.appending(path: "empty-\(index)"),
+                withIntermediateDirectories: false
+            )
+        }
+        var observedChildren = 0
+
+        XCTAssertThrowsError(try PackageDigest.compute(
+            at: root,
+            limits: PackageDigestLimits(maximumFileBytes: 100, maximumTotalBytes: 100, maximumFileCount: 10),
+            hooks: PackageDigestHooks(directoryChildDiscovered: { observedChildren += 1 })
+        )) { XCTAssertEqual($0 as? PackageDigestError, .tooManyFiles) }
+        XCTAssertEqual(observedChildren, 11)
+    }
+
+    func testPackageDigestCountsEmptyDirectoriesAndDistinguishesTheirLayout() throws {
+        let root = try makeSkill(name: "demo")
+        defer { try? FileManager.default.removeItem(at: root.deletingLastPathComponent()) }
+        let baseline = try PackageDigest.compute(at: root)
+        try FileManager.default.createDirectory(
+            at: root.appending(path: "empty/child"),
+            withIntermediateDirectories: true
+        )
+
+        XCTAssertNotEqual(baseline, try PackageDigest.compute(at: root))
+        XCTAssertTrue(try PackageManifest.read(at: root).contains {
+            $0.path == "empty" && $0.kind == .directory
+        })
+        XCTAssertThrowsError(try PackageDigest.compute(
+            at: root,
+            limits: PackageDigestLimits(maximumFileBytes: 100, maximumTotalBytes: 100, maximumFileCount: 2)
+        )) { XCTAssertEqual($0 as? PackageDigestError, .tooManyFiles) }
     }
 
     func testPackageDigestStopsWhenOpenFileGrowsPastPerFileLimit() throws {
