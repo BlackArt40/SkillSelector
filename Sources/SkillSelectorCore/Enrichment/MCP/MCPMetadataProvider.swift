@@ -3,14 +3,14 @@ import Foundation
 public struct MCPMetadataProvider: MetadataProvider {
     private let rootURL: URL
     private let authorizedHomeURL: URL?
-    private let preferences: MCPPreferenceStore
+    private let preferences: any MCPPreferenceStoring
     private let approval: CommandApproval
     private let discovery: MCPConfigDiscovery
 
     public init(
         rootURL: URL,
         authorizedHomeURL: URL? = nil,
-        preferences: MCPPreferenceStore = MCPPreferenceStore(),
+        preferences: any MCPPreferenceStoring = MCPPreferenceStore(),
         approval: CommandApproval = CommandApproval(),
         discovery: MCPConfigDiscovery = MCPConfigDiscovery()
     ) {

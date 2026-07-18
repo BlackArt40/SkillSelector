@@ -7,14 +7,14 @@ import SwiftUI
 @Observable
 private final class MCPSettingsModel {
     private let approval: CommandApproval
-    private let preferences: MCPPreferenceStore
+    private let preferences: any MCPPreferenceStoring
     private(set) var servers: [MCPServerConfiguration] = []
     private(set) var toolsByServer: [String: [MCPTool]] = [:]
     private(set) var loadingServerIDs: Set<String> = []
     private(set) var failedServerIDs: Set<String> = []
 
     init(
-        preferences: MCPPreferenceStore = MCPPreferenceStore(),
+        preferences: any MCPPreferenceStoring = MCPPreferenceStore(),
         approval: CommandApproval = CommandApproval()
     ) {
         self.preferences = preferences

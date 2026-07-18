@@ -369,7 +369,17 @@ public enum MCPConfigDiscoveryError: Error, Equatable, Sendable {
     case invalidConfiguration(URL)
 }
 
-public final class MCPPreferenceStore: @unchecked Sendable {
+public protocol MCPPreferenceStoring: AnyObject, Sendable {
+    func isServerEnabled(_ id: String) -> Bool
+    func setServer(_ id: String, enabled: Bool)
+    func enabledTools(for serverID: String) -> Set<String>
+    func setTool(_ name: String, serverID: String, enabled: Bool)
+}
+
+/// The production preference adapter. Tests and previews should inject an
+/// in-memory `MCPPreferenceStoring` implementation instead of creating a
+/// persistent UserDefaults suite.
+public final class MCPPreferenceStore: MCPPreferenceStoring, @unchecked Sendable {
     private static let enabledServersKey = "SkillSelector.mcp.enabledServers"
     private static let enabledToolsKey = "SkillSelector.mcp.enabledTools"
 

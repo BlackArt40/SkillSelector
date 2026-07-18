@@ -236,6 +236,14 @@ final class AcceptanceTests: XCTestCase {
     }
 
     func testMCPRequiresExactApprovalsAndUsesOnlyEnabledReadOnlyTools() async throws {
+        let preferenceResidueBefore = try acceptanceMCPPreferenceResidue()
+        defer {
+            XCTAssertEqual(
+                try? acceptanceMCPPreferenceResidue(),
+                preferenceResidueBefore,
+                "Acceptance MCP test must not create persistent preference domains or files"
+            )
+        }
         let fixture = try AcceptanceFixture()
         var configurations = try MCPConfigDiscovery().discover(in: fixture.home)
         XCTAssertEqual(Set(configurations.map(\.name)), ["http", "package-runner", "stdio"])
@@ -245,10 +253,7 @@ final class AcceptanceTests: XCTestCase {
 
         let stdio = try XCTUnwrap(configurations.first { $0.name == "stdio" })
             .withState(isEnabled: true, enabledToolNames: ["metadata_lookup"])
-        let defaults = UserDefaults(suiteName: "AcceptanceMCP-\(UUID().uuidString)")!
-        let approval = CommandApproval(
-            store: UserDefaultsCommandApprovalStore(defaults: defaults, key: "approvals")
-        )
+        let approval = CommandApproval(store: AcceptanceCommandApprovalStore())
         await XCTAssertThrowsAcceptanceError(
             try await StdioMCPClient(configuration: stdio, approval: approval).listTools(),
             expected: MCPClientError.approvalRequired
@@ -267,7 +272,7 @@ final class AcceptanceTests: XCTestCase {
             try MCPMetadataCandidateMapper.map(approvedResult).description,
             "Exact stdio MCP description."
         )
-        let preferences = MCPPreferenceStore(defaults: defaults)
+        let preferences = AcceptanceMCPPreferenceStore()
         preferences.setServer(stdio.id, enabled: true)
         preferences.setTool("metadata_lookup", serverID: stdio.id, enabled: true)
         let provider = MCPMetadataProvider(
@@ -628,6 +633,79 @@ private final class AcceptanceBookmarkAdapter: BookmarkDataCreating, @unchecked 
     func stopAccessing(_ url: URL) {
         lock.withLock { stopped.append(url) }
     }
+}
+
+private final class AcceptanceCommandApprovalStore: CommandApprovalStoring, @unchecked Sendable {
+    private let lock = NSLock()
+    private var values: Set<String> = []
+
+    func fingerprints() -> Set<String> { lock.withLock { values } }
+    func save(fingerprints: Set<String>) { lock.withLock { values = fingerprints } }
+}
+
+private final class AcceptanceMCPPreferenceStore: MCPPreferenceStoring, @unchecked Sendable {
+    private let lock = NSLock()
+    private var enabledServers: Set<String> = []
+    private var enabledToolsByServer: [String: Set<String>] = [:]
+
+    func isServerEnabled(_ id: String) -> Bool {
+        lock.withLock { enabledServers.contains(id) }
+    }
+
+    func setServer(_ id: String, enabled: Bool) {
+        lock.withLock {
+            if enabled { enabledServers.insert(id) }
+            else { enabledServers.remove(id) }
+        }
+    }
+
+    func enabledTools(for serverID: String) -> Set<String> {
+        lock.withLock { enabledToolsByServer[serverID, default: []] }
+    }
+
+    func setTool(_ name: String, serverID: String, enabled: Bool) {
+        lock.withLock {
+            if enabled { enabledToolsByServer[serverID, default: []].insert(name) }
+            else { enabledToolsByServer[serverID, default: []].remove(name) }
+        }
+    }
+}
+
+private struct AcceptanceMCPPreferenceResidue: Equatable {
+    let files: Set<String>
+    let domains: Set<String>
+}
+
+private func acceptanceMCPPreferenceResidue() throws -> AcceptanceMCPPreferenceResidue {
+    let preferencesDirectory = FileManager.default.homeDirectoryForCurrentUser
+        .appending(path: "Library/Preferences")
+    let entries = (try? FileManager.default.contentsOfDirectory(
+        at: preferencesDirectory,
+        includingPropertiesForKeys: nil
+    )) ?? []
+    let files = Set(entries.filter { $0.lastPathComponent.hasPrefix("AcceptanceMCP-") }.map(\.path))
+
+    let domains: Set<String>
+    if FileManager.default.isExecutableFile(atPath: "/usr/bin/defaults") {
+        let process = Process()
+        let output = Pipe()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/defaults")
+        process.arguments = ["domains"]
+        process.standardOutput = output
+        process.standardError = FileHandle.nullDevice
+        try? process.run()
+        process.waitUntilExit()
+        let text = String(
+            data: output.fileHandleForReading.readDataToEndOfFile(),
+            encoding: .utf8
+        ) ?? ""
+        domains = Set(text.split { $0 == "," || $0 == "{" || $0 == "}" || $0.isWhitespace }
+            .map(String.init)
+            .filter { $0.hasPrefix("AcceptanceMCP-") })
+    } else {
+        domains = []
+    }
+    return AcceptanceMCPPreferenceResidue(files: files, domains: domains)
 }
 
 private final class AcceptanceTrash: FileOperationTrashing {
