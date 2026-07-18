@@ -33,7 +33,7 @@ The bundled registry declares names, standard global roots, project-relative pat
 
 Every directory containing a recognized `SKILL.md` is parsed best-effort and remains visible even when its frontmatter is invalid. Invalid records show diagnostics instead of silently disappearing.
 
-An absolute installation path identifies a Skill record. The same path can belong to multiple Agents, so shared `.agents/skills` content appears once with multiple Agent labels. Copies at different paths remain separate records. Symbolic links remain separate installations and record their resolved target.
+An absolute installation path identifies a Skill record. Agent filters represent the canonical owner of the containing Agent-specific directory, not every tool that can consume it. Shared `.agents/skills` content has no Agent association: home-level shared content appears under Global Skills, while project-level shared content appears only under that project. Copies at different paths remain separate records. Symbolic links remain separate installations and record their resolved target.
 
 After home authorization, every launch quickly checks only bundled allowlisted global roots and refreshes the local index. Project scans run for authorized projects. The app has no continuous filesystem watcher. Manual refresh and app-initiated file operations refresh affected roots. If a root becomes inaccessible, its records remain with an unavailable status; a record is removed only when its parent root is accessible and the Skill is confirmed absent.
 

@@ -35,7 +35,7 @@ final class SkillQueryTests: XCTestCase {
         let shared = snapshot(
             path: "/Users/tester/.agents/skills/shared",
             name: "Shared",
-            agentIDs: ["cursor", "gemini-cli"],
+            agentIDs: [],
             rootIDs: ["home-root"]
         )
         let snapshots = [
@@ -50,27 +50,29 @@ final class SkillQueryTests: XCTestCase {
         XCTAssertEqual(result.map(\.path), ["/a/one", shared.path, "/z/three"])
     }
 
-    func testSharedMembershipAndIndividualAgentFiltersReturnOneRowPerPath() {
+    func testSharedSkillsAppearGloballyButNotUnderAgentFilters() {
         let shared = snapshot(
-            path: "/shared/tool",
+            path: "/Users/tester/.agents/skills/shared",
             name: "Shared",
-            agentIDs: ["cursor", "gemini-cli"]
+            agentIDs: [],
+            rootIDs: ["home-root"]
         )
         let snapshots = [
             shared,
-            snapshot(path: "/cursor/only", name: "Cursor Only", agentIDs: ["cursor"]),
-            snapshot(path: "/gemini/only", name: "Gemini Only", agentIDs: ["gemini-cli"]),
+            snapshot(path: "/codex/only", name: "Codex Only", agentIDs: ["codex"], rootIDs: ["home-root"]),
+            snapshot(path: "/claude/only", name: "Claude Only", agentIDs: ["claude-code"], rootIDs: ["home-root"]),
         ]
 
-        let cursor = SkillQuery(agentID: "cursor")
+        let global = SkillQuery(scope: .global)
             .apply(to: snapshots, rootsByID: rootsByID)
-        let gemini = SkillQuery(agentID: "gemini-cli")
+        let codex = SkillQuery(agentID: "codex")
+            .apply(to: snapshots, rootsByID: rootsByID)
+        let claude = SkillQuery(agentID: "claude-code")
             .apply(to: snapshots, rootsByID: rootsByID)
 
-        XCTAssertEqual(Set(cursor.map(\.path)), ["/shared/tool", "/cursor/only"])
-        XCTAssertEqual(cursor.filter { $0.path == shared.path }.count, 1)
-        XCTAssertEqual(Set(gemini.map(\.path)), ["/shared/tool", "/gemini/only"])
-        XCTAssertEqual(gemini.filter { $0.path == shared.path }.count, 1)
+        XCTAssertEqual(Set(global.map(\.path)), [shared.path, "/codex/only", "/claude/only"])
+        XCTAssertEqual(codex.map(\.path), ["/codex/only"])
+        XCTAssertEqual(claude.map(\.path), ["/claude/only"])
     }
 
     func testGlobalScopeUsesRootKindAndNotPathSubstring() {

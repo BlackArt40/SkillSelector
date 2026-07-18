@@ -1,5 +1,7 @@
 # Agent Skill 目录规则调研
 
+> Compatibility paths document what each tool can read. SkillSelector sidebar classification is based on canonical directory ownership; compatibility entries do not create additional Agent associations.
+
 > 基于各 Agent 官方文档或官方 GitHub 仓库，仅记录可确认信息，无法确认的字段标注"未确认"。
 > 调研日期：2026-07-17
 

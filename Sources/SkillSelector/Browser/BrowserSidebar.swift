@@ -41,12 +41,22 @@ struct BrowserSidebar: View {
     }
 
     private var agents: [AgentDefinition] {
+        Self.visibleAgentDefinitions(
+            definitions: definitions,
+            detectedAgentIDs: detectedAgentIDs
+        )
+    }
+
+    static func visibleAgentDefinitions(
+        definitions: [AgentDefinition],
+        detectedAgentIDs: Set<String>
+    ) -> [AgentDefinition] {
         definitions
             .filter { detectedAgentIDs.contains($0.id) && $0.id != "system" && $0.id != "custom" }
-            .sorted { lhs, rhs in
-                let lhsName = lhs.displayName.lowercased()
-                let rhsName = rhs.displayName.lowercased()
-                return lhsName == rhsName ? lhs.id < rhs.id : lhsName < rhsName
+            .sorted {
+                let lhsName = $0.displayName.lowercased()
+                let rhsName = $1.displayName.lowercased()
+                return lhsName == rhsName ? $0.id < $1.id : lhsName < rhsName
             }
     }
 

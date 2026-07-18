@@ -29,7 +29,7 @@ final class AcceptanceTests: XCTestCase {
         XCTAssertFalse(skills.contains { $0.name == "ignored" })
 
         let shared = try XCTUnwrap(skills.first { $0.path == fixture.sharedSkill.path })
-        XCTAssertGreaterThan(shared.agentIDs.count, 1)
+        XCTAssertEqual(shared.agentIDs, [])
         XCTAssertEqual(skills.filter { $0.path == shared.path }.count, 1)
         XCTAssertFalse(try XCTUnwrap(skills.first {
             $0.path == fixture.brokenSkill.path
