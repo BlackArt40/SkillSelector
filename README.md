@@ -29,6 +29,8 @@ zsh Tests/Packaging/package-smoke.sh 0.1.0
 
 Packaging writes `dist/SkillSelector.app`, `dist/SkillSelector.dmg`, and the versioned GitHub Release asset `dist/SkillSelector-0.1.0.dmg`.
 
+The focused acceptance suite uses only a temporary disposable home, fake `gh`/`npm`/MCP services, an intercepted HTTP transport, and an injected Trash adapter. The remaining packaged-app directory-panel and sandbox-boundary checks are manual release evidence; see [docs/test-plan.md](docs/test-plan.md).
+
 ## Installing a GitHub Release
 
 Releases are ad-hoc signed and sandboxed, but are not Developer ID signed or notarized. After downloading the `.dmg` from GitHub Releases, mount it and drag `SkillSelector.app` to Applications. In Finder, Control-click the app, choose **Open**, then choose **Open** in the confirmation dialog. macOS remembers that choice for later launches.
