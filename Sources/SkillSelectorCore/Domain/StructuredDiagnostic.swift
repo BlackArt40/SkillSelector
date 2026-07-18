@@ -7,6 +7,7 @@ public enum DiagnosticCode: String, Codable, CaseIterable, Hashable, Sendable {
     case blockValueHasNoContent = "diagnostic.blockValueHasNoContent"
     case blockValueMustBeIndented = "diagnostic.blockValueMustBeIndented"
     case collectionsNotSupported = "diagnostic.collectionsNotSupported"
+    case digestUnavailable = "diagnostic.digestUnavailable"
     case expectedKeyValuePair = "diagnostic.expectedKeyValuePair"
     case invalidFrontmatterKey = "diagnostic.invalidFrontmatterKey"
     case missingClosingFrontmatterBoundary = "diagnostic.missingClosingFrontmatterBoundary"
@@ -41,6 +42,8 @@ public enum DiagnosticCode: String, Codable, CaseIterable, Hashable, Sendable {
             "Block value must be indented"
         case .collectionsNotSupported:
             "Collections are not supported in frontmatter"
+        case .digestUnavailable:
+            "Content digest is unavailable because the Skill package exceeds safety limits"
         case .expectedKeyValuePair:
             "Expected a key-value pair"
         case .invalidFrontmatterKey:

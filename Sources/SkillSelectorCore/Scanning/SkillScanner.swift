@@ -1,6 +1,7 @@
 import Foundation
 
 public struct SkillScanner: Sendable {
+    private let digestLimits: PackageDigestLimits
     private static let skippedDirectoryNames: Set<String> = [
         ".git",
         "node_modules",
@@ -18,7 +19,9 @@ public struct SkillScanner: Sendable {
         "Carthage",
     ]
 
-    public init() {}
+    public init(digestLimits: PackageDigestLimits = PackageDigestLimits()) {
+        self.digestLimits = digestLimits
+    }
 
     public func scan(_ roots: [ScanRoot]) async -> ScanReport {
         let authorizedURLs = roots.map(\.url)
@@ -348,7 +351,7 @@ public struct SkillScanner: Sendable {
             resolvedEntryURL = url
         }
 
-        let document: ParsedSkillDocument
+        var document: ParsedSkillDocument
         do {
             document = FrontmatterParser.parse(
                 try String(contentsOf: resolvedEntryURL, encoding: .utf8)
@@ -369,6 +372,19 @@ public struct SkillScanner: Sendable {
         let modificationDate = try? resolvedEntryURL.resourceValues(
             forKeys: [.contentModificationDateKey]
         ).contentModificationDate
+        let digest: String?
+        do {
+            digest = try PackageDigest.compute(
+                at: resolvedTarget ?? installationURL,
+                limits: digestLimits
+            ).value
+        } catch {
+            digest = nil
+            document.issues.append(ParseIssue(
+                code: .digestUnavailable,
+                arguments: [String(describing: error)]
+            ))
+        }
         return ScannedSkill(
             installation: SkillInstallation(
                 path: installationURL,
@@ -379,9 +395,11 @@ public struct SkillScanner: Sendable {
             agentIDsByRoot: [rootID: agentIDs],
             entryFilename: entryFilename,
             entryModificationDate: modificationDate,
-            digest: try? PackageDigest.compute(
-                at: resolvedTarget ?? installationURL
-            ).value
+            digest: digest,
+            discoveredSourceBindings: SkillSourceDiscovery().candidates(
+                for: contentDirectory,
+                document: document
+            ).map(\.binding)
         )
     }
 

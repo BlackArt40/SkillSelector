@@ -105,6 +105,11 @@ public enum UpdateResult: Hashable, Sendable {
     case confirmationRequired
     case localChangesRequireConfirmation(UpdateProposal)
     case updated(digest: PackageDigest, refreshRootIDs: [String])
+
+    public var affectedRootIDs: [String] {
+        guard case .updated(_, let rootIDs) = self else { return [] }
+        return rootIDs
+    }
 }
 
 public struct FetchedSkillPackage: Hashable, Sendable {
@@ -307,11 +312,11 @@ public final class SkillUpdater: @unchecked Sendable {
     }
 
     private func affectedAliases(for request: UpdateRequest, target: URL) -> [IndexedSkillAlias] {
-        guard request.resolvedTargetURL != nil else { return [] }
         var aliases = Set(aliasesProvider().filter {
             $0.resolvedTarget.map { URL(fileURLWithPath: $0).standardizedFileURL.path } == target.path
         })
-        if !aliases.contains(where: { $0.path == request.installationURL.path }) {
+        if request.resolvedTargetURL != nil,
+           !aliases.contains(where: { $0.path == request.installationURL.path }) {
             aliases.insert(IndexedSkillAlias(
                 path: request.installationURL.path,
                 resolvedTarget: target.path

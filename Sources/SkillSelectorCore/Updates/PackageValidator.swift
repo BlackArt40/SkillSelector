@@ -4,10 +4,16 @@ import Foundation
 
 public struct PackageValidationLimits: Hashable, Sendable {
     public let maximumFileCount: Int
+    public let maximumFileBytes: Int64
     public let maximumTotalBytes: Int64
 
-    public init(maximumFileCount: Int = 2_000, maximumTotalBytes: Int64 = 100 * 1_024 * 1_024) {
+    public init(
+        maximumFileCount: Int = 2_000,
+        maximumFileBytes: Int64 = 100 * 1_024 * 1_024,
+        maximumTotalBytes: Int64 = 100 * 1_024 * 1_024
+    ) {
         self.maximumFileCount = maximumFileCount
+        self.maximumFileBytes = maximumFileBytes
         self.maximumTotalBytes = maximumTotalBytes
     }
 }
@@ -132,6 +138,9 @@ enum SafeZIPExtractor {
                   let path = String(data: archive[nameStart..<nameEnd], encoding: .utf8),
                   !path.unicodeScalars.contains("\0") else {
                 throw PackageValidationError.unsupportedItem("ZIP entry name")
+            }
+            guard declaredBytes <= limits.maximumFileBytes else {
+                throw PackageValidationError.fileTooLarge(path)
             }
             let local = Int(localOffset)
             guard readUInt32(archive, at: local) == 0x0403_4b50,
@@ -313,6 +322,7 @@ public enum PackageValidationError: Error, Equatable, Sendable {
     case unsupportedItem(String)
     case excessiveFileCount(maximum: Int)
     case excessiveByteCount(maximum: Int64)
+    case fileTooLarge(String)
 }
 
 public struct ValidatedSkillPackage: Hashable, Sendable {
@@ -380,6 +390,10 @@ public struct PackageValidator: Sendable {
                 throw PackageValidationError.unsupportedItem(entry.path)
             }
             guard entry.byteCount >= 0,
+                  entry.byteCount <= limits.maximumFileBytes else {
+                throw PackageValidationError.fileTooLarge(entry.path)
+            }
+            guard entry.byteCount >= 0,
                   byteCount <= Int64.max - entry.byteCount else {
                 throw PackageValidationError.excessiveByteCount(maximum: limits.maximumTotalBytes)
             }
@@ -390,10 +404,13 @@ public struct PackageValidator: Sendable {
             if byteCount > limits.maximumTotalBytes {
                 throw PackageValidationError.excessiveByteCount(maximum: limits.maximumTotalBytes)
             }
-            if entry.kind == .symbolicLink,
-               let target = entry.symbolicLinkTarget,
-               symbolicLinkEscapes(linkPath: entry.path, target: target) {
-                throw PackageValidationError.escapingSymbolicLink(entry.path)
+            if entry.kind == .symbolicLink {
+                guard let target = entry.symbolicLinkTarget,
+                      !target.isEmpty,
+                      !target.unicodeScalars.contains("\0"),
+                      !symbolicLinkEscapes(linkPath: entry.path, target: target) else {
+                    throw PackageValidationError.escapingSymbolicLink(entry.path)
+                }
             }
         }
     }
@@ -447,7 +464,8 @@ public struct PackageValidator: Sendable {
         guard !path.isEmpty,
               !path.hasPrefix("/"),
               !path.hasPrefix("~"),
-              !path.contains("\\") else {
+              !path.contains("\\"),
+              !path.unicodeScalars.contains("\0") else {
             return false
         }
         var depth = 0

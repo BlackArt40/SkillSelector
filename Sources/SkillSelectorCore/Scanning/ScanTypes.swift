@@ -126,6 +126,7 @@ public struct ScannedSkill: Hashable, Sendable {
     public var entryFilename: String
     public var entryModificationDate: Date?
     public var digest: String?
+    public var discoveredSourceBindings: [String]
 
     public init(
         installation: SkillInstallation,
@@ -133,7 +134,8 @@ public struct ScannedSkill: Hashable, Sendable {
         agentIDsByRoot: [String: Set<String>],
         entryFilename: String,
         entryModificationDate: Date? = nil,
-        digest: String? = nil
+        digest: String? = nil,
+        discoveredSourceBindings: [String] = []
     ) {
         var installation = installation
         installation.agentIDs = agentIDsByRoot.values.reduce(into: []) { result, agentIDs in
@@ -145,6 +147,7 @@ public struct ScannedSkill: Hashable, Sendable {
         self.entryFilename = entryFilename
         self.entryModificationDate = entryModificationDate
         self.digest = digest
+        self.discoveredSourceBindings = discoveredSourceBindings
     }
 
     public var path: URL { installation.path }

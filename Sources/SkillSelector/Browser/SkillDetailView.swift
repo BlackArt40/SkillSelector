@@ -4,6 +4,10 @@ import SwiftUI
 
 struct SkillDetailView: View {
     @Environment(AppModel.self) private var model
+    @State private var detectedBindingToConfirm: String?
+    @State private var directPackageURL = ""
+    @State private var confirmsDetectedBinding = false
+    @State private var confirmsDirectPackage = false
     let skill: SkillSnapshot?
     let rootsByID: [String: AuthorizedRootSnapshot]
     let agentNamesByID: [String: String]
@@ -86,6 +90,40 @@ struct SkillDetailView: View {
                         if let digest = skill.digest {
                             labeledValue(L10n.string("Content Digest"), value: digest, monospaced: true)
                         }
+                        ForEach(skill.discoveredSourceBindings, id: \.self) { binding in
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Image(systemName: "link.badge.plus")
+                                    .foregroundStyle(.secondary)
+                                Text(verbatim: binding)
+                                    .font(.caption.monospaced())
+                                    .textSelection(.enabled)
+                                Spacer(minLength: 8)
+                                Button {
+                                    detectedBindingToConfirm = binding
+                                    confirmsDetectedBinding = true
+                                } label: {
+                                    Label(L10n.string("Use Detected Source"), systemImage: "checkmark.circle")
+                                }
+                                .disabled(model.fileOperationCommandsDisabled)
+                            }
+                        }
+                        HStack(spacing: 8) {
+                            TextField(
+                                L10n.string("Direct HTTPS package URL"),
+                                text: $directPackageURL,
+                                prompt: Text(verbatim: "https://example.com/skill.zip")
+                            )
+                            .textFieldStyle(.roundedBorder)
+                            Button {
+                                confirmsDirectPackage = true
+                            } label: {
+                                Label(L10n.string("Use Package URL"), systemImage: "link.badge.plus")
+                            }
+                            .disabled(
+                                model.fileOperationCommandsDisabled
+                                    || directPackageURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            )
+                        }
                         Button {
                             Task { await model.checkForUpdate(skill) }
                         } label: {
@@ -141,6 +179,38 @@ struct SkillDetailView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .navigationTitle(skill.name)
+            .confirmationDialog(
+                L10n.string("Confirm Update Source"),
+                isPresented: $confirmsDetectedBinding,
+                titleVisibility: .visible
+            ) {
+                Button(L10n.string("Use Detected Source")) {
+                    guard let binding = detectedBindingToConfirm else { return }
+                    model.confirmDiscoveredSource(path: skill.path, binding: binding)
+                    detectedBindingToConfirm = nil
+                }
+                Button(L10n.string("Cancel"), role: .cancel) {
+                    detectedBindingToConfirm = nil
+                }
+            } message: {
+                Text(verbatim: L10n.string(
+                    "This detected source will become the confirmed update source for this Skill."
+                ))
+            }
+            .confirmationDialog(
+                L10n.string("Confirm Direct Package URL"),
+                isPresented: $confirmsDirectPackage,
+                titleVisibility: .visible
+            ) {
+                Button(L10n.string("Use Package URL")) {
+                    model.confirmDirectPackageSource(path: skill.path, value: directPackageURL)
+                }
+                Button(L10n.string("Cancel"), role: .cancel) {}
+            } message: {
+                Text(verbatim: L10n.string(
+                    "Only this exact HTTPS URL will be stored as the confirmed update source."
+                ))
+            }
         } else {
             ContentUnavailableView(
                 L10n.string("Select a Skill"),

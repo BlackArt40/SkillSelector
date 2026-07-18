@@ -22,7 +22,7 @@ final class GitHubMetadataProviderTests: XCTestCase {
                 skillSubdirectory: "skills/demo",
                 description: "Exact remote description.",
                 evidenceURL: URL(string: "https://github.com/acme/skills/blob/main/skills/demo/SKILL.md")!,
-                sourceBinding: "github:acme/skills:skills/demo"
+                sourceBinding: "github:acme/skills:skills/demo:branch:main"
             ),
         ])
         XCTAssertEqual(runner.commands.map(\.arguments), [

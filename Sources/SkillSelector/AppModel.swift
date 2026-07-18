@@ -242,15 +242,21 @@ final class AppModel {
     func applyEnrichmentCandidate(_ candidate: MetadataCandidate, bindSource: Bool) {
         guard let group = pendingEnrichmentGroup else { return }
         do {
+            let validatedSourceBinding: String?
+            if bindSource, let binding = candidate.sourceBinding {
+                validatedSourceBinding = try SkillSource.remembered(binding: binding).binding
+            } else {
+                validatedSourceBinding = nil
+            }
             _ = try index.setEnrichedDescription(
                 path: group.skillPath,
                 value: candidate.description,
                 provenance: "\(candidate.provider.rawValue):\(candidate.evidenceURL.absoluteString)"
             )
-            if bindSource, let sourceBinding = candidate.sourceBinding {
+            if let validatedSourceBinding {
                 _ = try index.setSourceBinding(
                     path: group.skillPath,
-                    value: sourceBinding
+                    value: validatedSourceBinding
                 )
             }
             try reloadSnapshot()
@@ -292,13 +298,23 @@ final class AppModel {
         do {
             let source = try SkillSource.remembered(binding: binding)
             let documentAccess = try resolveDocumentAccess(for: skill)
+            var heldUpdateLeases = documentAccess.leases
             var transfersDocumentLeases = false
             defer {
                 if !transfersDocumentLeases {
-                    documentAccess.leases.forEach { $0.close() }
+                    heldUpdateLeases.forEach { $0.close() }
                 }
             }
             let authorizationSnapshot = try bookmarks.roots()
+            let actualTargetPath = (skill.resolvedTarget ?? skill.path)
+            let aliasRootIDs = Set(snapshots
+                .filter { $0.resolvedTarget == actualTargetPath }
+                .flatMap(\.rootIDs))
+            let knownRootIDs = Set(operationAccessRootIDs(for: skill, destinationRootURL: nil))
+            for rootID in aliasRootIDs.subtracting(knownRootIDs).sorted() {
+                heldUpdateLeases.append(try bookmarks.resolve(id: rootID).lease)
+            }
+            let updateRootIDs = (knownRootIDs.union(aliasRootIDs)).sorted()
             let ghAccess: ToolAccess?
             let fetcher: LiveSkillPackageFetcher
             if source.kind == .github {
@@ -344,9 +360,9 @@ final class AppModel {
             ))
             pendingUpdateContext = PendingUpdateContext(
                 updater: updater,
-                rootIDs: operationAccessRootIDs(for: skill, destinationRootURL: nil),
+                rootIDs: updateRootIDs,
                 authorizedRoots: authorizationSnapshot,
-                leases: documentAccess.leases,
+                leases: heldUpdateLeases,
                 toolAccess: ghAccess
             )
             pendingUpdateProposal = proposal
@@ -385,7 +401,7 @@ final class AppModel {
             case .updated:
                 let summary = try await refresher.refresh(
                     .manual,
-                    rootIDs: Set(context.rootIDs)
+                    rootIDs: Set(result.affectedRootIDs)
                 )
                 try reloadSnapshot()
                 refreshState = .finished(summary)
@@ -593,6 +609,31 @@ final class AppModel {
 
     func restoreDefaultDescription(path: String) throws {
         try saveCustomDescription(path: path, value: nil)
+    }
+
+    func confirmDiscoveredSource(path: String, binding: String) {
+        do {
+            let source = try SkillSource.remembered(binding: binding)
+            _ = try index.setSourceBinding(path: path, value: source.binding)
+            try reloadSnapshot()
+            updateError = nil
+        } catch {
+            updateError = localizedSourceBindingError(error)
+        }
+    }
+
+    func confirmDirectPackageSource(path: String, value: String) {
+        do {
+            guard let url = URL(string: value.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+                throw SkillSourceError.invalidDirectPackageURL
+            }
+            let source = try SkillSource.userConfirmed(candidate: .directPackage(url))
+            _ = try index.setSourceBinding(path: path, value: source.binding)
+            try reloadSnapshot()
+            updateError = nil
+        } catch {
+            updateError = localizedSourceBindingError(error)
+        }
     }
 
     private func performRefresh(_ trigger: RefreshTrigger) async {
@@ -1013,6 +1054,11 @@ final class AppModel {
             return L10n.string("The downloaded Skill package is invalid.")
         }
         return String(describing: error)
+    }
+
+    private func localizedSourceBindingError(_ error: Error) -> String {
+        guard error is SkillSourceError else { return String(describing: error) }
+        return L10n.string("The update source is invalid or cannot be verified.")
     }
 }
 

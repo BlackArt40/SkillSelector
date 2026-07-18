@@ -132,7 +132,7 @@ public struct GitHubMetadataProvider: MetadataProvider {
             skillSubdirectory: normalizedSubdirectory,
             description: description,
             evidenceURL: evidenceURL,
-            sourceBinding: "github:\(repository):\(normalizedSubdirectory ?? ".")"
+            sourceBinding: "github:\(repository):\(normalizedSubdirectory ?? "."):branch:main"
         )
     }
 

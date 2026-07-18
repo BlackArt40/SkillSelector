@@ -4,6 +4,25 @@ import XCTest
 @testable import SkillSelectorCore
 
 final class SkillUpdaterTests: XCTestCase {
+    func testBindingRoundTripsReferenceKindAndValueAndReadsLegacyBinding() throws {
+        let source = try SkillSource.github(
+            repository: "acme/skills",
+            subdirectory: "skills/demo",
+            reference: .tag("v1.2.3"),
+            provenance: .rememberedBinding
+        )
+        let remembered = try SkillSource.remembered(binding: source.binding)
+        XCTAssertEqual(remembered.reference, .tag("v1.2.3"))
+        XCTAssertEqual(
+            try SkillSource.remembered(binding: "github:acme/skills:skills/demo").reference,
+            .branch("HEAD")
+        )
+        XCTAssertEqual(
+            try SkillSource.remembered(binding: "github:acme/skills:skills/demo:commit:0123456789abcdef").reference,
+            .commit("0123456789abcdef")
+        )
+    }
+
     func testSourceRequiresExplicitProvenanceAndParsesSupportedBindings() throws {
         let embedded = try SkillSource.github(
             repository: "acme/skills",
@@ -43,6 +62,38 @@ final class SkillUpdaterTests: XCTestCase {
         XCTAssertEqual(rememberedDirect.directPackageURL?.absoluteString, "https://example.com/demo.zip")
         XCTAssertNil(SkillSource.nameOnlyCandidate("demo"))
         XCTAssertThrowsError(try SkillSource.userConfirmed(candidate: .nameOnly("demo")))
+    }
+
+    func testDiscoveryFindsEmbeddedMetadataAndContainingGitRepository() throws {
+        let repository = temporaryDirectory()
+        let skill = repository.appending(path: "skills/demo")
+        let git = repository.appending(path: ".git")
+        defer { try? FileManager.default.removeItem(at: repository) }
+        try FileManager.default.createDirectory(at: git, withIntermediateDirectories: true)
+        try Data("[remote \"origin\"]\n  url = git@github.com:acme/repository.git\n".utf8)
+            .write(to: git.appending(path: "config"))
+        try Data("ref: refs/heads/develop\n".utf8).write(to: git.appending(path: "HEAD"))
+        try FileManager.default.createDirectory(at: skill, withIntermediateDirectories: true)
+        let text = """
+        ---
+        name: demo
+        description: test
+        source: https://github.com/acme/embedded
+        subdirectory: packages/demo
+        tag: v2
+        ---
+        """
+        try Data(text.utf8).write(to: skill.appending(path: "SKILL.md"))
+
+        let candidates = SkillSourceDiscovery().candidates(
+            for: skill,
+            document: FrontmatterParser.parse(text)
+        )
+        XCTAssertEqual(candidates.map(\.binding), [
+            "github:acme/embedded:packages/demo:tag:v2",
+            "github:acme/repository:skills/demo:branch:develop",
+        ])
+        XCTAssertEqual(candidates.map(\.provenance), [.embeddedMetadata, .containingGitRemote])
     }
 
     func testDigestIsStableSortedAndIncludesExecutableBitsAndLinkTargets() throws {
@@ -332,6 +383,40 @@ final class SkillUpdaterTests: XCTestCase {
         XCTAssertEqual(proposal.affectedAliases.map(\.path), [first.path, second.path])
     }
 
+    func testApplyDisclosesIndexedLinksWhenRequestUsesRealDirectory() async throws {
+        let installed = try makeSkill(name: "demo", body: "old")
+        let remote = try makeSkill(name: "demo", body: "new")
+        let linkParent = temporaryDirectory()
+        try FileManager.default.createDirectory(at: linkParent, withIntermediateDirectories: true)
+        let first = linkParent.appending(path: "demo-one")
+        let second = linkParent.appending(path: "demo-two")
+        try FileManager.default.createSymbolicLink(atPath: first.path, withDestinationPath: installed.path)
+        try FileManager.default.createSymbolicLink(atPath: second.path, withDestinationPath: installed.path)
+        defer {
+            try? FileManager.default.removeItem(at: installed.deletingLastPathComponent())
+            try? FileManager.default.removeItem(at: remote.deletingLastPathComponent())
+            try? FileManager.default.removeItem(at: linkParent)
+        }
+        let updater = SkillUpdater(
+            fetcher: FixturePackageFetcher(packageURL: remote),
+            aliasesProvider: { [
+                IndexedSkillAlias(path: installed.path, resolvedTarget: nil, rootIDs: ["real"]),
+                IndexedSkillAlias(path: first.path, resolvedTarget: installed.path, rootIDs: ["a"]),
+                IndexedSkillAlias(path: second.path, resolvedTarget: installed.path, rootIDs: ["b"]),
+            ] }
+        )
+        let proposal = try await updater.check(UpdateRequest(
+            installationURL: installed,
+            entryFilename: "SKILL.md",
+            requiredName: "demo",
+            source: source(),
+            indexedDigest: try PackageDigest.compute(at: installed),
+            authorizedRootURLs: [installed.deletingLastPathComponent(), linkParent]
+        ))
+        XCTAssertEqual(proposal.affectedAliases.map(\.path), [first.path, second.path])
+        XCTAssertEqual(Set(proposal.affectedAliases.flatMap(\.rootIDs)), ["a", "b"])
+    }
+
     func testFailedInstallationRollsBackOriginalPackage() async throws {
         let installed = try makeSkill(name: "demo", body: "old")
         let remote = try makeSkill(name: "demo", body: "new")
@@ -355,6 +440,42 @@ final class SkillUpdaterTests: XCTestCase {
         XCTAssertTrue(try String(contentsOf: installed.appending(path: "SKILL.md"), encoding: .utf8).contains("old"))
         XCTAssertEqual(replacer.calls, 1)
         XCTAssertEqual(replacer.expectedDigest, try PackageDigest.compute(at: installed))
+    }
+
+    func testZIPRejectsInvalidLinkTargetsBeforeDestinationCreation() throws {
+        let destination = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: destination) }
+        let archive = storedZIP(entries: [
+            ("SKILL.md", Data("safe".utf8), 0o100644),
+            ("broken", Data([0xff, 0xfe]), 0o120777),
+        ])
+        XCTAssertThrowsError(try SafeZIPExtractor.extract(
+            archive,
+            into: destination,
+            validator: PackageValidator()
+        ))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
+    }
+
+    func testPackageDigestStreamsAndEnforcesPerFileTotalAndCountLimits() throws {
+        let root = try makeSkill(name: "demo")
+        defer { try? FileManager.default.removeItem(at: root.deletingLastPathComponent()) }
+        try Data(repeating: 0x41, count: 120).write(to: root.appending(path: "large.bin"))
+        XCTAssertThrowsError(try PackageDigest.compute(
+            at: root,
+            limits: PackageDigestLimits(maximumFileBytes: 100, maximumTotalBytes: 1_000, maximumFileCount: 10)
+        )) { XCTAssertEqual($0 as? PackageDigestError, .fileTooLarge("large.bin")) }
+        try FileManager.default.removeItem(at: root.appending(path: "large.bin"))
+        try Data(repeating: 0x41, count: 9).write(to: root.appending(path: "a.bin"))
+        try Data(repeating: 0x42, count: 9).write(to: root.appending(path: "b.bin"))
+        XCTAssertThrowsError(try PackageDigest.compute(
+            at: root,
+            limits: PackageDigestLimits(maximumFileBytes: 100, maximumTotalBytes: 10, maximumFileCount: 10)
+        )) { XCTAssertEqual($0 as? PackageDigestError, .totalBytesExceeded) }
+        XCTAssertThrowsError(try PackageDigest.compute(
+            at: root,
+            limits: PackageDigestLimits(maximumFileBytes: 100, maximumTotalBytes: 100, maximumFileCount: 1)
+        )) { XCTAssertEqual($0 as? PackageDigestError, .tooManyFiles) }
     }
 
     private func request(installed: URL) throws -> UpdateRequest {

@@ -211,6 +211,12 @@
 "Changed" = "已更改";
 "Check for Updates" = "检查更新";
 "Check this Skill's confirmed source with local gh" = "使用本机 gh 检查此 Skill 已确认的来源";
+"Use Detected Source" = "使用检测到的来源";
+"This detected source will become the confirmed update source for this Skill." = "此检测到的来源将成为此 Skill 的已确认更新来源。";
+"Direct HTTPS package URL" = "直接 HTTPS 包 URL";
+"Use Package URL" = "使用包 URL";
+"Confirm Direct Package URL" = "确认直接包 URL";
+"Only this exact HTTPS URL will be stored as the confirmed update source." = "仅存储此精确 HTTPS URL 作为已确认的更新来源。";
 "Deleted" = "已删除";
 "File Changes" = "文件变更";
 "I understand that the local changes will be replaced." = "我了解本机更改将被替换。";
@@ -219,6 +225,11 @@
 "Local changes were detected after the indexed version." = "检测到索引版本之后产生的本机更改。";
 "No content changes" = "内容没有变化";
 "Reference" = "引用";
+"Selected Reference" = "选定引用";
+"Resolved Commit" = "解析后的提交";
+"Branch" = "分支";
+"Tag" = "标签";
+"Commit" = "提交";
 "Review Skill Update" = "审阅 Skill 更新";
 "Skill Update Failed" = "Skill 更新失败";
 "The downloaded Skill package changed before installation." = "下载的 Skill 包在安装前发生了变化。";
@@ -226,5 +237,7 @@
 "The GitHub update command failed." = "GitHub 更新命令执行失败。";
 "The update source or GitHub CLI is unavailable." = "更新来源或 GitHub CLI 不可用。";
 "The update target is not authorized." = "更新目标未获授权。";
+"The update source is invalid or cannot be verified." = "更新来源无效或无法验证。";
 "This Skill does not have a confirmed update source and indexed digest." = "此 Skill 没有已确认的更新来源和索引摘要。";
 "This update confirmation is no longer valid." = "此更新确认已失效。";
+"diagnostic.digestUnavailable" = "Skill 包超过安全限制，无法生成内容摘要";

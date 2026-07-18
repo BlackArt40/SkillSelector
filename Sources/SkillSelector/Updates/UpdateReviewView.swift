@@ -37,8 +37,13 @@ struct UpdateReviewView: View {
                     detailSection(L10n.string("Source")) {
                         labeledValue(L10n.string("Update Source"), proposal.source.binding)
                         labeledValue(
-                            L10n.string("Reference"),
-                            proposal.resolvedReference ?? proposal.source.reference?.value ?? L10n.string("Not available")
+                            L10n.string("Selected Reference"),
+                            proposal.source.reference.map(referenceLabel) ?? L10n.string("Not available")
+                        )
+                        labeledValue(
+                            L10n.string("Resolved Commit"),
+                            proposal.resolvedReference ?? L10n.string("Not available"),
+                            monospaced: true
                         )
                         labeledValue(L10n.string("Content Digest"), proposal.remoteDigest.value, monospaced: true)
                     }
@@ -179,6 +184,14 @@ struct UpdateReviewView: View {
         case .added: L10n.string("Added")
         case .changed: L10n.string("Changed")
         case .deleted: L10n.string("Deleted")
+        }
+    }
+
+    private func referenceLabel(_ reference: UpdateReference) -> String {
+        switch reference {
+        case .branch(let value): "\(L10n.string("Branch")): \(value)"
+        case .tag(let value): "\(L10n.string("Tag")): \(value)"
+        case .commit(let value): "\(L10n.string("Commit")): \(value)"
         }
     }
 }

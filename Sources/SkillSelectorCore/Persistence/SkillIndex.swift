@@ -178,6 +178,8 @@ public final class SkillIndex {
         }
         record.agentIDsByRootData = try encode(associations, path: record.path)
         record.entryFilename = scanned.entryFilename
+        record.discoveredSourceBindingsData = (try? encoder.encode(scanned.discoveredSourceBindings))
+            ?? Data("[]".utf8)
         record.parseDiagnosticsData = (try? encoder.encode(scanned.document.issues)) ?? Data()
     }
 
@@ -204,7 +206,11 @@ public final class SkillIndex {
             parseDiagnostics: (try? decoder.decode([ParseIssue].self, from: record.parseDiagnosticsData)) ?? [],
             unavailableDiagnostic: record.unavailableDiagnosticData.flatMap {
                 try? decoder.decode(StructuredDiagnostic.self, from: $0)
-            }
+            },
+            discoveredSourceBindings: (try? decoder.decode(
+                [String].self,
+                from: record.discoveredSourceBindingsData
+            )) ?? []
         )
     }
 

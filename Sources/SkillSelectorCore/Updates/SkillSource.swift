@@ -35,10 +35,29 @@ public enum UpdateReference: Codable, Hashable, Sendable {
     }
 }
 
-public enum SkillSourceCandidate: Hashable, Sendable {
+public enum SkillSourceCandidate: Codable, Hashable, Sendable {
     case github(repository: String, subdirectory: String, reference: UpdateReference)
     case directPackage(URL)
     case nameOnly(String)
+}
+
+public struct SkillSourceDiscovery: Hashable, Sendable {
+    public init() {}
+
+    public func candidates(
+        for installationURL: URL,
+        document: ParsedSkillDocument
+    ) -> [SkillSource] {
+        var result: [SkillSource] = []
+        if let source = try? SkillSource.embeddedMetadata(document: document) {
+            result.append(source)
+        }
+        if let source = try? SkillSource.containingGitRepository(for: installationURL) {
+            result.append(source)
+        }
+        var seen = Set<String>()
+        return result.filter { seen.insert($0.binding).inserted }
+    }
 }
 
 public enum SkillSourceKind: String, Codable, Hashable, Sendable {
@@ -57,7 +76,8 @@ public struct SkillSource: Codable, Hashable, Sendable {
     public var binding: String {
         switch kind {
         case .github:
-            return "github:\(repository!):\(subdirectory ?? ".")"
+            let reference = self.reference ?? .branch("HEAD")
+            return "github:\(repository!):\(subdirectory ?? "."):\(reference.bindingKind):\(reference.value)"
         case .directPackage:
             return "url:\(directPackageURL!.absoluteString)"
         }
@@ -158,11 +178,20 @@ public struct SkillSource: Codable, Hashable, Sendable {
         guard binding.hasPrefix("github:") else { throw SkillSourceError.invalidBinding }
         let remainder = String(binding.dropFirst("github:".count))
         let parts = remainder.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
-        guard parts.count == 2 else { throw SkillSourceError.invalidBinding }
+        guard parts.count == 2 || parts.count == 4 else { throw SkillSourceError.invalidBinding }
+        let parsedReference: UpdateReference
+        if parts.count == 2 {
+            parsedReference = reference
+        } else {
+            guard let kind = UpdateReference.BindingKind(rawValue: parts[2]) else {
+                throw SkillSourceError.invalidBinding
+            }
+            parsedReference = try UpdateReference(bindingKind: kind, value: parts[3])
+        }
         return try github(
             repository: parts[0],
             subdirectory: parts[1],
-            reference: reference,
+            reference: parsedReference,
             provenance: .rememberedBinding
         )
     }
@@ -185,6 +214,68 @@ public struct SkillSource: Codable, Hashable, Sendable {
 
     public static func nameOnlyCandidate(_ name: String) -> SkillSource? { nil }
 
+    public static func embeddedMetadata(document: ParsedSkillDocument) throws -> SkillSource? {
+        let fields = document.fields
+        guard let raw = fields["source"] ?? fields["source_url"] ?? fields["repository"],
+              !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        let reference: UpdateReference
+        if let commit = fields["commit"] {
+            reference = .commit(commit)
+        } else if let tag = fields["tag"] {
+            reference = .tag(tag)
+        } else {
+            reference = .branch(fields["branch"] ?? fields["ref"] ?? "main")
+        }
+        if raw.hasPrefix("github:") {
+            return try remembered(binding: raw, reference: reference)
+        }
+        guard let url = URL(string: raw) else { throw SkillSourceError.invalidBinding }
+        if url.host?.lowercased() == "github.com" {
+            var components = url.path.split(separator: "/").map(String.init)
+            guard components.count >= 2 else { throw SkillSourceError.invalidRepository }
+            if components[1].hasSuffix(".git") { components[1].removeLast(4) }
+            let subdirectory = fields["subdirectory"]
+                ?? (components.count > 2 ? components.dropFirst(2).joined(separator: "/") : ".")
+            return try github(
+                repository: components.prefix(2).joined(separator: "/"),
+                subdirectory: subdirectory,
+                reference: reference,
+                provenance: .embeddedMetadata
+            )
+        }
+        return try directPackage(url, provenance: .embeddedMetadata)
+    }
+
+    public static func containingGitRepository(for installationURL: URL) throws -> SkillSource? {
+        var directory = installationURL.standardizedFileURL
+        if (try? directory.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) != true {
+            directory.deleteLastPathComponent()
+        }
+        while directory.pathComponents.count > 1 {
+            let gitDirectory = directory.appending(path: ".git")
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: gitDirectory.path, isDirectory: &isDirectory) else {
+                directory.deleteLastPathComponent()
+                continue
+            }
+            let config = gitDirectory.appending(path: "config")
+            guard let text = try? String(contentsOf: config, encoding: .utf8),
+                  let remote = gitRemoteURL(in: text) else { return nil }
+            let relative = installationURL.standardizedFileURL.path
+                .dropFirst(directory.path.count)
+                .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            let branch = gitBranch(in: gitDirectory) ?? "main"
+            return try containingGitRemote(
+                remote: remote,
+                relativePath: relative.isEmpty ? "." : String(relative),
+                reference: .branch(branch)
+            )
+        }
+        return nil
+    }
+
     private static func validate(
         repository: String,
         subdirectory: String,
@@ -197,7 +288,8 @@ public struct SkillSource: Codable, Hashable, Sendable {
         }
         guard validRelativePath(subdirectory) else { throw SkillSourceError.invalidSubdirectory }
         guard validArgumentComponent(reference.value),
-              !reference.value.contains("..") else {
+              !reference.value.contains(".."),
+              !reference.value.contains(":") else {
             throw SkillSourceError.invalidReference
         }
     }
@@ -220,5 +312,89 @@ public struct SkillSource: Codable, Hashable, Sendable {
             && value.utf8.count <= 512
             && !value.hasPrefix("-")
             && value.unicodeScalars.allSatisfy { !CharacterSet.controlCharacters.contains($0) }
+    }
+}
+
+private func gitRemoteURL(in config: String) -> String? {
+    var inOrigin = false
+    for line in config.split(whereSeparator: \.isNewline) {
+        let value = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        if value.hasPrefix("[remote \"origin\"]") {
+            inOrigin = true
+            continue
+        }
+        if value.hasPrefix("[") { inOrigin = false }
+        if inOrigin, value.hasPrefix("url =") {
+            return value.dropFirst("url =".count).trimmingCharacters(in: .whitespaces)
+        }
+    }
+    return nil
+}
+
+private func gitBranch(in gitDirectory: URL) -> String? {
+    guard let head = try? String(contentsOf: gitDirectory.appending(path: "HEAD"), encoding: .utf8),
+          head.hasPrefix("ref: refs/heads/") else { return nil }
+    return String(head.dropFirst("ref: refs/heads/".count)).trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+extension SkillSourceCandidate {
+    private enum CodingKeys: String, CodingKey { case kind, repository, subdirectory, reference, url, name }
+    private enum Kind: String, Codable { case github, directPackage, nameOnly }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .github(let repository, let subdirectory, let reference):
+            try container.encode(Kind.github, forKey: .kind)
+            try container.encode(repository, forKey: .repository)
+            try container.encode(subdirectory, forKey: .subdirectory)
+            try container.encode(reference, forKey: .reference)
+        case .directPackage(let url):
+            try container.encode(Kind.directPackage, forKey: .kind)
+            try container.encode(url, forKey: .url)
+        case .nameOnly(let name):
+            try container.encode(Kind.nameOnly, forKey: .kind)
+            try container.encode(name, forKey: .name)
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        switch try container.decode(Kind.self, forKey: .kind) {
+        case .github:
+            self = .github(
+                repository: try container.decode(String.self, forKey: .repository),
+                subdirectory: try container.decode(String.self, forKey: .subdirectory),
+                reference: try container.decode(UpdateReference.self, forKey: .reference)
+            )
+        case .directPackage:
+            self = .directPackage(try container.decode(URL.self, forKey: .url))
+        case .nameOnly:
+            self = .nameOnly(try container.decode(String.self, forKey: .name))
+        }
+    }
+}
+
+private extension UpdateReference {
+    enum BindingKind: String {
+        case branch
+        case tag
+        case commit
+    }
+
+    var bindingKind: BindingKind {
+        switch self {
+        case .branch: .branch
+        case .tag: .tag
+        case .commit: .commit
+        }
+    }
+
+    init(bindingKind: BindingKind, value: String) throws {
+        switch bindingKind {
+        case .branch: self = .branch(value)
+        case .tag: self = .tag(value)
+        case .commit: self = .commit(value)
+        }
     }
 }
