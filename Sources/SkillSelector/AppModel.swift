@@ -46,6 +46,7 @@ final class AppModel {
     private let defaults: UserDefaults
     @ObservationIgnored private var activeRefresh: (id: UUID, task: Task<Void, Never>)?
     @ObservationIgnored private var pendingOperationContext: PendingOperationContext?
+    @ObservationIgnored private var pendingUpdateContext: PendingUpdateContext?
     @ObservationIgnored private var remainingEnrichmentGroups: [EnrichmentCandidateGroup] = []
     @ObservationIgnored private var enrichmentTotalCount = 0
     @ObservationIgnored private var completedEnrichmentCount = 0
@@ -62,6 +63,9 @@ final class AppModel {
     private(set) var isEnriching = false
     var pendingEnrichmentGroup: EnrichmentCandidateGroup?
     var enrichmentError: String?
+    var pendingUpdateProposal: UpdateProposal?
+    var updateError: String?
+    private(set) var isUpdating = false
     var enrichMissingDescriptionsAfterRefresh: Bool {
         didSet {
             defaults.set(
@@ -203,6 +207,8 @@ final class AppModel {
             || pendingOperationPlan != nil
             || isEnriching
             || pendingEnrichmentGroup != nil
+            || isUpdating
+            || pendingUpdateProposal != nil
             || activeRefresh != nil
     }
 
@@ -211,6 +217,8 @@ final class AppModel {
             || pendingEnrichmentGroup != nil
             || isOperating
             || pendingOperationPlan != nil
+            || isUpdating
+            || pendingUpdateProposal != nil
             || activeRefresh != nil
     }
 
@@ -223,7 +231,9 @@ final class AppModel {
         guard !isEnriching,
               pendingEnrichmentGroup == nil,
               !isOperating,
-              pendingOperationPlan == nil else {
+              pendingOperationPlan == nil,
+              !isUpdating,
+              pendingUpdateProposal == nil else {
             return
         }
         await performEnrichment(for: skills)
@@ -260,6 +270,132 @@ final class AppModel {
         remainingEnrichmentGroups.removeAll()
         enrichmentTotalCount = 0
         completedEnrichmentCount = 0
+    }
+
+    func checkForUpdate(_ skill: SkillSnapshot) async {
+        await waitForActiveRefresh()
+        guard pendingUpdateProposal == nil,
+              !isUpdating,
+              !isOperating,
+              pendingOperationPlan == nil,
+              !isEnriching,
+              pendingEnrichmentGroup == nil else {
+            return
+        }
+        guard let binding = skill.sourceBinding,
+              let digest = skill.digest,
+              let bookmarks else {
+            updateError = L10n.string("This Skill does not have a confirmed update source and indexed digest.")
+            return
+        }
+
+        do {
+            let source = try SkillSource.remembered(binding: binding)
+            let documentAccess = try resolveDocumentAccess(for: skill)
+            var transfersDocumentLeases = false
+            defer {
+                if !transfersDocumentLeases {
+                    documentAccess.leases.forEach { $0.close() }
+                }
+            }
+            let authorizationSnapshot = try bookmarks.roots()
+            let ghAccess: ToolAccess?
+            let fetcher: LiveSkillPackageFetcher
+            if source.kind == .github {
+                guard let homeRoot = authorizationSnapshot.first(where: { $0.kind == .home }) else {
+                    throw AppModelOperationError.noAuthorizedRoot
+                }
+                let homeAccess = try bookmarks.resolve(id: homeRoot.id)
+                let ghResult = await toolLocator.openAccess(.gh, authorizedHomeAccess: homeAccess)
+                guard let access = ghResult.access else {
+                    throw SkillUpdateError.unsupportedSource
+                }
+                ghAccess = access
+                fetcher = LiveSkillPackageFetcher(toolAccess: access, runner: commandRunner)
+            } else {
+                ghAccess = nil
+                fetcher = LiveSkillPackageFetcher()
+            }
+            var transfersToolAccess = false
+            defer {
+                if !transfersToolAccess { ghAccess?.close() }
+            }
+            let updater = SkillUpdater(
+                fetcher: fetcher,
+                aliasesProvider: { [snapshots] in
+                    snapshots.map {
+                        IndexedSkillAlias(
+                            path: $0.path,
+                            resolvedTarget: $0.resolvedTarget,
+                            rootIDs: $0.rootIDs
+                        )
+                    }
+                }
+            )
+            let proposal = try await updater.check(UpdateRequest(
+                installationURL: documentAccess.request.installationURL,
+                resolvedTargetURL: documentAccess.request.resolvedTargetURL,
+                entryFilename: skill.entryFilename,
+                requiredName: skill.name,
+                source: source,
+                indexedDigest: PackageDigest(value: digest),
+                authorizedRootURLs: documentAccess.request.authorizedRootURLs,
+                refreshRootIDs: operationAccessRootIDs(for: skill, destinationRootURL: nil)
+            ))
+            pendingUpdateContext = PendingUpdateContext(
+                updater: updater,
+                rootIDs: operationAccessRootIDs(for: skill, destinationRootURL: nil),
+                authorizedRoots: authorizationSnapshot,
+                leases: documentAccess.leases,
+                toolAccess: ghAccess
+            )
+            pendingUpdateProposal = proposal
+            transfersDocumentLeases = true
+            transfersToolAccess = true
+            updateError = nil
+        } catch {
+            updateError = localizedUpdateError(error)
+        }
+    }
+
+    func cancelPendingUpdate() {
+        guard !isUpdating else { return }
+        closePendingUpdate()
+    }
+
+    func applyPendingUpdate(allowLocalChanges: Bool) async {
+        guard let proposal = pendingUpdateProposal,
+              let context = pendingUpdateContext,
+              !isUpdating else { return }
+        isUpdating = true
+        defer { isUpdating = false }
+        do {
+            guard let bookmarks,
+                  try bookmarks.roots() == context.authorizedRoots else {
+                throw SkillFileOperatorError.authorizationChanged
+            }
+            let result = try await context.updater.apply(
+                proposal.confirmed(allowLocalChanges: allowLocalChanges)
+            )
+            switch result {
+            case .confirmationRequired:
+                return
+            case .localChangesRequireConfirmation(let warning):
+                pendingUpdateProposal = warning
+            case .updated:
+                let summary = try await refresher.refresh(
+                    .manual,
+                    rootIDs: Set(context.rootIDs)
+                )
+                try reloadSnapshot()
+                refreshState = .finished(summary)
+                updateError = nil
+                closePendingUpdate()
+            }
+        } catch {
+            updateError = localizedUpdateError(error)
+            closePendingUpdate()
+        }
     }
 
     func planFileOperation(
@@ -729,10 +865,25 @@ final class AppModel {
         let leases: [AccessLease]
     }
 
+    private struct PendingUpdateContext {
+        let updater: SkillUpdater
+        let rootIDs: [String]
+        let authorizedRoots: [AuthorizedRootSnapshot]
+        let leases: [AccessLease]
+        let toolAccess: ToolAccess?
+    }
+
     private func closePendingOperation() {
         pendingOperationContext?.leases.forEach { $0.close() }
         pendingOperationContext = nil
         pendingOperationPlan = nil
+    }
+
+    private func closePendingUpdate() {
+        pendingUpdateContext?.leases.forEach { $0.close() }
+        pendingUpdateContext?.toolAccess?.close()
+        pendingUpdateContext = nil
+        pendingUpdateProposal = nil
     }
 
     private func operationAccessRootIDs(
@@ -838,6 +989,30 @@ final class AppModel {
             rollback
         )
         }
+    }
+
+    private func localizedUpdateError(_ error: Error) -> String {
+        if error is SkillFileOperatorError {
+            return localizedOperationError(error)
+        }
+        if let error = error as? SkillUpdateError {
+            return switch error {
+            case .unsupportedSource: L10n.string("The update source or GitHub CLI is unavailable.")
+            case .unauthorizedInstallation: L10n.string("The update target is not authorized.")
+            case .resolvedTargetMismatch: L10n.string("The symbolic link target changed.")
+            case .commandFailed: L10n.string("The GitHub update command failed.")
+            case .invalidRemoteResponse, .truncatedRepositoryTree, .remotePackageTooLarge:
+                L10n.string("The downloaded Skill package is invalid.")
+            case .proposalExpired, .proposalAlreadyConsumed:
+                L10n.string("This update confirmation is no longer valid.")
+            case .stagedPackageChanged:
+                L10n.string("The downloaded Skill package changed before installation.")
+            }
+        }
+        if error is PackageValidationError {
+            return L10n.string("The downloaded Skill package is invalid.")
+        }
+        return String(describing: error)
     }
 }
 

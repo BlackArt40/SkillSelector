@@ -378,7 +378,10 @@ public struct SkillScanner: Sendable {
             document: document,
             agentIDsByRoot: [rootID: agentIDs],
             entryFilename: entryFilename,
-            entryModificationDate: modificationDate
+            entryModificationDate: modificationDate,
+            digest: try? PackageDigest.compute(
+                at: resolvedTarget ?? installationURL
+            ).value
         )
     }
 

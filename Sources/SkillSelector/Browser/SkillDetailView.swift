@@ -86,6 +86,19 @@ struct SkillDetailView: View {
                         if let digest = skill.digest {
                             labeledValue(L10n.string("Content Digest"), value: digest, monospaced: true)
                         }
+                        Button {
+                            Task { await model.checkForUpdate(skill) }
+                        } label: {
+                            Label(L10n.string("Check for Updates"), systemImage: "arrow.triangle.2.circlepath")
+                        }
+                        .controlSize(.small)
+                        .disabled(
+                            model.fileOperationCommandsDisabled
+                                || skill.sourceBinding == nil
+                                || skill.digest == nil
+                                || skill.availability != .available
+                        )
+                        .help(L10n.string("Check this Skill's confirmed source with local gh"))
                     }
                     detailSection(L10n.string("Trusted Metadata")) {
                         Button {

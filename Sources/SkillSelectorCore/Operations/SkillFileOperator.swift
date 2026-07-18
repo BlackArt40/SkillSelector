@@ -187,6 +187,21 @@ public final class SkillFileOperator: @unchecked Sendable {
         )
     }
 
+    public convenience init(
+        registryProvider: @escaping () -> AgentRegistry,
+        authorizedRootsProvider: @escaping () -> [AuthorizedRootSnapshot],
+        indexedAliasesProvider: @escaping () -> [IndexedSkillAlias],
+        trash: any FileOperationTrashing
+    ) {
+        self.init(
+            registryProvider: registryProvider,
+            authorizedRootsProvider: authorizedRootsProvider,
+            indexedAliasesProvider: indexedAliasesProvider,
+            fileSystem: .live,
+            trash: trash
+        )
+    }
+
     init(
         registryProvider: @escaping () -> AgentRegistry,
         authorizedRootsProvider: @escaping () -> [AuthorizedRootSnapshot],

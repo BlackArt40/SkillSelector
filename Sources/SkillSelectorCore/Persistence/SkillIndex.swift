@@ -167,6 +167,7 @@ public final class SkillIndex {
             ?? scanned.document.title
             ?? scanned.path.lastPathComponent
         record.localDescription = scanned.document.description
+        record.digest = scanned.digest
         record.modificationDate = scanned.entryModificationDate
         record.availabilityRawValue = SkillAvailability.available.rawValue
         record.unavailableReason = nil

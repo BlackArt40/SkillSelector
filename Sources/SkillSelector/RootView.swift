@@ -139,6 +139,21 @@ struct RootView: View {
             )
             .id(group.id)
         }
+        .sheet(item: pendingUpdateBinding) { proposal in
+            UpdateReviewView(
+                proposal: proposal,
+                isUpdating: model.isUpdating,
+                onCancel: model.cancelPendingUpdate,
+                onConfirm: { allowLocalChanges in
+                    Task {
+                        await model.applyPendingUpdate(
+                            allowLocalChanges: allowLocalChanges
+                        )
+                    }
+                }
+            )
+            .id(proposal.id)
+        }
         .alert(
             L10n.string("File Operation Failed"),
             isPresented: operationErrorBinding
@@ -154,6 +169,14 @@ struct RootView: View {
             Button(L10n.string("OK")) { model.enrichmentError = nil }
         } message: {
             Text(verbatim: model.enrichmentError ?? "")
+        }
+        .alert(
+            L10n.string("Skill Update Failed"),
+            isPresented: updateErrorBinding
+        ) {
+            Button(L10n.string("OK")) { model.updateError = nil }
+        } message: {
+            Text(verbatim: model.updateError ?? "")
         }
     }
 
@@ -195,6 +218,24 @@ struct RootView: View {
             get: { model.enrichmentError != nil },
             set: { isPresented in
                 if !isPresented { model.enrichmentError = nil }
+            }
+        )
+    }
+
+    private var pendingUpdateBinding: Binding<UpdateProposal?> {
+        Binding(
+            get: { model.pendingUpdateProposal },
+            set: { value in
+                if value == nil { model.cancelPendingUpdate() }
+            }
+        )
+    }
+
+    private var updateErrorBinding: Binding<Bool> {
+        Binding(
+            get: { model.updateError != nil },
+            set: { isPresented in
+                if !isPresented { model.updateError = nil }
             }
         )
     }
