@@ -41,7 +41,7 @@ final class AppModel {
     private let index: SkillIndex
     private let bookmarks: BookmarkStore?
     private var registry: AgentRegistry
-    private let builtInAgentDefinitions: [AgentDefinition]
+    private let builtInRegistry: AgentRegistry
     private let customAgentStore: any AgentDefinitionStoring
     private let toolLocator: ToolLocator
     private let commandRunner: any CommandRunning
@@ -97,7 +97,7 @@ final class AppModel {
         self.refresher = refresher
         self.index = index
         self.bookmarks = bookmarks
-        builtInAgentDefinitions = registry.definitions
+        builtInRegistry = registry
         self.toolLocator = toolLocator
         self.commandRunner = commandRunner
         self.defaults = defaults
@@ -989,10 +989,9 @@ final class AppModel {
 
     private func reloadAgentDefinitions() throws {
         customAgentDefinitions = try customAgentStore.definitions()
-        registry = AgentRegistry(
-            definitions: builtInAgentDefinitions,
-            customDefinitions: customAgentDefinitions
-        )
+        var effectiveRegistry = builtInRegistry
+        effectiveRegistry.merge(customDefinitions: customAgentDefinitions)
+        registry = effectiveRegistry
         agentDefinitions = registry.definitions
         refresher.updateRegistry(registry)
     }

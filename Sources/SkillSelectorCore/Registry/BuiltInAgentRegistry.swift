@@ -2,7 +2,7 @@ import Foundation
 
 public enum BuiltInAgentRegistry {
     public static func make() -> AgentRegistry {
-        AgentRegistry(definitions: [
+        let definitions = [
             AgentDefinition(
                 id: "claude-code",
                 displayName: "Claude Code",
@@ -13,7 +13,7 @@ public enum BuiltInAgentRegistry {
                 id: "codex",
                 displayName: "Codex",
                 globalRoots: ["~/.codex/skills"],
-                projectPatterns: [".codex/skills", ".agents/skills"]
+                projectPatterns: [".codex/skills"]
             ),
             AgentDefinition(
                 id: "qoder",
@@ -31,51 +31,57 @@ public enum BuiltInAgentRegistry {
                 id: "opencode",
                 displayName: "OpenCode",
                 globalRoots: ["~/.config/opencode/skills", "~/.opencode/skills"],
-                projectPatterns: [".opencode/skills", ".agents/skills"]
+                projectPatterns: [".opencode/skills"]
             ),
             AgentDefinition(
                 id: "cursor",
                 displayName: "Cursor",
-                globalRoots: ["~/.cursor/skills", "~/.agents/skills", "~/.claude/skills", "~/.codex/skills"],
-                projectPatterns: [".cursor/skills", ".agents/skills", ".claude/skills", ".codex/skills"]
+                globalRoots: ["~/.cursor/skills"],
+                projectPatterns: [".cursor/skills"]
             ),
             AgentDefinition(
                 id: "kilo-code",
                 displayName: "Kilo Code",
                 globalRoots: ["~/.kilo/skills"],
-                projectPatterns: [".kilo/skills", ".agents/skills"]
+                projectPatterns: [".kilo/skills"]
             ),
             AgentDefinition(
                 id: "cline",
                 displayName: "Cline",
-                globalRoots: ["~/.cline/skills", "~/.agents/skills"],
-                projectPatterns: [".cline/skills", ".clinerules/skills", ".claude/skills", ".agents/skills"]
+                globalRoots: ["~/.cline/skills"],
+                projectPatterns: [".cline/skills", ".clinerules/skills"]
             ),
             AgentDefinition(
                 id: "roo-code",
                 displayName: "Roo Code",
-                globalRoots: ["~/.roo/skills", "~/.agents/skills", "~/.roo/skills-{modeSlug}", "~/.agents/skills-{modeSlug}"],
-                projectPatterns: [".roo/skills", ".agents/skills", ".roo/skills-{modeSlug}", ".agents/skills-{modeSlug}"],
+                globalRoots: ["~/.roo/skills", "~/.roo/skills-{modeSlug}"],
+                projectPatterns: [".roo/skills", ".roo/skills-{modeSlug}"],
                 isLegacy: true
             ),
             AgentDefinition(
                 id: "windsurf",
                 displayName: "Windsurf",
-                globalRoots: ["~/.codeium/windsurf/skills", "~/.agents/skills", "~/.claude/skills", "/Library/Application Support/Windsurf/skills"],
-                projectPatterns: [".windsurf/skills", ".agents/skills", ".claude/skills"]
+                globalRoots: ["~/.codeium/windsurf/skills", "/Library/Application Support/Windsurf/skills"],
+                projectPatterns: [".windsurf/skills"]
             ),
             AgentDefinition(
                 id: "gemini-cli",
                 displayName: "Gemini CLI",
-                globalRoots: ["~/.gemini/skills", "~/.agents/skills"],
-                projectPatterns: [".gemini/skills", ".agents/skills"]
+                globalRoots: ["~/.gemini/skills"],
+                projectPatterns: [".gemini/skills"]
             ),
             AgentDefinition(
                 id: "github-copilot",
                 displayName: "GitHub Copilot",
-                globalRoots: ["~/.copilot/skills", "~/.claude/skills", "~/.agents/skills"],
-                projectPatterns: [".github/skills", ".claude/skills", ".agents/skills"]
+                globalRoots: ["~/.copilot/skills"],
+                projectPatterns: [".github/skills"]
             ),
-        ])
+        ]
+
+        return AgentRegistry(
+            definitions: definitions,
+            sharedGlobalRoots: ["~/.agents/skills", "~/.agents/skills-{modeSlug}"],
+            sharedProjectPatterns: [".agents/skills", ".agents/skills-{modeSlug}"]
+        )
     }
 }
