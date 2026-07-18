@@ -68,6 +68,10 @@ public struct Redactor: Sendable {
                 pendingRedaction = .header
                 continue
             }
+            if let inlineHeader = redactInlineHeader(argument) {
+                result.append(inlineHeader)
+                continue
+            }
             if isSensitiveFlag(argument) {
                 result.append(argument)
                 pendingRedaction = .secret
@@ -98,7 +102,8 @@ public struct Redactor: Sendable {
 
     private func replacePath(_ path: String, with replacement: String, in value: String) -> String {
         guard !path.isEmpty else { return value }
-        let pattern = NSRegularExpression.escapedPattern(for: path) + #"(?=$|/|[\s,;:)\]}])"#
+        let pattern = NSRegularExpression.escapedPattern(for: path)
+            + #"(?=$|/|[\s,;:.!?\)\]\}'\"“”‘’])"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return value }
         let range = NSRange(value.startIndex..<value.endIndex, in: value)
         return regex.stringByReplacingMatches(
@@ -146,17 +151,20 @@ public struct Redactor: Sendable {
     }
 
     private func redactHeader(_ argument: String) -> String {
-        guard let colon = argument.firstIndex(of: ":") else { return redact(argument) }
-        let name = argument[..<colon]
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased()
-        let sensitiveNames = Set([
-            "authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key",
-        ])
-        guard sensitiveNames.contains(name) else { return redact(argument) }
+        guard let colon = argument.firstIndex(of: ":") else { return Self.redactedValue }
         let valueStart = argument.index(after: colon)
         let whitespace = argument[valueStart...].prefix { $0.isWhitespace }
         return String(argument[...colon]) + whitespace + Self.redactedValue
+    }
+
+    private func redactInlineHeader(_ argument: String) -> String? {
+        if argument.hasPrefix("--header=") {
+            let header = String(argument.dropFirst("--header=".count))
+            return "--header=" + redactHeader(header)
+        }
+        guard argument.hasPrefix("-H"), argument != "-H" else { return nil }
+        let header = String(argument.dropFirst(2))
+        return "-H" + redactHeader(header)
     }
 
     private func isSensitiveFlag(_ argument: String) -> Bool {

@@ -205,11 +205,11 @@ final class AppModel {
             authorizedRoots = try bookmarks.roots()
             rootsByID = Dictionary(uniqueKeysWithValues: authorizedRoots.map { ($0.id, $0) })
             await refresh(.manual)
-            diagnosticStore.record(
+            recordPathDiagnostic(
                 category: .persistence,
                 code: "ROOT_AUTHORIZED",
-                message: "Authorized \(url.path)",
-                redactor: currentRedactor()
+                action: "Authorized",
+                path: url.path
             )
         } catch {
             refreshState = .failed(String(describing: error))
@@ -231,11 +231,12 @@ final class AppModel {
             ))
             try bookmarks.revoke(id: root.id)
             try reloadSnapshot()
-            diagnosticStore.record(
+            recordPathDiagnostic(
                 category: .persistence,
                 code: "ROOT_REVOKED",
-                message: "Revoked \(root.url.path)",
-                redactor: currentRedactor(additionalRoots: [root])
+                action: "Revoked",
+                path: root.url.path,
+                additionalRoots: [root]
             )
         } catch {
             refreshState = .failed(currentRedactor().redact(String(describing: error)))
@@ -1006,6 +1007,23 @@ final class AppModel {
         return Redactor(
             homeDirectory: home,
             projectDirectories: roots.filter { $0.kind == .project }.map(\.url)
+        )
+    }
+
+    private func recordPathDiagnostic(
+        category: AppLogCategory,
+        code: String,
+        action: String,
+        path: String,
+        additionalRoots: [AuthorizedRootSnapshot] = []
+    ) {
+        let redactor = currentRedactor(additionalRoots: additionalRoots)
+        let redactedPath = redactor.redact(path)
+        diagnosticStore.record(
+            category: category,
+            code: code,
+            message: "\(action) \(redactedPath)",
+            redactor: redactor
         )
     }
 

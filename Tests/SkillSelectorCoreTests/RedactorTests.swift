@@ -28,6 +28,15 @@ final class RedactorTests: XCTestCase {
         )
     }
 
+    func testRedactsConfiguredPathsInsideQuotesAndCommonPunctuation() {
+        let input = "ASCII \"/Users/alice/.codex/skills\", project '/Users/alice/Work/Secret Project/.agents'; exact home \u{2018}/Users/alice\u{2019}, exact project \u{201C}/Users/alice/Work/Secret Project\u{201D}!"
+
+        XCTAssertEqual(
+            redactor.redact(input),
+            "ASCII \"<home>/.codex/skills\", project '<project:1>/.agents'; exact home \u{2018}<home>\u{2019}, exact project \u{201C}<project:1>\u{201D}!"
+        )
+    }
+
     func testRedactsSensitiveEnvironmentByKeyAndTokenShape() {
         XCTAssertEqual(
             redactor.redact(environment: [
@@ -66,17 +75,31 @@ final class RedactorTests: XCTestCase {
         )
     }
 
-    func testCommandHeaderRedactionPreservesNonSecretHeaders() {
+    func testRedactsSeparatedAndInlineHeaderArgumentsConservatively() {
+        let arguments = [
+            "api",
+            "-H", "Accept: application/json",
+            "--header", "Cookie: session=top-secret",
+            "--header=Cookie: session=secret",
+            "-HAuthorization: Bearer top-secret-token",
+            "--header=X-Trace-ID: readable-value",
+        ]
+
+        let redacted = redactor.redact(arguments: arguments)
+
         XCTAssertEqual(
-            redactor.redact(arguments: [
-                "api", "-H", "Accept: application/json",
-                "--header", "Cookie: session=top-secret",
-            ]),
+            redacted,
             [
-                "api", "-H", "Accept: application/json",
+                "api",
+                "-H", "Accept: <redacted>",
                 "--header", "Cookie: <redacted>",
+                "--header=Cookie: <redacted>",
+                "-HAuthorization: <redacted>",
+                "--header=X-Trace-ID: <redacted>",
             ]
         )
+        XCTAssertFalse(redacted.joined(separator: " ").contains("session=secret"))
+        XCTAssertFalse(redacted.joined(separator: " ").contains("top-secret-token"))
     }
 
     func testRedactsInlineAuthorizationButPreservesAgentNamesAndErrorCodes() {
