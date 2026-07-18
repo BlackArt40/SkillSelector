@@ -207,10 +207,9 @@ public final class SkillIndex {
             unavailableDiagnostic: record.unavailableDiagnosticData.flatMap {
                 try? decoder.decode(StructuredDiagnostic.self, from: $0)
             },
-            discoveredSourceBindings: (try? decoder.decode(
-                [String].self,
-                from: record.discoveredSourceBindingsData
-            )) ?? []
+            discoveredSourceBindings: record.discoveredSourceBindingsData.flatMap {
+                try? decoder.decode([String].self, from: $0)
+            } ?? []
         )
     }
 

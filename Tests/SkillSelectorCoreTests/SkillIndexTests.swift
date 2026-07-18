@@ -212,6 +212,22 @@ final class SkillIndexTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode([String: Set<String>].self, from: try XCTUnwrap(saved?.agentIDsByRootData)), [:])
     }
 
+    func testLegacyNilDiscoveredSourceBindingsDecodeAsEmpty() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let record = SkillRecord(
+            path: "/tmp/legacy",
+            name: "legacy",
+            discoveredSourceBindingsData: nil,
+            entryFilename: "SKILL.md"
+        )
+        context.insert(record)
+        try context.save()
+
+        let snapshot = try XCTUnwrap(try SkillIndex(container: container).skills().first)
+        XCTAssertEqual(snapshot.discoveredSourceBindings, [])
+    }
+
     func testCorruptProvenanceFailsQueriesAndReconciliation() throws {
         let container = try makeContainer()
         let index = SkillIndex(container: container)

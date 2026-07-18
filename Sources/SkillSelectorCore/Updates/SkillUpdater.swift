@@ -497,42 +497,59 @@ public struct LiveSkillPackageFetcher: SkillPackageFetching {
             return PackageArchiveEntry(
                 path: relative,
                 kind: kind,
-                byteCount: item.size ?? 0
+                byteCount: item.size ?? 0,
+                // Tree responses do not include link bytes. Validate its actual target after every blob is downloaded.
+                symbolicLinkTarget: kind == .symbolicLink ? "." : nil
             )
         }
         try validator.validateArchiveEntries(archiveEntries)
-        try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+        struct DownloadedItem {
+            let item: TreeItem
+            let relativePath: String
+            let bytes: Data
+        }
+        var downloaded: [DownloadedItem] = []
         for (item, relative) in items.sorted(by: { $0.1 < $1.1 }) {
-            let output = destination.appending(path: relative)
             if item.type == "tree" {
-                try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
                 continue
             }
-            guard item.type == "blob" else { throw PackageValidationError.unsupportedItem(relative) }
+            guard item.type == "blob", let size = item.size, size >= 0,
+                  size < Int64(Int.max) else {
+                throw PackageValidationError.unsupportedItem(relative)
+            }
+            let bytes = try await runData([
+                "api", "repos/\(repository)/git/blobs/\(item.sha)",
+                "-H", "Accept: application/vnd.github.raw+json",
+            ], limit: max(1, Int(size) + 1))
+            downloaded.append(DownloadedItem(item: item, relativePath: relative, bytes: bytes))
+        }
+        let downloadedEntries = downloaded.map { downloaded -> PackageArchiveEntry in
+            PackageArchiveEntry(
+                path: downloaded.relativePath,
+                kind: downloaded.item.mode == "120000" ? .symbolicLink : .regularFile,
+                byteCount: Int64(downloaded.bytes.count),
+                symbolicLinkTarget: downloaded.item.mode == "120000"
+                    ? String(data: downloaded.bytes, encoding: .utf8)
+                    : nil
+            )
+        }
+        try validator.validateArchiveEntries(downloadedEntries)
+
+        try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+        for downloaded in downloaded {
+            let output = destination.appending(path: downloaded.relativePath)
             try FileManager.default.createDirectory(
                 at: output.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
-            let bytes = try await runData([
-                "api", "repos/\(repository)/git/blobs/\(item.sha)",
-                "-H", "Accept: application/vnd.github.raw+json",
-            ], limit: max(1, Int(item.size ?? 0) + 1))
-            if item.mode == "120000" {
-                guard let target = String(data: bytes, encoding: .utf8) else {
+            if downloaded.item.mode == "120000" {
+                guard let target = String(data: downloaded.bytes, encoding: .utf8) else {
                     throw SkillUpdateError.invalidRemoteResponse
                 }
-                try validator.validateArchiveEntries([
-                    PackageArchiveEntry(
-                        path: relative,
-                        kind: .symbolicLink,
-                        byteCount: Int64(bytes.count),
-                        symbolicLinkTarget: target
-                    ),
-                ])
                 try FileManager.default.createSymbolicLink(atPath: output.path, withDestinationPath: target)
             } else {
-                try bytes.write(to: output, options: .atomic)
-                if item.mode == "100755" {
+                try downloaded.bytes.write(to: output, options: .atomic)
+                if downloaded.item.mode == "100755" {
                     try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: output.path)
                 }
             }

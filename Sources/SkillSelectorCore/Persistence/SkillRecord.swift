@@ -21,7 +21,8 @@ public final class SkillRecord {
     public var unavailableReason: String?
     public var unavailableDiagnosticData: Data?
     public var sourceBinding: String?
-    public var discoveredSourceBindingsData: Data
+    // Optional preserves compatibility with stores created before source discovery existed.
+    public var discoveredSourceBindingsData: Data?
     public var agentIDsByRootData: Data
     public var entryFilename: String
     public var parseDiagnosticsData: Data
@@ -40,7 +41,7 @@ public final class SkillRecord {
         unavailableReason: String? = nil,
         unavailableDiagnosticData: Data? = nil,
         sourceBinding: String? = nil,
-        discoveredSourceBindingsData: Data = Data("[]".utf8),
+        discoveredSourceBindingsData: Data? = nil,
         agentIDsByRootData: Data = Data("{}".utf8),
         entryFilename: String,
         parseDiagnosticsData: Data = Data()

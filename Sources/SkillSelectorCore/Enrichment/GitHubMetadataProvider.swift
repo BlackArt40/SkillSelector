@@ -46,10 +46,12 @@ public struct GitHubMetadataProvider: MetadataProvider {
                   let searchURL = Self.githubURL(result.url) else {
                 continue
             }
+            let metadata = try await repositoryMetadata(repository)
             if let candidate = try await candidate(
                 searchResult: result,
                 repository: repository,
-                searchURL: searchURL
+                searchURL: searchURL,
+                metadata: metadata
             ) {
                 candidates.append(candidate)
             }
@@ -60,14 +62,19 @@ public struct GitHubMetadataProvider: MetadataProvider {
     private func candidate(
         searchResult: SearchResult,
         repository: String,
-        searchURL: URL
+        searchURL: URL,
+        metadata: RepositoryMetadata
     ) async throws -> MetadataCandidate? {
+        guard let reference = MetadataProviderSupport.nonempty(metadata.defaultBranch),
+              Self.validReference(reference) else {
+            throw MetadataProviderError.invalidResponse(provider: .github)
+        }
         let encodedPath = searchResult.path
             .split(separator: "/", omittingEmptySubsequences: false)
             .map { Self.apiPathComponent(String($0)) }
             .joined(separator: "/")
         let skillData = try await execute([
-            "api", "repos/\(repository)/contents/\(encodedPath)",
+            "api", "repos/\(repository)/contents/\(encodedPath)?ref=\(Self.apiQueryValue(reference))",
             "-H", "Accept: application/vnd.github.raw+json",
         ])
         let skillText = String(decoding: skillData, as: UTF8.self)
@@ -78,29 +85,24 @@ public struct GitHubMetadataProvider: MetadataProvider {
                 result: searchResult,
                 repository: repository,
                 description: description,
-                evidenceURL: searchURL
+                evidenceURL: searchURL,
+                reference: reference
             )
         }
 
-        let repositoryData = try await execute(["api", "repos/\(repository)"])
-        let metadata: RepositoryMetadata
-        do {
-            metadata = try decoder.decode(RepositoryMetadata.self, from: repositoryData)
-        } catch {
-            throw MetadataProviderError.invalidResponse(provider: .github)
-        }
         if let description = MetadataProviderSupport.nonempty(metadata.description),
            let evidenceURL = Self.githubURL(metadata.htmlURL) {
             return makeCandidate(
                 result: searchResult,
                 repository: repository,
                 description: description,
-                evidenceURL: evidenceURL
+                evidenceURL: evidenceURL,
+                reference: reference
             )
         }
 
         let readmeData = try await execute([
-            "api", "repos/\(repository)/readme",
+            "api", "repos/\(repository)/readme?ref=\(Self.apiQueryValue(reference))",
             "-H", "Accept: application/vnd.github.raw+json",
         ])
         guard let description = MetadataProviderSupport.readmeParagraph(
@@ -113,15 +115,26 @@ public struct GitHubMetadataProvider: MetadataProvider {
             result: searchResult,
             repository: repository,
             description: description,
-            evidenceURL: evidenceURL
+            evidenceURL: evidenceURL,
+            reference: reference
         )
+    }
+
+    private func repositoryMetadata(_ repository: String) async throws -> RepositoryMetadata {
+        let data = try await execute(["api", "repos/\(repository)"])
+        do {
+            return try decoder.decode(RepositoryMetadata.self, from: data)
+        } catch {
+            throw MetadataProviderError.invalidResponse(provider: .github)
+        }
     }
 
     private func makeCandidate(
         result: SearchResult,
         repository: String,
         description: String,
-        evidenceURL: URL
+        evidenceURL: URL,
+        reference: String
     ) -> MetadataCandidate {
         let subdirectory = (result.path as NSString).deletingLastPathComponent
         let normalizedSubdirectory = subdirectory == "." || subdirectory.isEmpty
@@ -132,7 +145,7 @@ public struct GitHubMetadataProvider: MetadataProvider {
             skillSubdirectory: normalizedSubdirectory,
             description: description,
             evidenceURL: evidenceURL,
-            sourceBinding: "github:\(repository):\(normalizedSubdirectory ?? "."):branch:main"
+            sourceBinding: "github:\(repository):\(normalizedSubdirectory ?? "."):branch:\(reference)"
         )
     }
 
@@ -185,6 +198,21 @@ public struct GitHubMetadataProvider: MetadataProvider {
         return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
     }
 
+    private static func apiQueryValue(_ value: String) -> String {
+        var allowed = CharacterSet.alphanumerics
+        allowed.insert(charactersIn: "-._~")
+        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+    }
+
+    private static func validReference(_ value: String) -> Bool {
+        !value.isEmpty
+            && value.utf8.count <= 512
+            && !value.hasPrefix("-")
+            && !value.contains("..")
+            && !value.contains(":")
+            && value.unicodeScalars.allSatisfy { !CharacterSet.controlCharacters.contains($0) }
+    }
+
     private struct SearchResult: Decodable {
         let path: String
         let repository: Repository
@@ -198,10 +226,12 @@ public struct GitHubMetadataProvider: MetadataProvider {
     private struct RepositoryMetadata: Decodable {
         let description: String?
         let htmlURL: String
+        let defaultBranch: String?
 
         enum CodingKeys: String, CodingKey {
             case description
             case htmlURL = "html_url"
+            case defaultBranch = "default_branch"
         }
     }
 }

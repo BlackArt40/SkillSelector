@@ -26,6 +26,23 @@ public struct PackageDigestLimits: Hashable, Sendable {
     }
 }
 
+/// Test-only observation points for filesystem race regression coverage.
+struct PackageDigestHooks {
+    var entryDiscovered: (() -> Void)?
+    var beforeFileOpen: ((String) throws -> Void)?
+    var afterFileOpen: ((String) throws -> Void)?
+
+    init(
+        entryDiscovered: (() -> Void)? = nil,
+        beforeFileOpen: ((String) throws -> Void)? = nil,
+        afterFileOpen: ((String) throws -> Void)? = nil
+    ) {
+        self.entryDiscovered = entryDiscovered
+        self.beforeFileOpen = beforeFileOpen
+        self.afterFileOpen = afterFileOpen
+    }
+}
+
 public struct PackageDigest: Codable, Hashable, Sendable, CustomStringConvertible {
     public let value: String
     public var description: String { value }
@@ -38,36 +55,68 @@ public struct PackageDigest: Codable, Hashable, Sendable, CustomStringConvertibl
         at packageURL: URL,
         limits: PackageDigestLimits = PackageDigestLimits()
     ) throws -> PackageDigest {
-        let entries = try digestEntries(at: packageURL)
+        try compute(at: packageURL, limits: limits, hooks: PackageDigestHooks())
+    }
+
+    static func compute(
+        at packageURL: URL,
+        limits: PackageDigestLimits = PackageDigestLimits(),
+        hooks: PackageDigestHooks
+    ) throws -> PackageDigest {
+        let root = packageURL.standardizedFileURL
+        let rootFD = try openDirectory(at: root)
+        defer { Darwin.close(rootFD) }
+        var fileCount = 0
+        let entries = try digestEntries(
+            rootFD: rootFD,
+            relativePrefix: "",
+            limits: limits,
+            fileCount: &fileCount,
+            hooks: hooks
+        ).sorted { $0.path.utf8.lexicographicallyPrecedes($1.path.utf8) }
         var hasher = SHA256()
         var totalBytes: Int64 = 0
-        var fileCount = 0
         for entry in entries {
             append(Data(entry.path.utf8), to: &hasher)
             append(Data(entry.kind.rawValue.utf8), to: &hasher)
             append(Data(entry.isExecutable ? "1".utf8 : "0".utf8), to: &hasher)
-            fileCount += 1
-            guard fileCount <= limits.maximumFileCount else {
-                throw PackageDigestError.tooManyFiles
-            }
-            guard entry.byteCount <= limits.maximumFileBytes else {
-                throw PackageDigestError.fileTooLarge(entry.path)
-            }
-            guard totalBytes <= Int64.max - entry.byteCount,
-                  totalBytes + entry.byteCount <= limits.maximumTotalBytes else {
-                throw PackageDigestError.totalBytesExceeded
-            }
-            totalBytes += entry.byteCount
-            append(UInt64(entry.byteCount), to: &hasher)
             if entry.kind == .symbolicLink {
-                hasher.update(data: entry.content)
+                let content = try readLink(
+                    entry.path,
+                    rootFD: rootFD,
+                    expected: entry.status
+                )
+                try validate(byteCount: Int64(content.count), path: entry.path, limits: limits, totalBytes: &totalBytes)
+                append(UInt64(content.count), to: &hasher)
+                hasher.update(data: content)
             } else {
-                let handle = try FileHandle(forReadingFrom: entry.url)
-                defer { try? handle.close() }
-                while true {
-                    let chunk = try handle.read(upToCount: 1 * 1_024 * 1_024) ?? Data()
-                    if chunk.isEmpty { break }
-                    hasher.update(data: chunk)
+                try hooks.beforeFileOpen?(entry.path)
+                let descriptor = try openRegular(entry.path, rootFD: rootFD, expected: entry.status)
+                defer { Darwin.close(descriptor) }
+                try hooks.afterFileOpen?(entry.path)
+                var openedStatus = stat()
+                guard Darwin.fstat(descriptor, &openedStatus) == 0,
+                      sameObject(openedStatus, entry.status),
+                      openedStatus.st_mode & S_IFMT == S_IFREG else {
+                    throw PackageDigestError.unsupportedItem(entry.path)
+                }
+                guard openedStatus.st_size <= limits.maximumFileBytes else {
+                    throw PackageDigestError.fileTooLarge(entry.path)
+                }
+                append(UInt64(openedStatus.st_size), to: &hasher)
+                let readCount = try hash(
+                    descriptor,
+                    path: entry.path,
+                    hasher: &hasher,
+                    limits: limits,
+                    totalBytes: &totalBytes
+                )
+                var finalStatus = stat()
+                guard Darwin.fstat(descriptor, &finalStatus) == 0,
+                      sameObject(finalStatus, openedStatus),
+                      finalStatus.st_size == openedStatus.st_size,
+                      finalStatus.st_size == readCount else {
+                    throw PackageDigestError.unsupportedItem(entry.path)
                 }
             }
         }
@@ -78,70 +127,208 @@ public struct PackageDigest: Codable, Hashable, Sendable, CustomStringConvertibl
         let path: String
         let kind: PackageManifestEntry.Kind
         let isExecutable: Bool
-        let content: Data
-        let url: URL
-        let byteCount: Int64
+        let status: stat
     }
 
-    private static func digestEntries(at packageURL: URL) throws -> [DigestEntry] {
-        let root = packageURL.standardizedFileURL
-        var status = stat()
-        guard root.path.withCString({ Darwin.lstat($0, &status) }) == 0,
-              status.st_mode & S_IFMT == S_IFDIR else {
-            throw PackageDigestError.packageMissing
-        }
-        var result: [DigestEntry] = []
-        try walkDigest(directory: root, relativePrefix: "", result: &result)
-        return result.sorted { $0.path.utf8.lexicographicallyPrecedes($1.path.utf8) }
-    }
-
-    private static func walkDigest(
-        directory: URL,
+    private static func digestEntries(
+        rootFD: Int32,
         relativePrefix: String,
-        result: inout [DigestEntry]
-    ) throws {
-        for child in try FileManager.default.contentsOfDirectory(
-            at: directory,
-            includingPropertiesForKeys: nil,
-            options: []
-        ) {
-            if child.lastPathComponent == ".git" || PackageManifest.excludedNames.contains(child.lastPathComponent) {
+        limits: PackageDigestLimits,
+        fileCount: inout Int,
+        hooks: PackageDigestHooks
+    ) throws -> [DigestEntry] {
+        var result: [DigestEntry] = []
+        for name in try directoryNames(rootFD) {
+            if name == ".git" || PackageManifest.excludedNames.contains(name) {
                 continue
             }
             var status = stat()
-            guard child.path.withCString({ Darwin.lstat($0, &status) }) == 0 else {
+            guard name.withCString({ Darwin.fstatat(rootFD, $0, &status, AT_SYMLINK_NOFOLLOW) }) == 0 else {
                 throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
             }
             let relativePath = relativePrefix.isEmpty
-                ? child.lastPathComponent
-                : "\(relativePrefix)/\(child.lastPathComponent)"
+                ? name
+                : "\(relativePrefix)/\(name)"
             switch status.st_mode & S_IFMT {
             case S_IFDIR:
-                try walkDigest(directory: child, relativePrefix: relativePath, result: &result)
+                let childFD = try openDirectory(name, relativeTo: rootFD, expected: status)
+                defer { Darwin.close(childFD) }
+                result += try digestEntries(
+                    rootFD: childFD,
+                    relativePrefix: relativePath,
+                    limits: limits,
+                    fileCount: &fileCount,
+                    hooks: hooks
+                )
             case S_IFREG:
+                try addEntry(path: relativePath, status: status, kind: .file, limits: limits, fileCount: &fileCount, hooks: hooks)
                 result.append(DigestEntry(
                     path: relativePath,
                     kind: .file,
                     isExecutable: status.st_mode & 0o111 != 0,
-                    content: Data(),
-                    url: child,
-                    byteCount: Int64(status.st_size)
+                    status: status
                 ))
             case S_IFLNK:
-                let target = try FileManager.default.destinationOfSymbolicLink(atPath: child.path)
-                let bytes = Data(target.utf8)
+                try addEntry(path: relativePath, status: status, kind: .symbolicLink, limits: limits, fileCount: &fileCount, hooks: hooks)
                 result.append(DigestEntry(
                     path: relativePath,
                     kind: .symbolicLink,
                     isExecutable: false,
-                    content: bytes,
-                    url: child,
-                    byteCount: Int64(bytes.count)
+                    status: status
                 ))
             default:
                 throw PackageDigestError.unsupportedItem(relativePath)
             }
         }
+        return result
+    }
+
+    private static func addEntry(
+        path: String,
+        status: stat,
+        kind: PackageManifestEntry.Kind,
+        limits: PackageDigestLimits,
+        fileCount: inout Int,
+        hooks: PackageDigestHooks
+    ) throws {
+        guard fileCount < limits.maximumFileCount else { throw PackageDigestError.tooManyFiles }
+        guard status.st_size <= limits.maximumFileBytes else { throw PackageDigestError.fileTooLarge(path) }
+        fileCount += 1
+        hooks.entryDiscovered?()
+    }
+
+    private static func openDirectory(at url: URL) throws -> Int32 {
+        let descriptor = url.path.withCString { Darwin.open($0, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC) }
+        guard descriptor >= 0 else { throw PackageDigestError.packageMissing }
+        return descriptor
+    }
+
+    private static func openDirectory(_ name: String, relativeTo parentFD: Int32, expected: stat) throws -> Int32 {
+        let descriptor = name.withCString { Darwin.openat(parentFD, $0, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC) }
+        guard descriptor >= 0 else { throw PackageDigestError.unsupportedItem(name) }
+        var opened = stat()
+        guard Darwin.fstat(descriptor, &opened) == 0, sameObject(opened, expected) else {
+            Darwin.close(descriptor)
+            throw PackageDigestError.unsupportedItem(name)
+        }
+        return descriptor
+    }
+
+    private static func directoryNames(_ descriptor: Int32) throws -> [String] {
+        let duplicate = Darwin.dup(descriptor)
+        guard duplicate >= 0, let directory = Darwin.fdopendir(duplicate) else {
+            if duplicate >= 0 { Darwin.close(duplicate) }
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+        defer { Darwin.closedir(directory) }
+        var names: [String] = []
+        errno = 0
+        while let entry = Darwin.readdir(directory) {
+            let name = withUnsafePointer(to: &entry.pointee.d_name) {
+                String(cString: UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self))
+            }
+            if name != "." && name != ".." { names.append(name) }
+        }
+        guard errno == 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+        return names.sorted { $0.utf8.lexicographicallyPrecedes($1.utf8) }
+    }
+
+    private static func openRegular(_ path: String, rootFD: Int32, expected: stat) throws -> Int32 {
+        let components = path.split(separator: "/").map(String.init)
+        var parentFD = Darwin.dup(rootFD)
+        guard parentFD >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+        defer { Darwin.close(parentFD) }
+        for component in components.dropLast() {
+            let childFD = component.withCString { Darwin.openat(parentFD, $0, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC) }
+            guard childFD >= 0 else { throw PackageDigestError.unsupportedItem(path) }
+            Darwin.close(parentFD)
+            parentFD = childFD
+        }
+        let name = components.last ?? ""
+        let descriptor = name.withCString { Darwin.openat(parentFD, $0, O_RDONLY | O_NOFOLLOW | O_CLOEXEC) }
+        guard descriptor >= 0 else { throw PackageDigestError.unsupportedItem(path) }
+        var opened = stat()
+        guard Darwin.fstat(descriptor, &opened) == 0,
+              sameObject(opened, expected),
+              opened.st_mode & S_IFMT == S_IFREG else {
+            Darwin.close(descriptor)
+            throw PackageDigestError.unsupportedItem(path)
+        }
+        return descriptor
+    }
+
+    private static func readLink(_ path: String, rootFD: Int32, expected: stat) throws -> Data {
+        let components = path.split(separator: "/").map(String.init)
+        var parentFD = Darwin.dup(rootFD)
+        guard parentFD >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+        defer { Darwin.close(parentFD) }
+        for component in components.dropLast() {
+            let childFD = component.withCString { Darwin.openat(parentFD, $0, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC) }
+            guard childFD >= 0 else { throw PackageDigestError.unsupportedItem(path) }
+            Darwin.close(parentFD)
+            parentFD = childFD
+        }
+        let name = components.last ?? ""
+        var buffer = [UInt8](repeating: 0, count: max(1, Int(expected.st_size) + 1))
+        let count = try name.withCString { pointer -> Int in
+            let result = Darwin.readlinkat(parentFD, pointer, &buffer, buffer.count)
+            guard result >= 0 else { throw PackageDigestError.unsupportedItem(path) }
+            return result
+        }
+        var current = stat()
+        guard name.withCString({ Darwin.fstatat(parentFD, $0, &current, AT_SYMLINK_NOFOLLOW) }) == 0,
+              sameObject(current, expected),
+              current.st_mode & S_IFMT == S_IFLNK,
+              count == Int(current.st_size) else {
+            throw PackageDigestError.unsupportedItem(path)
+        }
+        return Data(buffer.prefix(count))
+    }
+
+    private static func hash(
+        _ descriptor: Int32,
+        path: String,
+        hasher: inout SHA256,
+        limits: PackageDigestLimits,
+        totalBytes: inout Int64
+    ) throws -> Int64 {
+        var buffer = [UInt8](repeating: 0, count: 64 * 1_024)
+        var bytesRead: Int64 = 0
+        while true {
+            let count = buffer.withUnsafeMutableBytes { Darwin.read(descriptor, $0.baseAddress, $0.count) }
+            if count == 0 { break }
+            guard count > 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+            guard bytesRead <= Int64.max - Int64(count) else { throw PackageDigestError.fileTooLarge(path) }
+            bytesRead += Int64(count)
+            guard bytesRead <= limits.maximumFileBytes else {
+                throw PackageDigestError.fileTooLarge(path)
+            }
+            guard totalBytes <= Int64.max - Int64(count),
+                  totalBytes + Int64(count) <= limits.maximumTotalBytes else {
+                throw PackageDigestError.totalBytesExceeded
+            }
+            totalBytes += Int64(count)
+            hasher.update(data: Data(buffer.prefix(count)))
+        }
+        return bytesRead
+    }
+
+    private static func validate(
+        byteCount: Int64,
+        path: String,
+        limits: PackageDigestLimits,
+        totalBytes: inout Int64
+    ) throws {
+        guard byteCount <= limits.maximumFileBytes else { throw PackageDigestError.fileTooLarge(path) }
+        guard totalBytes <= Int64.max - byteCount,
+              totalBytes + byteCount <= limits.maximumTotalBytes else {
+            throw PackageDigestError.totalBytesExceeded
+        }
+        totalBytes += byteCount
+    }
+
+    private static func sameObject(_ lhs: stat, _ rhs: stat) -> Bool {
+        lhs.st_dev == rhs.st_dev && lhs.st_ino == rhs.st_ino
     }
 
     private static func append(_ value: UInt64, to hasher: inout SHA256) {

@@ -254,14 +254,13 @@ public struct SkillSource: Codable, Hashable, Sendable {
             directory.deleteLastPathComponent()
         }
         while directory.pathComponents.count > 1 {
-            let gitDirectory = directory.appending(path: ".git")
-            var isDirectory: ObjCBool = false
-            guard FileManager.default.fileExists(atPath: gitDirectory.path, isDirectory: &isDirectory) else {
+            let gitMarker = directory.appending(path: ".git")
+            guard let gitDirectory = gitDirectory(from: gitMarker) else {
                 directory.deleteLastPathComponent()
                 continue
             }
-            let config = gitDirectory.appending(path: "config")
-            guard let text = try? String(contentsOf: config, encoding: .utf8),
+            let commonDirectory = commonGitDirectory(from: gitDirectory) ?? gitDirectory
+            guard let text = readGitText(commonDirectory.appending(path: "config")),
                   let remote = gitRemoteURL(in: text) else { return nil }
             let relative = installationURL.standardizedFileURL.path
                 .dropFirst(directory.path.count)
@@ -332,9 +331,75 @@ private func gitRemoteURL(in config: String) -> String? {
 }
 
 private func gitBranch(in gitDirectory: URL) -> String? {
-    guard let head = try? String(contentsOf: gitDirectory.appending(path: "HEAD"), encoding: .utf8),
+    guard let head = readGitText(gitDirectory.appending(path: "HEAD")),
           head.hasPrefix("ref: refs/heads/") else { return nil }
     return String(head.dropFirst("ref: refs/heads/".count)).trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+private let maximumGitMetadataBytes = 64 * 1_024
+
+private func gitDirectory(from marker: URL) -> URL? {
+    var status = stat()
+    guard marker.path.withCString({ Darwin.lstat($0, &status) }) == 0 else { return nil }
+    if status.st_mode & S_IFMT == S_IFDIR { return marker.standardizedFileURL }
+    guard status.st_mode & S_IFMT == S_IFREG,
+          let value = readGitText(marker),
+          let path = gitDirectoryPath(in: value, relativeTo: marker.deletingLastPathComponent()),
+          isGitMetadataDirectory(path) else {
+        return nil
+    }
+    return path
+}
+
+private func commonGitDirectory(from gitDirectory: URL) -> URL? {
+    let marker = gitDirectory.appending(path: "commondir")
+    guard let value = readGitText(marker),
+          let path = gitDirectoryPath(in: value, relativeTo: gitDirectory),
+          isGitMetadataDirectory(path) else {
+        return nil
+    }
+    return path
+}
+
+private func gitDirectoryPath(in text: String, relativeTo base: URL) -> URL? {
+    guard !text.unicodeScalars.contains("\0"), text.utf8.count <= maximumGitMetadataBytes else { return nil }
+    let lines = text.split(whereSeparator: \.isNewline)
+    guard lines.count == 1 else { return nil }
+    let line = String(lines[0]).trimmingCharacters(in: .whitespacesAndNewlines)
+    let rawPath: String
+    if line.hasPrefix("gitdir:") {
+        rawPath = String(line.dropFirst("gitdir:".count)).trimmingCharacters(in: .whitespaces)
+    } else {
+        rawPath = line
+    }
+    guard !rawPath.isEmpty, rawPath.utf8.count <= 4_096, !rawPath.contains("\0") else { return nil }
+    let url = rawPath.hasPrefix("/")
+        ? URL(fileURLWithPath: rawPath)
+        : base.appending(path: rawPath)
+    return url.standardizedFileURL
+}
+
+private func isGitMetadataDirectory(_ url: URL) -> Bool {
+    guard url.pathComponents.contains(".git") else { return false }
+    var status = stat()
+    return url.path.withCString({ Darwin.lstat($0, &status) }) == 0
+        && status.st_mode & S_IFMT == S_IFDIR
+}
+
+private func readGitText(_ url: URL) -> String? {
+    let descriptor = url.path.withCString { Darwin.open($0, O_RDONLY | O_NOFOLLOW | O_CLOEXEC) }
+    guard descriptor >= 0 else { return nil }
+    var status = stat()
+    guard Darwin.fstat(descriptor, &status) == 0,
+          status.st_mode & S_IFMT == S_IFREG,
+          status.st_size <= maximumGitMetadataBytes else {
+        Darwin.close(descriptor)
+        return nil
+    }
+    let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
+    guard let data = try? handle.read(upToCount: maximumGitMetadataBytes + 1),
+          data.count <= maximumGitMetadataBytes else { return nil }
+    return String(data: data, encoding: .utf8)
 }
 
 extension SkillSourceCandidate {

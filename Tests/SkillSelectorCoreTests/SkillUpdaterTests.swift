@@ -96,6 +96,46 @@ final class SkillUpdaterTests: XCTestCase {
         XCTAssertEqual(candidates.map(\.provenance), [.embeddedMetadata, .containingGitRemote])
     }
 
+    func testDiscoveryReadsRelativeWorktreeGitDirectoryAndCommonRepositoryFiles() throws {
+        let parent = temporaryDirectory()
+        let repository = parent.appending(path: "repository")
+        let commonGit = repository.appending(path: ".git")
+        let worktreeGit = commonGit.appending(path: "worktrees/demo")
+        let worktree = parent.appending(path: "worktree")
+        let skill = worktree.appending(path: "skills/demo")
+        defer { try? FileManager.default.removeItem(at: parent) }
+        try FileManager.default.createDirectory(at: worktreeGit, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: skill, withIntermediateDirectories: true)
+        try Data("[remote \"origin\"]\n  url = https://github.com/acme/worktree.git\n".utf8)
+            .write(to: commonGit.appending(path: "config"))
+        try Data("ref: refs/heads/release\n".utf8).write(to: worktreeGit.appending(path: "HEAD"))
+        try Data("../..\n".utf8).write(to: worktreeGit.appending(path: "commondir"))
+        try Data("gitdir: ../repository/.git/worktrees/demo\n".utf8)
+            .write(to: worktree.appending(path: ".git"))
+
+        let source = try XCTUnwrap(SkillSource.containingGitRepository(for: skill))
+
+        XCTAssertEqual(source.binding, "github:acme/worktree:skills/demo:branch:release")
+    }
+
+    func testDiscoveryReadsAbsoluteSubmoduleGitDirectory() throws {
+        let parent = temporaryDirectory()
+        let module = parent.appending(path: "checkout/modules/demo")
+        let gitDirectory = parent.appending(path: "checkout/.git/modules/demo")
+        let skill = module.appending(path: "skills/nested")
+        defer { try? FileManager.default.removeItem(at: parent) }
+        try FileManager.default.createDirectory(at: gitDirectory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: skill, withIntermediateDirectories: true)
+        try Data("[remote \"origin\"]\n  url = git@github.com:acme/submodule.git\n".utf8)
+            .write(to: gitDirectory.appending(path: "config"))
+        try Data("ref: refs/heads/custom\n".utf8).write(to: gitDirectory.appending(path: "HEAD"))
+        try Data("gitdir: \(gitDirectory.path)\n".utf8).write(to: module.appending(path: ".git"))
+
+        let source = try XCTUnwrap(SkillSource.containingGitRepository(for: skill))
+
+        XCTAssertEqual(source.binding, "github:acme/submodule:skills/nested:branch:custom")
+    }
+
     func testDigestIsStableSortedAndIncludesExecutableBitsAndLinkTargets() throws {
         let root = try makeSkill(name: "demo")
         defer { try? FileManager.default.removeItem(at: root.deletingLastPathComponent()) }
@@ -321,6 +361,45 @@ final class SkillUpdaterTests: XCTestCase {
         ])
     }
 
+    func testGitHubFetcherValidatesAllDownloadedLinkTargetsBeforeMaterializing() async throws {
+        let skill = "---\nname: demo\ndescription: test\n---\n"
+        let tree = #"{"tree":[{"path":"skills/demo/SKILL.md","mode":"100644","type":"blob","sha":"skill","size":41},{"path":"skills/demo/current","mode":"120000","type":"blob","sha":"link","size":8}],"truncated":false}"#
+        let destination = temporaryDirectory().appending(path: "package")
+        defer { try? FileManager.default.removeItem(at: destination.deletingLastPathComponent()) }
+        let runner = UpdateFixtureRunner(results: [
+            commandResult("abcdef0123456789\n"), commandResult(tree),
+            commandResult(skill), commandResult("SKILL.md"),
+        ])
+
+        _ = try await LiveSkillPackageFetcher(
+            executableURL: URL(fileURLWithPath: "/usr/bin/gh"),
+            runner: runner
+        ).fetch(source(), into: destination)
+
+        XCTAssertEqual(
+            try FileManager.default.destinationOfSymbolicLink(atPath: destination.appending(path: "current").path),
+            "SKILL.md"
+        )
+    }
+
+    func testGitHubFetcherRejectsEscapingLinkWithoutPartialWrites() async throws {
+        let skill = "---\nname: demo\ndescription: test\n---\n"
+        let tree = #"{"tree":[{"path":"skills/demo/SKILL.md","mode":"100644","type":"blob","sha":"skill","size":41},{"path":"skills/demo/z-escape","mode":"120000","type":"blob","sha":"link","size":10}],"truncated":false}"#
+        let destination = temporaryDirectory().appending(path: "package")
+        defer { try? FileManager.default.removeItem(at: destination.deletingLastPathComponent()) }
+        let runner = UpdateFixtureRunner(results: [
+            commandResult("abcdef0123456789\n"), commandResult(tree),
+            commandResult(skill), commandResult("../outside"),
+        ])
+
+        await assertAsyncThrows(try await LiveSkillPackageFetcher(
+            executableURL: URL(fileURLWithPath: "/usr/bin/gh"),
+            runner: runner
+        ).fetch(source(), into: destination))
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
+    }
+
     func testApplyRequiresConfirmationAndDetectsPostCheckLocalChanges() async throws {
         let installed = try makeSkill(name: "demo", body: "old")
         let remote = try makeSkill(name: "demo", body: "new")
@@ -478,6 +557,59 @@ final class SkillUpdaterTests: XCTestCase {
         )) { XCTAssertEqual($0 as? PackageDigestError, .tooManyFiles) }
     }
 
+    func testPackageDigestStopsTraversalAsSoonAsEntryCountExceedsLimit() throws {
+        let root = try makeSkill(name: "demo")
+        defer { try? FileManager.default.removeItem(at: root.deletingLastPathComponent()) }
+        for index in 0..<100 {
+            try Data().write(to: root.appending(path: "entry-\(index)"))
+        }
+        var observedEntries = 0
+
+        XCTAssertThrowsError(try PackageDigest.compute(
+            at: root,
+            limits: PackageDigestLimits(maximumFileBytes: 100, maximumTotalBytes: 100, maximumFileCount: 10),
+            hooks: PackageDigestHooks(entryDiscovered: { observedEntries += 1 })
+        )) { XCTAssertEqual($0 as? PackageDigestError, .tooManyFiles) }
+        XCTAssertLessThanOrEqual(observedEntries, 10)
+    }
+
+    func testPackageDigestRejectsPathReplacedBySymlinkBeforeOpen() throws {
+        let root = try makeSkill(name: "demo")
+        let outside = root.deletingLastPathComponent().appending(path: "outside")
+        let victim = root.appending(path: "victim.txt")
+        defer { try? FileManager.default.removeItem(at: root.deletingLastPathComponent()) }
+        try Data("inside".utf8).write(to: victim)
+        try Data("outside".utf8).write(to: outside)
+
+        XCTAssertThrowsError(try PackageDigest.compute(
+            at: root,
+            hooks: PackageDigestHooks(beforeFileOpen: { path in
+                guard path == "victim.txt" else { return }
+                try FileManager.default.removeItem(at: victim)
+                try FileManager.default.createSymbolicLink(at: victim, withDestinationURL: outside)
+            })
+        )) { XCTAssertEqual($0 as? PackageDigestError, .unsupportedItem("victim.txt")) }
+    }
+
+    func testPackageDigestStopsWhenOpenFileGrowsPastPerFileLimit() throws {
+        let root = try makeSkill(name: "demo")
+        let growing = root.appending(path: "growing.bin")
+        defer { try? FileManager.default.removeItem(at: root.deletingLastPathComponent()) }
+        try Data(repeating: 0x41, count: 4).write(to: growing)
+
+        XCTAssertThrowsError(try PackageDigest.compute(
+            at: root,
+            limits: PackageDigestLimits(maximumFileBytes: 64, maximumTotalBytes: 1_000, maximumFileCount: 10),
+            hooks: PackageDigestHooks(afterFileOpen: { path in
+                guard path == "growing.bin" else { return }
+                let handle = try FileHandle(forWritingTo: growing)
+                try handle.seekToEnd()
+                try handle.write(contentsOf: Data(repeating: 0x42, count: 80))
+                try handle.close()
+            })
+        )) { XCTAssertEqual($0 as? PackageDigestError, .fileTooLarge("growing.bin")) }
+    }
+
     private func request(installed: URL) throws -> UpdateRequest {
         UpdateRequest(
             installationURL: installed,
@@ -592,6 +724,17 @@ private func commandResult(_ stdout: String) -> CommandResult {
         terminationStatus: 0,
         terminationReason: .exit
     )
+}
+
+private func assertAsyncThrows<T>(
+    _ expression: @autoclosure () async throws -> T,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) async {
+    do {
+        _ = try await expression()
+        XCTFail("Expected an error", file: file, line: line)
+    } catch {}
 }
 
 private func storedZIP(entries: [(String, Data, UInt32)]) -> Data {

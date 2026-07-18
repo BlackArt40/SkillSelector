@@ -6,6 +6,7 @@ final class GitHubMetadataProviderTests: XCTestCase {
     func testRemoteSkillDescriptionWinsAndCommandsDiscloseOnlyNameAndRemoteSkillLocation() async throws {
         let runner = MetadataFixtureRunner(results: [
             .success(result(stdout: #"[{"path":"skills/demo/SKILL.md","repository":{"nameWithOwner":"acme/skills"},"url":"https://github.com/acme/skills/blob/main/skills/demo/SKILL.md"}]"#)),
+            .success(result(stdout: #"{"description":"Repository fallback.","html_url":"https://github.com/acme/skills","default_branch":"release/2026"}"#)),
             .success(result(stdout: "---\nname: demo\ndescription: Exact remote description.\n---\n\n# Demo\n\nREADME fallback.")),
         ])
         let provider = GitHubMetadataProvider(
@@ -22,12 +23,13 @@ final class GitHubMetadataProviderTests: XCTestCase {
                 skillSubdirectory: "skills/demo",
                 description: "Exact remote description.",
                 evidenceURL: URL(string: "https://github.com/acme/skills/blob/main/skills/demo/SKILL.md")!,
-                sourceBinding: "github:acme/skills:skills/demo:branch:main"
+                sourceBinding: "github:acme/skills:skills/demo:branch:release/2026"
             ),
         ])
         XCTAssertEqual(runner.commands.map(\.arguments), [
             ["search", "code", "demo", "--filename", "SKILL.md", "--json", "path,repository,url", "--limit", "20"],
-            ["api", "repos/acme/skills/contents/skills/demo/SKILL.md", "-H", "Accept: application/vnd.github.raw+json"],
+            ["api", "repos/acme/skills"],
+            ["api", "repos/acme/skills/contents/skills/demo/SKILL.md?ref=release%2F2026", "-H", "Accept: application/vnd.github.raw+json"],
         ])
         XCTAssertFalse(runner.commands.flatMap(\.arguments).contains { $0.contains("/Users/") })
     }
@@ -35,8 +37,8 @@ final class GitHubMetadataProviderTests: XCTestCase {
     func testRepositoryDescriptionFallsBackWhenRemoteSkillHasNoDescription() async throws {
         let runner = MetadataFixtureRunner(results: [
             .success(result(stdout: #"[{"path":"SKILL.md","repository":{"nameWithOwner":"acme/demo"},"url":"https://github.com/acme/demo/blob/main/SKILL.md"}]"#)),
+            .success(result(stdout: #"{"description":"Official repository description.","html_url":"https://github.com/acme/demo","default_branch":"stable"}"#)),
             .success(result(stdout: "# Demo\n")),
-            .success(result(stdout: #"{"description":"Official repository description.","html_url":"https://github.com/acme/demo"}"#)),
         ])
         let provider = GitHubMetadataProvider(executableURL: URL(fileURLWithPath: "/usr/bin/gh"), runner: runner)
 
@@ -45,14 +47,18 @@ final class GitHubMetadataProviderTests: XCTestCase {
 
         XCTAssertEqual(candidate.description, "Official repository description.")
         XCTAssertEqual(candidate.evidenceURL.absoluteString, "https://github.com/acme/demo")
-        XCTAssertEqual(runner.commands.last?.arguments, ["api", "repos/acme/demo"])
+        XCTAssertEqual(runner.commands.map(\.arguments), [
+            ["search", "code", "demo", "--filename", "SKILL.md", "--json", "path,repository,url", "--limit", "20"],
+            ["api", "repos/acme/demo"],
+            ["api", "repos/acme/demo/contents/SKILL.md?ref=stable", "-H", "Accept: application/vnd.github.raw+json"],
+        ])
     }
 
     func testReadmeParagraphIsFinalFallbackAndPreservesSourceText() async throws {
         let runner = MetadataFixtureRunner(results: [
             .success(result(stdout: #"[{"path":"SKILL.md","repository":{"nameWithOwner":"acme/demo"},"url":"https://github.com/acme/demo/blob/main/SKILL.md"}]"#)),
+            .success(result(stdout: #"{"description":null,"html_url":"https://github.com/acme/demo","default_branch":"main"}"#)),
             .success(result(stdout: "# Demo\n")),
-            .success(result(stdout: #"{"description":null,"html_url":"https://github.com/acme/demo"}"#)),
             .success(result(stdout: "# Demo\n\nExact README paragraph, unchanged.\n\n## Install\n")),
         ])
         let provider = GitHubMetadataProvider(executableURL: URL(fileURLWithPath: "/usr/bin/gh"), runner: runner)
@@ -63,15 +69,15 @@ final class GitHubMetadataProviderTests: XCTestCase {
         XCTAssertEqual(candidate.description, "Exact README paragraph, unchanged.")
         XCTAssertEqual(candidate.evidenceURL.absoluteString, "https://github.com/acme/demo#readme")
         XCTAssertEqual(runner.commands.last?.arguments, [
-            "api", "repos/acme/demo/readme", "-H", "Accept: application/vnd.github.raw+json",
+            "api", "repos/acme/demo/readme?ref=main", "-H", "Accept: application/vnd.github.raw+json",
         ])
     }
 
     func testReadmeFallbackPreservesExactMultilineSourceSlice() async throws {
         let runner = MetadataFixtureRunner(results: [
             .success(result(stdout: #"[{"path":"SKILL.md","repository":{"nameWithOwner":"acme/demo"},"url":"https://github.com/acme/demo/blob/main/SKILL.md"}]"#)),
+            .success(result(stdout: #"{"description":null,"html_url":"https://github.com/acme/demo","default_branch":"main"}"#)),
             .success(result(stdout: "# Demo\n")),
-            .success(result(stdout: #"{"description":null,"html_url":"https://github.com/acme/demo"}"#)),
             .success(result(stdout: "# Demo\r\n\r\nFirst source line\r\n  indented continuation\r\nthird source line\r\n\r\n## Install\r\n")),
         ])
         let provider = GitHubMetadataProvider(executableURL: URL(fileURLWithPath: "/usr/bin/gh"), runner: runner)
