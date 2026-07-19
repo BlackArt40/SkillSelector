@@ -1,6 +1,6 @@
 # SkillSelector Product Specification
 
-Status: Confirmed on 2026-07-17.
+Status: Confirmed on 2026-07-17. Updated 2026-07-19 (features removed).
 
 ## Product boundary
 
@@ -43,29 +43,29 @@ The main window is a native three-column Skill browser:
 
 - Sidebar: all Skills, global Skills, individual projects, and Agent filters.
 - List: one row per installation path with search, status filters, and sorting.
-- Detail: effective description and provenance, Agent associations, scope, path, source/update state, read-only Markdown, and file operations.
+- Detail: effective description and Markdown rendering, Agent associations, scope, path, and file operations.
 
-`SKILL.md` is read-only in the app. Users can reveal it in Finder or open it in the default editor.
+`SKILL.md` is read-only in the app. Users can reveal it in Finder or open it in the default editor. Both the description and Skill document sections render Markdown formatting (headers, bold, lists, code, links, tables).
 
-The effective description priority is user customization, local `SKILL.md` description, trusted remote metadata, then a deterministic local fallback. All available sources remain visible, and the user can remove a customization to restore the default.
+The effective description priority is user customization, local `SKILL.md` description, ~~trusted remote metadata~~, then a deterministic local fallback. All available sources remain visible, and the user can remove a customization to restore the default.
 
-## Trusted metadata enrichment
+## ~~Trusted metadata enrichment~~
 
-Enrichment is offline by default and user-triggered for one or more existing Skills. An optional setting may enrich missing descriptions after index refresh, but it defaults off. Only minimal identifying information is sent; local project paths, scripts, reference files, and full content are excluded.
+~~Enrichment is offline by default and user-triggered for one or more existing Skills. An optional setting may enrich missing descriptions after index refresh, but it defaults off. Only minimal identifying information is sent; local project paths, scripts, reference files, and full content are excluded.~~
 
-No model is configured or called. Providers extract source text without rewriting it:
+~~No model is configured or called. Providers extract source text without rewriting it:~~
 
-1. Remote `SKILL.md` description.
-2. Official manifest or npm package description.
-3. README first descriptive paragraph.
+1. ~~Remote `SKILL.md` description.~~
+2. ~~Official manifest or npm package description.~~
+3. ~~README first descriptive paragraph.~~
 
-`gh` performs all GitHub search, metadata, download, and update requests. Authentication remains in the user's `gh` installation. SkillSelector never reads or stores a GitHub token. GitHub-wide search is limited to matching existing local Skills, and every candidate source requires user confirmation.
+~~`gh` performs all GitHub search, metadata, download, and update requests. Authentication remains in the user's `gh` installation. SkillSelector never reads or stores a GitHub token. GitHub-wide search is limited to matching existing local Skills, and every candidate source requires user confirmation.~~
 
-npm is limited to Registry read operations equivalent to `npm search --json` and `npm view --json`. The app never invokes install, exec, package scripts, or an npm lifecycle.
+~~npm is limited to Registry read operations equivalent to `npm search --json` and `npm view --json`. The app never invokes install, exec, package scripts, or an npm lifecycle.~~
 
-The app may discover MCP configurations from supported Agents but never starts or invokes a Server until the user enables it and selects a read-only tool. It supports stdio and Streamable HTTP, not legacy HTTP+SSE. Package-runner commands such as `npx` or `uvx` are disabled until the user separately approves the exact executable and arguments; any configuration change invalidates that approval. Unknown or write-capable tools are not invoked automatically.
+~~The app may discover MCP configurations from supported Agents but never starts or invokes a Server until the user enables it and selects a read-only tool. It supports stdio and Streamable HTTP, not legacy HTTP+SSE. Package-runner commands such as `npx` or `uvx` are disabled until the user separately approves the exact executable and arguments; any configuration change invalidates that approval. Unknown or write-capable tools are not invoked automatically.~~
 
-The app does not install `gh`, npm, MCP Servers, or any supporting package. It detects common executable locations and lets the user bind an executable when needed. External commands are launched directly with argument arrays, never through a shell command string.
+~~The app does not install `gh`, npm, MCP Servers, or any supporting package. It detects common executable locations and lets the user bind an executable when needed. External commands are launched directly with argument arrays, never through a shell command string.~~
 
 ## Sources and updates
 
@@ -89,12 +89,12 @@ Name conflicts never merge or silently overwrite directories. The user can keep 
 
 The app stores no remote credentials except security-scoped bookmark data needed for authorized paths. Local unified logs redact home paths, command environment variables, and remote response bodies. A user-initiated diagnostic export is also redacted.
 
-External process output is bounded, parsed as structured data where available, and treated as untrusted input. Remote archives are checked for path traversal and symbolic-link escapes before installation. No downloaded content is executed by update or enrichment flows.
+~~External process output is bounded, parsed as structured data where available, and treated as untrusted input. Remote archives are checked for path traversal and symbolic-link escapes before installation. No downloaded content is executed by update or enrichment flows.~~
 
 ## Delivery milestones
 
 1. App shell, authorization, registry, scanning, and SwiftData index.
 2. Three-column browser, Markdown reading, custom descriptions, and localization.
 3. Safe file operations and symbolic-link behavior.
-4. `gh`, npm, and MCP enrichment plus source binding.
+4. ~~`gh`, npm, and MCP enrichment plus source binding.~~
 5. Atomic Skill updates, packaging, diagnostics, and release documentation.

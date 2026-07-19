@@ -12,24 +12,11 @@ public struct DiagnosticRootSummary: Codable, Hashable, Sendable {
     }
 }
 
-public struct DiagnosticToolSummary: Codable, Hashable, Sendable {
-    public let kind: ToolKind
-    public let state: ToolAvailabilityState
-    public let version: String?
-
-    public init(kind: ToolKind, state: ToolAvailabilityState, version: String?) {
-        self.kind = kind
-        self.state = state
-        self.version = version
-    }
-}
-
 public struct DiagnosticExportInput: Codable, Hashable, Sendable {
     public let appVersion: String
     public let macOSVersion: String
     public let registryIDs: [String]
     public let roots: [DiagnosticRootSummary]
-    public let tools: [DiagnosticToolSummary]
     public let diagnostics: [AppDiagnostic]
 
     public init(
@@ -37,14 +24,12 @@ public struct DiagnosticExportInput: Codable, Hashable, Sendable {
         macOSVersion: String,
         registryIDs: [String],
         roots: [DiagnosticRootSummary],
-        tools: [DiagnosticToolSummary],
         diagnostics: [AppDiagnostic]
     ) {
         self.appVersion = appVersion
         self.macOSVersion = macOSVersion
         self.registryIDs = registryIDs
         self.roots = roots
-        self.tools = tools
         self.diagnostics = diagnostics
     }
 }
@@ -68,13 +53,6 @@ public struct DiagnosticExporter: Sendable {
                     isAvailable: $0.isAvailable
                 )
             }.sorted { $0.id < $1.id },
-            tools: input.tools.map {
-                DiagnosticToolSummary(
-                    kind: $0.kind,
-                    state: $0.state,
-                    version: $0.version.map(redactor.redact)
-                )
-            }.sorted { $0.kind.rawValue < $1.kind.rawValue },
             diagnostics: input.diagnostics.map {
                 AppDiagnostic(
                     timestamp: $0.timestamp,

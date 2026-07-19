@@ -534,10 +534,7 @@ public struct SkillScanner: Sendable {
     }
 
     private func containsByPathComponents(_ candidate: URL, in root: URL) -> Bool {
-        let candidateComponents = candidate.standardizedFileURL.pathComponents
-        let rootComponents = root.standardizedFileURL.pathComponents
-        return candidateComponents.count >= rootComponents.count
-            && Array(candidateComponents.prefix(rootComponents.count)) == rootComponents
+        candidate.standardizedFileURL.isContained(in: root.standardizedFileURL)
     }
 
     private func directoryContents(_ url: URL) throws -> [URL] {

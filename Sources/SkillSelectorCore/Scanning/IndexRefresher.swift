@@ -448,9 +448,6 @@ public final class IndexRefresher {
     }
 
     private func contains(_ candidate: URL, in root: URL) -> Bool {
-        let candidateComponents = candidate.standardizedFileURL.pathComponents
-        let rootComponents = root.standardizedFileURL.pathComponents
-        return candidateComponents.count >= rootComponents.count
-            && Array(candidateComponents.prefix(rootComponents.count)) == rootComponents
+        candidate.standardizedFileURL.isContained(in: root.standardizedFileURL)
     }
 }

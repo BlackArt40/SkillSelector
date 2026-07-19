@@ -693,10 +693,7 @@ public final class SkillFileOperator: @unchecked Sendable {
     }
 
     private func contains(_ candidate: URL, in root: URL) -> Bool {
-        let candidateComponents = candidate.pathComponents
-        let rootComponents = root.pathComponents
-        return candidateComponents.count >= rootComponents.count
-            && Array(candidateComponents.prefix(rootComponents.count)) == rootComponents
+        candidate.isContained(in: root)
     }
 
     private func authorizationFingerprint(_ roots: [AuthorizedRootSnapshot]) -> String {

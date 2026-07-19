@@ -4,6 +4,7 @@ import SwiftUI
 enum BrowserDestination: Hashable {
     case all
     case global
+    case system(rootID: String)
     case project(rootID: String)
     case agent(id: String)
 
@@ -13,6 +14,8 @@ enum BrowserDestination: Hashable {
             .all
         case .global:
             .global
+        case .system(let rootID):
+            .root(rootID: rootID)
         case .project(let rootID):
             .project(rootID: rootID)
         }
@@ -29,6 +32,16 @@ struct BrowserSidebar: View {
     let roots: [AuthorizedRootSnapshot]
     let definitions: [AgentDefinition]
     let detectedAgentIDs: Set<String>
+
+    private var systemRoots: [AuthorizedRootSnapshot] {
+        roots
+            .filter { $0.kind == .home || $0.kind == .system }
+            .sorted {
+                let lhsName = $0.url.lastPathComponent.lowercased()
+                let rhsName = $1.url.lastPathComponent.lowercased()
+                return lhsName == rhsName ? $0.url.path < $1.url.path : lhsName < rhsName
+            }
+    }
 
     private var projects: [AuthorizedRootSnapshot] {
         roots
@@ -74,6 +87,15 @@ struct BrowserSidebar: View {
                     .tag(BrowserDestination.global)
             }
 
+            if !systemRoots.isEmpty {
+                Section(L10n.string("System")) {
+                    ForEach(systemRoots) { root in
+                        Label(root.displayName, systemImage: root.kind.systemImage)
+                            .tag(BrowserDestination.system(rootID: root.id))
+                    }
+                }
+            }
+
             if !projects.isEmpty {
                 Section(L10n.string("Projects")) {
                     ForEach(projects) { project in
@@ -91,12 +113,6 @@ struct BrowserSidebar: View {
                     }
                 }
             }
-
-            Section(L10n.string("Manage")) {
-                SettingsLink {
-                    Label(L10n.string("Directories"), systemImage: "folder.badge.gearshape")
-                }
-            }
         }
         .listStyle(.sidebar)
         .navigationTitle("SkillSelector")
@@ -109,7 +125,7 @@ struct BrowserSidebar: View {
                 Image(systemName: "folder")
                     .foregroundStyle(.secondary)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(verbatim: project.url.lastPathComponent)
+                    Text(verbatim: project.displayName)
                     Text(verbatim: project.url.path)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -117,7 +133,7 @@ struct BrowserSidebar: View {
                 }
             }
         } else {
-            Label(project.url.lastPathComponent, systemImage: "folder")
+            Label(project.displayName, systemImage: "folder")
         }
     }
 }

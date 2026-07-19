@@ -1,6 +1,8 @@
 import Darwin
 import Foundation
 
+public typealias CommandRunning = ExternalCommandRunning
+
 public enum CommandOutputStream: String, Codable, Hashable, Sendable {
     case stdout
     case stderr

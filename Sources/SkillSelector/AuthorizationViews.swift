@@ -4,7 +4,6 @@ import SwiftUI
 
 struct AuthorizationViews: View {
     @Environment(AppModel.self) private var model
-    var kinds: [AuthorizedRootKind] = AuthorizedRootKind.allCases
     var showsHeading = true
 
     var body: some View {
@@ -13,74 +12,38 @@ struct AuthorizationViews: View {
                 Text(verbatim: L10n.string("Directories"))
                     .font(.headline)
             }
-            ForEach(kinds, id: \.self) { kind in
-                authorizationButton(systemImage: systemImage(for: kind), kind: kind)
+            Button {
+                guard let url = chooseDirectory(
+                    title: L10n.string("Import System Directory"),
+                    message: L10n.string("Choose a home directory containing Agent Skills (e.g. ~/.claude, ~/.codex).")
+                ) else { return }
+                Task { await model.authorize(url, as: .home) }
+            } label: {
+                Label(L10n.string("Import System Directory"), systemImage: "house")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            Button {
+                guard let url = chooseDirectory(
+                    title: L10n.string("Import Project Directory"),
+                    message: L10n.string("Choose a project directory to scan for all Skills.")
+                ) else { return }
+                Task { await model.authorize(url, as: .project) }
+            } label: {
+                Label(L10n.string("Import Project Directory"), systemImage: "folder")
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
 
-    private func authorizationButton(
-        systemImage: String,
-        kind: AuthorizedRootKind
-    ) -> some View {
-        Button {
-            guard let url = chooseDirectory(kind: kind) else {
-                return
-            }
-            Task { await model.authorize(url, as: kind) }
-        } label: {
-            Label(title(for: kind), systemImage: systemImage)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    private func chooseDirectory(kind: AuthorizedRootKind) -> URL? {
+    private func chooseDirectory(title: String, message: String) -> URL? {
         let panel = NSOpenPanel()
-        panel.title = title(for: kind)
-        panel.message = message(for: kind)
-        panel.prompt = L10n.string("Authorize")
+        panel.title = title
+        panel.message = message
+        panel.prompt = L10n.string("Import")
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.canCreateDirectories = false
-        if kind == .home {
-            panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
-        }
         return panel.runModal() == .OK ? panel.url?.standardizedFileURL : nil
-    }
-
-    private func title(for kind: AuthorizedRootKind) -> String {
-        switch kind {
-        case .home:
-            L10n.string("Home Directory")
-        case .project:
-            L10n.string("Project Directory")
-        case .system:
-            L10n.string("System Skill Directory")
-        case .custom:
-            L10n.string("Custom Skill Directory")
-        }
-    }
-
-    private func message(for kind: AuthorizedRootKind) -> String {
-        switch kind {
-        case .home:
-            L10n.string("SkillSelector accesses only known Agent paths inside your home directory.")
-        case .project:
-            L10n.string("Choose the exact project directory to scan.")
-        case .system:
-            L10n.string("Choose the exact system Skill directory to scan.")
-        case .custom:
-            L10n.string("Choose the exact custom Skill directory to scan.")
-        }
-    }
-
-    private func systemImage(for kind: AuthorizedRootKind) -> String {
-        switch kind {
-        case .home: "house"
-        case .project: "folder"
-        case .system: "externaldrive"
-        case .custom: "folder.badge.plus"
-        }
     }
 }

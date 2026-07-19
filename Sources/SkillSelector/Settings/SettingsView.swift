@@ -53,25 +53,18 @@ struct SettingsView: View {
     @State private var customAgentEditor = CustomAgentEditorState()
     @State private var settingsError: String?
     @State private var exportStatus: String?
+    @State private var editingRootID: String?
+    @State private var editingRootName: String = ""
 
     var body: some View {
         @Bindable var model = model
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 settingsSection(
-                    title: L10n.string("Refresh and Metadata"),
+                    title: L10n.string("Refresh"),
                     systemImage: "arrow.clockwise"
                 ) {
                     Toggle(L10n.string("Refresh Skills at Launch"), isOn: $model.refreshOnLaunch)
-                    Toggle(
-                        L10n.string("Enrich Missing Descriptions After Refresh"),
-                        isOn: $model.enrichMissingDescriptionsAfterRefresh
-                    )
-                    Text(verbatim: L10n.string(
-                        "Uses local gh, npm, and enabled read-only MCP tools only for Skills without custom, local, or remote descriptions."
-                    ))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
                 }
 
                 Divider()
@@ -96,17 +89,6 @@ struct SettingsView: View {
                 Divider()
 
                 settingsSection(
-                    title: L10n.string("Local Tools"),
-                    systemImage: "terminal"
-                ) {
-                    toolStatuses
-                }
-
-                Divider()
-                MCPSettingsView()
-                Divider()
-
-                settingsSection(
                     title: L10n.string("Diagnostics"),
                     systemImage: "stethoscope"
                 ) {
@@ -126,7 +108,6 @@ struct SettingsView: View {
         }
         .frame(width: 660, height: 720)
         .background(SettingsWindowTitle(title: L10n.string("SkillSelector Settings")))
-        .task { await model.detectTools() }
         .alert(
             L10n.string("Settings Error"),
             isPresented: Binding(
@@ -150,20 +131,40 @@ struct SettingsView: View {
             }
             ForEach(model.authorizedRoots) { root in
                 HStack(spacing: 10) {
-                    Image(systemName: rootIcon(root.kind))
+                    Image(systemName: root.kind.systemImage)
                         .foregroundStyle(.secondary)
                         .frame(width: 18)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(verbatim: rootTitle(root.kind))
+                    if editingRootID == root.id {
+                        TextField(
+                            root.displayName,
+                            text: $editingRootName,
+                            onCommit: {
+                                model.renameRoot(id: root.id, to: editingRootName)
+                                editingRootID = nil
+                            }
+                        )
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: 200)
+                    } else {
+                        Text(verbatim: root.displayName)
                             .fontWeight(.medium)
-                        Text(verbatim: root.url.path)
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .textSelection(.enabled)
                     }
+                    Text(verbatim: root.url.path)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .textSelection(.enabled)
                     Spacer(minLength: 8)
+                    Button {
+                        editingRootID = root.id
+                        editingRootName = root.customName ?? ""
+                    } label: {
+                        Image(systemName: "pencil")
+                    }
+                    .buttonStyle(.borderless)
+                    .help(L10n.string("Rename"))
+                    .accessibilityLabel(L10n.string("Rename"))
                     Button {
                         reauthorize(root)
                     } label: {
@@ -263,35 +264,6 @@ struct SettingsView: View {
         }
     }
 
-    private var toolStatuses: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(ToolKind.allCases, id: \.self) { kind in
-                HStack {
-                    Text(verbatim: kind.rawValue)
-                        .font(.system(.body, design: .monospaced).weight(.medium))
-                    Spacer()
-                    if let status = model.toolStatuses[kind] {
-                        Label(toolState(status.state), systemImage: toolStateIcon(status.state))
-                            .foregroundStyle(status.state == .available ? .green : .secondary)
-                        if let version = status.version {
-                            Text(verbatim: version)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-                    } else {
-                        ProgressView().controlSize(.small)
-                    }
-                }
-            }
-            Button {
-                Task { await model.detectTools() }
-            } label: {
-                Label(L10n.string("Check Tools"), systemImage: "arrow.clockwise")
-            }
-        }
-    }
-
     private func settingsSection<Content: View>(
         title: String,
         systemImage: String,
@@ -332,39 +304,4 @@ struct SettingsView: View {
         }
     }
 
-    private func rootTitle(_ kind: AuthorizedRootKind) -> String {
-        switch kind {
-        case .home: L10n.string("Home Directory")
-        case .project: L10n.string("Project Directory")
-        case .system: L10n.string("System Skill Directory")
-        case .custom: L10n.string("Custom Skill Directory")
-        }
-    }
-
-    private func rootIcon(_ kind: AuthorizedRootKind) -> String {
-        switch kind {
-        case .home: "house"
-        case .project: "folder"
-        case .system: "externaldrive"
-        case .custom: "folder.badge.plus"
-        }
-    }
-
-    private func toolState(_ state: ToolAvailabilityState) -> String {
-        switch state {
-        case .available: L10n.string("Available")
-        case .unavailable: L10n.string("Not Found")
-        case .unauthenticated: L10n.string("Not Authenticated")
-        case .invalid: L10n.string("Invalid")
-        }
-    }
-
-    private func toolStateIcon(_ state: ToolAvailabilityState) -> String {
-        switch state {
-        case .available: "checkmark.circle.fill"
-        case .unavailable: "questionmark.circle"
-        case .unauthenticated: "person.crop.circle.badge.exclamationmark"
-        case .invalid: "exclamationmark.triangle"
-        }
-    }
 }

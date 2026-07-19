@@ -362,12 +362,7 @@ public final class SkillUpdater: @unchecked Sendable {
     }
 
     private func covered(_ candidate: URL, by roots: [URL]) -> Bool {
-        roots.contains { root in
-            let candidateComponents = candidate.standardizedFileURL.pathComponents
-            let rootComponents = root.standardizedFileURL.pathComponents
-            return candidateComponents.count >= rootComponents.count
-                && Array(candidateComponents.prefix(rootComponents.count)) == rootComponents
-        }
+        candidate.standardizedFileURL.isContained(inAny: roots.map { $0.standardizedFileURL })
     }
 
     private static func diff(
@@ -438,12 +433,7 @@ public final class SkillFileOperatorPackageReplacer: SkillPackageReplacing, @unc
     }
 
     private func isCovered(_ candidate: URL, roots: [URL]) -> Bool {
-        roots.contains { root in
-            let candidateComponents = candidate.pathComponents
-            let rootComponents = root.standardizedFileURL.pathComponents
-            return candidateComponents.count >= rootComponents.count
-                && Array(candidateComponents.prefix(rootComponents.count)) == rootComponents
-        }
+        candidate.isContained(inAny: roots.map { $0.standardizedFileURL })
     }
 }
 
@@ -478,14 +468,6 @@ public struct LiveSkillPackageFetcher: SkillPackageFetching {
         authorizedHomeURL = nil
         runner = ExternalCommandRunner()
         session = .shared
-    }
-
-    public init(toolAccess: ToolAccess, runner: any CommandRunning = ExternalCommandRunner()) {
-        self.init(
-            executableURL: toolAccess.executableURL,
-            authorizedHomeURL: toolAccess.authorizedHomeURL,
-            runner: runner
-        )
     }
 
     public init(session: URLSession) {

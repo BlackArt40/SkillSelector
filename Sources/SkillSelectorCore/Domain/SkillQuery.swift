@@ -5,6 +5,7 @@ public struct SkillQuery: Hashable, Sendable {
         case all
         case global
         case project(rootID: String)
+        case root(rootID: String)
     }
 
     public enum Status: Hashable, Sendable {
@@ -71,12 +72,14 @@ public struct SkillQuery: Hashable, Sendable {
         case .all:
             true
         case .global:
-            snapshot.rootIDs.contains { rootID in
+            snapshot.agentIDs.isEmpty && snapshot.rootIDs.contains { rootID in
                 guard let kind = rootsByID[rootID]?.kind else { return false }
                 return kind == .home || kind == .system || kind == .custom
             }
         case .project(let rootID):
             rootsByID[rootID]?.kind == .project && snapshot.rootIDs.contains(rootID)
+        case .root(let rootID):
+            snapshot.rootIDs.contains(rootID)
         }
     }
 

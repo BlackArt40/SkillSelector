@@ -67,44 +67,6 @@ struct RootView: View {
                     onRefresh: refresh
                 )
 
-                Menu {
-                    Button {
-                        guard let selectedSkill else { return }
-                        Task { await model.enrich([selectedSkill]) }
-                    } label: {
-                        Label(
-                            L10n.string("Enrich Selected Skill"),
-                            systemImage: "doc.text.magnifyingglass"
-                        )
-                    }
-                    .disabled(selectedSkill == nil)
-
-                    Button {
-                        Task { await model.enrich(filteredSkills) }
-                    } label: {
-                        Label(
-                            L10n.string("Enrich Visible Skills"),
-                            systemImage: "square.stack.3d.up"
-                        )
-                    }
-                    .disabled(filteredSkills.isEmpty)
-                } label: {
-                    if model.isEnriching {
-                        ProgressView()
-                            .controlSize(.small)
-                            .frame(width: 18, height: 18)
-                    } else {
-                        Image(systemName: "text.magnifyingglass")
-                            .frame(width: 18, height: 18)
-                    }
-                }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .disabled(model.enrichmentCommandsDisabled)
-                .frame(width: 24, height: 24)
-                .help(L10n.string("Trusted Metadata"))
-                .accessibilityLabel(L10n.string("Trusted Metadata"))
-
                 SettingsLink {
                     Image(systemName: "gearshape")
                         .frame(width: 18, height: 18)
@@ -129,16 +91,6 @@ struct RootView: View {
             )
             .id(plan.id)
         }
-        .sheet(item: pendingEnrichmentBinding) { group in
-            CandidateSourceView(
-                group: group,
-                position: model.pendingEnrichmentPosition,
-                onCancel: model.cancelPendingEnrichment,
-                onSkip: model.skipPendingEnrichmentCandidate,
-                onApply: model.applyEnrichmentCandidate
-            )
-            .id(group.id)
-        }
         .sheet(item: pendingUpdateBinding) { proposal in
             UpdateReviewView(
                 proposal: proposal,
@@ -161,14 +113,6 @@ struct RootView: View {
             Button(L10n.string("OK")) { model.operationError = nil }
         } message: {
             Text(verbatim: model.operationError ?? "")
-        }
-        .alert(
-            L10n.string("Metadata Lookup Failed"),
-            isPresented: enrichmentErrorBinding
-        ) {
-            Button(L10n.string("OK")) { model.enrichmentError = nil }
-        } message: {
-            Text(verbatim: model.enrichmentError ?? "")
         }
         .alert(
             L10n.string("Skill Update Failed"),
@@ -200,24 +144,6 @@ struct RootView: View {
             get: { model.operationError != nil },
             set: { isPresented in
                 if !isPresented { model.operationError = nil }
-            }
-        )
-    }
-
-    private var pendingEnrichmentBinding: Binding<EnrichmentCandidateGroup?> {
-        Binding(
-            get: { model.pendingEnrichmentGroup },
-            set: { value in
-                if value == nil { model.cancelPendingEnrichment() }
-            }
-        )
-    }
-
-    private var enrichmentErrorBinding: Binding<Bool> {
-        Binding(
-            get: { model.enrichmentError != nil },
-            set: { isPresented in
-                if !isPresented { model.enrichmentError = nil }
             }
         )
     }

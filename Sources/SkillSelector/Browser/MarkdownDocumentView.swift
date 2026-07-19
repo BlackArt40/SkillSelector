@@ -58,18 +58,19 @@ struct MarkdownDocumentView: View {
                     .foregroundStyle(.secondary)
             }
         case .rendered(let attributed):
-            Text(attributed)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .textSelection(.enabled)
+            ScrollView {
+                Text(attributed)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+                    .padding(8)
+            }
         case .raw(let source):
-            VStack(alignment: .leading, spacing: 6) {
-                Text(verbatim: L10n.string("Raw Markdown"))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            ScrollView {
                 Text(verbatim: source)
                     .font(.system(.body, design: .monospaced))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .textSelection(.enabled)
+                    .padding(8)
             }
         case .tooLarge:
             messageShell(
@@ -98,19 +99,13 @@ struct MarkdownDocumentView: View {
             let document = try await model.loadDocument(for: skill)
             try Task.checkCancellation()
             let source = document.source
-            let renderTask = Task.detached(priority: .userInitiated) {
-                try? AttributedString(markdown: source)
-            }
-            let attributed = await withTaskCancellationHandler {
-                await renderTask.value
-            } onCancel: {
-                renderTask.cancel()
-            }
+            let body = MarkdownRenderer.extractBody(source)
+            let attributed = MarkdownRenderer.buildAttributedString(from: body)
             try Task.checkCancellation()
             if let attributed {
                 state = .rendered(attributed)
             } else {
-                state = .raw(document.source)
+                state = .raw(source)
             }
         } catch SkillDocumentReaderError.tooLarge {
             guard !Task.isCancelled else { return }
@@ -203,4 +198,5 @@ struct MarkdownDocumentView: View {
             String(describing: error)
         }
     }
+
 }

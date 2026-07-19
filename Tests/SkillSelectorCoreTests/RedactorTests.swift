@@ -150,9 +150,6 @@ final class RedactorTests: XCTestCase {
             roots: [
                 DiagnosticRootSummary(id: "root-project", kind: .project, isAvailable: false),
             ],
-            tools: [
-                DiagnosticToolSummary(kind: .gh, state: .unauthenticated, version: "gh 2.55.0"),
-            ],
             diagnostics: diagnostics
         )
 

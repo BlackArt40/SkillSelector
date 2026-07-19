@@ -94,7 +94,7 @@ struct SkillListView: View {
             } description: {
                 Text(verbatim: L10n.string("Authorize your home directory or add a project to find local Skills."))
             } actions: {
-                AuthorizationViews(kinds: [.home, .project], showsHeading: false)
+                AuthorizationViews(showsHeading: false)
                     .frame(width: 230)
             }
         } else if allSkillCount == 0 {
@@ -105,7 +105,7 @@ struct SkillListView: View {
             } actions: {
                 VStack(spacing: 8) {
                     Button(L10n.string("Refresh Skills"), action: onRefresh)
-                    AuthorizationViews(kinds: [.project], showsHeading: false)
+                    AuthorizationViews(showsHeading: false)
                         .frame(width: 230)
                 }
             }

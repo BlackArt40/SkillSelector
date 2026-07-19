@@ -469,10 +469,7 @@ private func isGitMetadataDirectory(_ url: URL) -> Bool {
 }
 
 private func isContained(_ candidate: URL, in root: URL) -> Bool {
-    let candidateComponents = physicalURL(candidate).pathComponents
-    let rootComponents = physicalURL(root).pathComponents
-    return candidateComponents.count >= rootComponents.count
-        && Array(candidateComponents.prefix(rootComponents.count)) == rootComponents
+    physicalURL(candidate).isContained(in: physicalURL(root))
 }
 
 private func physicalURL(_ url: URL) -> URL {

@@ -4,10 +4,6 @@ import SwiftUI
 
 struct SkillDetailView: View {
     @Environment(AppModel.self) private var model
-    @State private var detectedBindingToConfirm: String?
-    @State private var directPackageURL = ""
-    @State private var confirmsDetectedBinding = false
-    @State private var confirmsDirectPackage = false
     let skill: SkillSnapshot?
     let rootsByID: [String: AuthorizedRootSnapshot]
     let agentNamesByID: [String: String]
@@ -21,8 +17,14 @@ struct SkillDetailView: View {
                         let effective = DescriptionResolver.resolve(
                             DescriptionCandidates(snapshot: skill)
                         )
-                        Text(verbatim: effective.text)
-                            .textSelection(.enabled)
+                        let lines = MarkdownRenderer.extractBody(effective.text)
+                        if let attributed = MarkdownRenderer.buildAttributedString(from: lines) {
+                            Text(attributed)
+                                .textSelection(.enabled)
+                        } else {
+                            Text(verbatim: effective.text)
+                                .textSelection(.enabled)
+                        }
                         Text(verbatim: String.localizedStringWithFormat(
                             L10n.string("Description source: %@"),
                             provenanceName(effective.source)
@@ -39,17 +41,6 @@ struct SkillDetailView: View {
                             L10n.string("Local Skill Document"),
                             value: candidateValue(skill.localDescription)
                         )
-                        labeledValue(
-                            L10n.string("Remote Metadata"),
-                            value: candidateValue(skill.enrichedDescription)
-                        )
-                        if let provenance = skill.enrichedDescriptionProvenance {
-                            labeledValue(
-                                L10n.string("Remote Provenance"),
-                                value: provenance,
-                                monospaced: true
-                            )
-                        }
                         labeledValue(L10n.string("Local Fallback"), value: skill.name)
                         DescriptionEditor(skill: skill)
                             .id(skill.path)
@@ -82,135 +73,14 @@ struct SkillDetailView: View {
                         }
                         labeledValue(L10n.string("Entry File"), value: skill.entryFilename, monospaced: true)
                     }
-                    detailSection(L10n.string("Source")) {
-                        labeledValue(
-                            L10n.string("Update Source"),
-                            value: skill.sourceBinding ?? L10n.string("Not configured")
-                        )
-                        if let digest = skill.digest {
-                            labeledValue(L10n.string("Content Digest"), value: digest, monospaced: true)
-                        }
-                        ForEach(skill.discoveredSourceBindings, id: \.self) { binding in
-                            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                Image(systemName: "link.badge.plus")
-                                    .foregroundStyle(.secondary)
-                                Text(verbatim: binding)
-                                    .font(.caption.monospaced())
-                                    .textSelection(.enabled)
-                                Spacer(minLength: 8)
-                                Button {
-                                    detectedBindingToConfirm = binding
-                                    confirmsDetectedBinding = true
-                                } label: {
-                                    Label(L10n.string("Use Detected Source"), systemImage: "checkmark.circle")
-                                }
-                                .disabled(model.fileOperationCommandsDisabled)
-                            }
-                        }
-                        HStack(spacing: 8) {
-                            TextField(
-                                L10n.string("Direct HTTPS package URL"),
-                                text: $directPackageURL,
-                                prompt: Text(verbatim: "https://example.com/skill.zip")
-                            )
-                            .textFieldStyle(.roundedBorder)
-                            Button {
-                                confirmsDirectPackage = true
-                            } label: {
-                                Label(L10n.string("Use Package URL"), systemImage: "link.badge.plus")
-                            }
-                            .disabled(
-                                model.fileOperationCommandsDisabled
-                                    || directPackageURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                            )
-                        }
-                        Button {
-                            Task { await model.checkForUpdate(skill) }
-                        } label: {
-                            Label(L10n.string("Check for Updates"), systemImage: "arrow.triangle.2.circlepath")
-                        }
-                        .controlSize(.small)
-                        .disabled(
-                            model.fileOperationCommandsDisabled
-                                || skill.sourceBinding == nil
-                                || skill.digest == nil
-                                || skill.availability != .available
-                        )
-                        .help(L10n.string("Check this Skill's confirmed source with local gh"))
-                    }
-                    detailSection(L10n.string("Trusted Metadata")) {
-                        Button {
-                            Task { await model.enrich([skill]) }
-                        } label: {
-                            Label(
-                                L10n.string("Find Metadata"),
-                                systemImage: "text.magnifyingglass"
-                            )
-                        }
-                        .controlSize(.small)
-                        .disabled(
-                            model.enrichmentCommandsDisabled
-                                || skill.availability != .available
-                        )
-                        .help(L10n.string(
-                            "Find trusted metadata with local gh, npm, and enabled read-only MCP tools"
-                        ))
-                    }
                     detailSection(L10n.string("File Operations")) {
                         fileOperationControls(skill)
-                    }
-                    detailSection(L10n.string("Diagnostics")) {
-                        if skill.parseDiagnostics.isEmpty {
-                            Text(verbatim: L10n.string("No diagnostics"))
-                                .foregroundStyle(.secondary)
-                        } else {
-                            ForEach(Array(skill.parseDiagnostics.enumerated()), id: \.offset) { _, issue in
-                                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                    Image(systemName: "exclamationmark.circle")
-                                        .foregroundStyle(.orange)
-                                    Text(verbatim: diagnosticText(issue))
-                                        .textSelection(.enabled)
-                                }
-                            }
-                        }
                     }
                 }
                 .padding(24)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .navigationTitle(skill.name)
-            .confirmationDialog(
-                L10n.string("Confirm Update Source"),
-                isPresented: $confirmsDetectedBinding,
-                titleVisibility: .visible
-            ) {
-                Button(L10n.string("Use Detected Source")) {
-                    guard let binding = detectedBindingToConfirm else { return }
-                    model.confirmDiscoveredSource(path: skill.path, binding: binding)
-                    detectedBindingToConfirm = nil
-                }
-                Button(L10n.string("Cancel"), role: .cancel) {
-                    detectedBindingToConfirm = nil
-                }
-            } message: {
-                Text(verbatim: L10n.string(
-                    "This detected source will become the confirmed update source for this Skill."
-                ))
-            }
-            .confirmationDialog(
-                L10n.string("Confirm Direct Package URL"),
-                isPresented: $confirmsDirectPackage,
-                titleVisibility: .visible
-            ) {
-                Button(L10n.string("Use Package URL")) {
-                    model.confirmDirectPackageSource(path: skill.path, value: directPackageURL)
-                }
-                Button(L10n.string("Cancel"), role: .cancel) {}
-            } message: {
-                Text(verbatim: L10n.string(
-                    "Only this exact HTTPS URL will be stored as the confirmed update source."
-                ))
-            }
         } else {
             ContentUnavailableView(
                 L10n.string("Select a Skill"),
@@ -350,26 +220,7 @@ struct SkillDetailView: View {
     }
 
     private func rootRow(_ root: AuthorizedRootSnapshot) -> some View {
-        labeledValue(rootKindName(root.kind), value: root.url.path, monospaced: true)
-    }
-
-    private func rootKindName(_ kind: AuthorizedRootKind) -> String {
-        switch kind {
-        case .home: L10n.string("Home Root")
-        case .project: L10n.string("Project Root")
-        case .system: L10n.string("System Root")
-        case .custom: L10n.string("Custom Root")
-        }
-    }
-
-    private func diagnosticText(_ issue: ParseIssue) -> String {
-        let message = issue.diagnostic.map(L10n.diagnostic) ?? issue.message
-        guard let line = issue.line else { return message }
-        return String.localizedStringWithFormat(
-            L10n.string("Line %lld: %@"),
-            Int64(line),
-            message
-        )
+        labeledValue(root.kind.localizedName, value: root.url.path, monospaced: true)
     }
 
     private func provenanceName(_ source: EffectiveDescription.Source) -> String {

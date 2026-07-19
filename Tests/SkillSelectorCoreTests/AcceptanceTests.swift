@@ -190,145 +190,6 @@ final class AcceptanceTests: XCTestCase {
         }
     }
 
-    func testFakeGitHubAndNPMEnrichmentUseReadOnlyCommandAllowlistsAndConfirmedBinding() async throws {
-        let fixture = try AcceptanceFixture()
-        let runner = ExternalCommandRunner(defaultTimeout: 2)
-        let github = GitHubMetadataProvider(executableURL: fixture.fakeGH, runner: runner)
-        let npm = NPMMetadataProvider(executableURL: fixture.fakeNPM, runner: runner)
-
-        let githubCandidates = try await github.candidates(for: MetadataQuery(name: "demo"))
-        let npmCandidates = try await npm.candidates(for: MetadataQuery(name: "demo"))
-
-        let githubCandidate = try XCTUnwrap(githubCandidates.first)
-        XCTAssertEqual(githubCandidate.description, "Exact remote description.")
-        XCTAssertEqual(githubCandidate.sourceBinding, "github:acme/skills:skills/demo:branch:main")
-        XCTAssertTrue(SourceBindingDecision.shouldRequestConfirmation(
-            bindAsUpdateSource: true,
-            sourceBinding: githubCandidate.sourceBinding
-        ))
-        let confirmedSource = try SkillSource.userConfirmed(candidate: .github(
-            repository: githubCandidate.sourceIdentifier,
-            subdirectory: try XCTUnwrap(githubCandidate.skillSubdirectory),
-            reference: .branch("main")
-        ))
-        XCTAssertEqual(confirmedSource.provenance, .userConfirmedCandidate)
-        XCTAssertEqual(npmCandidates.first?.description, "Exact npm description.")
-        XCTAssertNil(npmCandidates.first?.sourceBinding)
-
-        let ghInvocations = try fixture.commandInvocations(at: fixture.ghLog)
-        XCTAssertEqual(ghInvocations, [
-            "search|code|demo|--filename|SKILL.md|--json|path,repository,url|--limit|20",
-            "api|repos/acme/skills",
-            "api|repos/acme/skills/contents/skills/demo/SKILL.md?ref=main|-H|Accept: application/vnd.github.raw+json",
-        ])
-        XCTAssertTrue(ghInvocations.allSatisfy { invocation in
-            !invocation.contains("token") && !invocation.contains(fixture.home.path)
-        })
-
-        let npmInvocations = try fixture.commandInvocations(at: fixture.npmLog)
-        XCTAssertEqual(npmInvocations, [
-            "search|demo|--json",
-            "view|--json|--|@acme/demo",
-        ])
-        XCTAssertTrue(npmInvocations.allSatisfy { invocation in
-            !["install", "exec", "run", "npx"].contains { invocation.split(separator: "|").contains(Substring($0)) }
-        })
-    }
-
-    func testMCPRequiresExactApprovalsAndUsesOnlyEnabledReadOnlyTools() async throws {
-        let fixture = try AcceptanceFixture()
-        var configurations = try MCPConfigDiscovery().discover(in: fixture.home)
-        XCTAssertEqual(Set(configurations.map(\.name)), ["http", "package-runner", "stdio"])
-        XCTAssertTrue(configurations.allSatisfy { !$0.isEnabled })
-        XCTAssertTrue(try XCTUnwrap(configurations.first { $0.name == "package-runner" }).isPackageRunner)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.packageRunnerMarker.path))
-
-        let stdio = try XCTUnwrap(configurations.first { $0.name == "stdio" })
-            .withState(isEnabled: true, enabledToolNames: ["metadata_lookup"])
-        let approvalStore = AcceptanceCommandApprovalStore()
-        let approval = CommandApproval(store: approvalStore)
-        await XCTAssertThrowsAcceptanceError(
-            try await StdioMCPClient(configuration: stdio, approval: approval).listTools(),
-            expected: MCPClientError.approvalRequired
-        )
-        approval.approve(try XCTUnwrap(stdio.commandApproval))
-        XCTAssertEqual(approvalStore.fingerprints(), [try XCTUnwrap(stdio.commandApproval).fingerprint])
-        let approvedClient = StdioMCPClient(configuration: stdio, approval: approval, timeout: 2)
-        let approvedTools = try await approvedClient.listTools()
-        XCTAssertEqual(approvedTools.map(\.name), [
-            "metadata_lookup", "write_everything",
-        ])
-        let approvedResult = try await approvedClient.call(
-            tool: "metadata_lookup",
-            arguments: ["name": .string("demo")]
-        )
-        XCTAssertEqual(
-            try MCPMetadataCandidateMapper.map(approvedResult).description,
-            "Exact stdio MCP description."
-        )
-        let preferences = AcceptanceMCPPreferenceStore()
-        preferences.setServer(stdio.id, enabled: true)
-        preferences.setTool("metadata_lookup", serverID: stdio.id, enabled: true)
-        XCTAssertTrue(preferences.isServerEnabled(stdio.id))
-        XCTAssertEqual(preferences.enabledTools(for: stdio.id), ["metadata_lookup"])
-        let provider = MCPMetadataProvider(
-            rootURL: fixture.home,
-            authorizedHomeURL: fixture.home,
-            preferences: preferences,
-            approval: approval
-        )
-
-        let stdioCandidates = try await provider.candidates(for: MetadataQuery(name: "demo"))
-
-        XCTAssertEqual(stdioCandidates.first?.description, "Exact stdio MCP description.")
-        let transcriptRequests = try String(contentsOf: fixture.stdioTranscript, encoding: .utf8)
-            .split(whereSeparator: \.isNewline)
-            .compactMap { line in
-                try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any]
-            }
-        XCTAssertTrue(transcriptRequests.contains { $0["method"] as? String == "tools/list" })
-        XCTAssertTrue(transcriptRequests.contains { request in
-            request["method"] as? String == "tools/call"
-                && ((request["params"] as? [String: Any])?["name"] as? String) == "metadata_lookup"
-        })
-        XCTAssertFalse(transcriptRequests.contains { request in
-            request["method"] as? String == "tools/call"
-                && ((request["params"] as? [String: Any])?["name"] as? String) == "write_everything"
-        })
-
-        try fixture.rewriteMCPConfiguration(stdioExtraArgument: "changed")
-        configurations = try MCPConfigDiscovery().discover(in: fixture.home)
-        let changed = try XCTUnwrap(configurations.first { $0.name == "stdio" })
-        XCTAssertNotEqual(changed.commandApproval?.fingerprint, stdio.commandApproval?.fingerprint)
-        XCTAssertEqual(
-            approval.state(for: try XCTUnwrap(changed.commandApproval)),
-            .approvalRequired
-        )
-        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.packageRunnerMarker.path))
-
-        AcceptanceHTTPURLProtocol.reset()
-        let sessionConfiguration = URLSessionConfiguration.ephemeral
-        sessionConfiguration.protocolClasses = [AcceptanceHTTPURLProtocol.self]
-        let session = URLSession(configuration: sessionConfiguration)
-        let http = try XCTUnwrap(configurations.first { $0.name == "http" })
-            .withState(isEnabled: true, enabledToolNames: ["metadata_lookup"])
-        let httpClient = HTTPMCPClient(configuration: http, session: session, timeout: 2)
-
-        let httpResult = try await httpClient.call(
-            tool: "metadata_lookup",
-            arguments: ["name": .string("demo")]
-        )
-
-        XCTAssertEqual(
-            httpResult.structuredContent?.objectValue?["description"]?.stringValue,
-            "Exact HTTP MCP description."
-        )
-        XCTAssertEqual(AcceptanceHTTPURLProtocol.requestedHosts, [
-            "fixture.invalid", "fixture.invalid", "fixture.invalid", "fixture.invalid",
-            "fixture.invalid", "fixture.invalid", "fixture.invalid", "fixture.invalid",
-        ])
-    }
-
     func testUpdateRejectsHostilePackagesWarnsForLocalChangesAndReplacesAtomically() async throws {
         let fixture = try AcceptanceFixture()
         let validator = PackageValidator()
@@ -434,11 +295,6 @@ private final class AcceptanceFixture: @unchecked Sendable {
     let fakeNPM: URL
     let ghLog: URL
     let npmLog: URL
-    let fakeStdioMCP: URL
-    let fakeNpx: URL
-    let stdioTranscript: URL
-    let packageRunnerMarker: URL
-
     var expectedInstallationPaths: Set<String> {
         Set([sharedSkill, copiedSkill, parentSkill, childSkill, brokenSkill, linkedSkill].map(\.path))
     }
@@ -460,10 +316,6 @@ private final class AcceptanceFixture: @unchecked Sendable {
         fakeNPM = root.appending(path: "bin/npm")
         ghLog = root.appending(path: "gh-invocations.log")
         npmLog = root.appending(path: "npm-invocations.log")
-        fakeStdioMCP = root.appending(path: "bin/stdio-mcp")
-        fakeNpx = root.appending(path: "bin/npx")
-        stdioTranscript = root.appending(path: "stdio-transcript.log")
-        packageRunnerMarker = root.appending(path: "package-runner-launched")
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: trash, withIntermediateDirectories: true)
 
@@ -508,26 +360,6 @@ private final class AcceptanceFixture: @unchecked Sendable {
             """,
             to: fakeNPM
         )
-        try writeExecutable(
-            """
-            #!/bin/sh
-            count=0
-            while IFS= read -r line; do
-              count=$((count + 1))
-              printf '%s\\n' "$line" >> "$1"
-              case "$count" in
-                1) printf '%s\\n' '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-03-26","capabilities":{},"serverInfo":{"name":"fixture","version":"1"}}}' ;;
-                3) case "$line" in
-                     *call*) printf '%s\\n' '{"jsonrpc":"2.0","id":2,"result":{"structuredContent":{"description":"Exact stdio MCP description.","sourceIdentifier":"fixture/demo","evidenceURL":"https://example.com/fixture/demo"}}}' ;;
-                     *) printf '%s\\n' '{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"metadata_lookup","inputSchema":{"type":"object"},"annotations":{"readOnlyHint":true,"destructiveHint":false}},{"name":"write_everything","inputSchema":{"type":"object"},"annotations":{"readOnlyHint":false,"destructiveHint":true}}]}}' ;;
-                   esac ;;
-              esac
-            done
-            """,
-            to: fakeStdioMCP
-        )
-        try writeExecutable("#!/bin/sh\ntouch \"\(packageRunnerMarker.path)\"\n", to: fakeNpx)
-        try rewriteMCPConfiguration()
     }
 
     deinit { try? FileManager.default.removeItem(at: root) }
@@ -561,20 +393,6 @@ private final class AcceptanceFixture: @unchecked Sendable {
         try String(contentsOf: url, encoding: .utf8)
             .split(whereSeparator: \.isNewline)
             .map(String.init)
-    }
-
-    func rewriteMCPConfiguration(stdioExtraArgument: String? = nil) throws {
-        var stdioArguments = [stdioTranscript.path]
-        if let stdioExtraArgument { stdioArguments.append(stdioExtraArgument) }
-        let object: [String: Any] = [
-            "servers": [
-                "stdio": ["command": fakeStdioMCP.path, "args": stdioArguments],
-                "http": ["url": "https://fixture.invalid/mcp", "type": "streamable-http"],
-                "package-runner": ["command": fakeNpx.path, "args": ["-y", "hostile-package@1"]],
-            ],
-        ]
-        let data = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
-        try data.write(to: home.appending(path: "mcp.json"), options: .atomic)
     }
 
     func description(at skill: URL) throws -> String? {
@@ -631,42 +449,6 @@ private final class AcceptanceBookmarkAdapter: BookmarkDataCreating, @unchecked 
     }
 }
 
-private final class AcceptanceCommandApprovalStore: CommandApprovalStoring, @unchecked Sendable {
-    private let lock = NSLock()
-    private var values: Set<String> = []
-
-    func fingerprints() -> Set<String> { lock.withLock { values } }
-    func save(fingerprints: Set<String>) { lock.withLock { values = fingerprints } }
-}
-
-private final class AcceptanceMCPPreferenceStore: MCPPreferenceStoring, @unchecked Sendable {
-    private let lock = NSLock()
-    private var enabledServers: Set<String> = []
-    private var enabledToolsByServer: [String: Set<String>] = [:]
-
-    func isServerEnabled(_ id: String) -> Bool {
-        lock.withLock { enabledServers.contains(id) }
-    }
-
-    func setServer(_ id: String, enabled: Bool) {
-        lock.withLock {
-            if enabled { enabledServers.insert(id) }
-            else { enabledServers.remove(id) }
-        }
-    }
-
-    func enabledTools(for serverID: String) -> Set<String> {
-        lock.withLock { enabledToolsByServer[serverID, default: []] }
-    }
-
-    func setTool(_ name: String, serverID: String, enabled: Bool) {
-        lock.withLock {
-            if enabled { enabledToolsByServer[serverID, default: []].insert(name) }
-            else { enabledToolsByServer[serverID, default: []].remove(name) }
-        }
-    }
-}
-
 private final class AcceptanceTrash: FileOperationTrashing {
     let root: URL
     private(set) var movedItems: [URL] = []
@@ -714,104 +496,4 @@ private func XCTAssertThrowsAcceptanceError<T, E: Error & Equatable>(
     }
 }
 
-private final class AcceptanceHTTPURLProtocol: URLProtocol, @unchecked Sendable {
-    private static let lock = NSLock()
-    nonisolated(unsafe) private static var hosts: [String] = []
 
-    static var requestedHosts: [String] { lock.withLock { hosts } }
-    static func reset() { lock.withLock { hosts = [] } }
-
-    override class func canInit(with request: URLRequest) -> Bool { true }
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
-
-    override func startLoading() {
-        Self.lock.withLock { Self.hosts.append(request.url?.host ?? "") }
-        let body = Self.bodyData(for: request).flatMap {
-            try? JSONSerialization.jsonObject(with: $0) as? [String: Any]
-        }
-        let method = body?["method"] as? String
-        let id = body?["id"] as? Int
-        let status: Int
-        let responseBody: Data
-        let headers: [String: String]
-        switch (request.httpMethod, method, id) {
-        case ("DELETE", _, _):
-            status = 200
-            responseBody = Data()
-            headers = [:]
-        case (_, "notifications/initialized", nil):
-            status = 202
-            responseBody = Data()
-            headers = [:]
-        case (_, "initialize", .some(let id)):
-            status = 200
-            responseBody = Self.rpc(
-                id: id,
-                result: [
-                    "protocolVersion": "2025-03-26",
-                    "capabilities": [:],
-                    "serverInfo": ["name": "fixture", "version": "1"],
-                ]
-            )
-            headers = ["Mcp-Session-Id": "fixture-session"]
-        case (_, "tools/list", .some(let id)):
-            status = 200
-            responseBody = Self.rpc(id: id, result: [
-                "tools": [[
-                    "name": "metadata_lookup",
-                    "inputSchema": ["type": "object"],
-                    "annotations": ["readOnlyHint": true, "destructiveHint": false],
-                ]],
-            ])
-            headers = [:]
-        case (_, "tools/call", .some(let id)):
-            status = 200
-            responseBody = Self.rpc(id: id, result: [
-                "structuredContent": [
-                    "description": "Exact HTTP MCP description.",
-                    "sourceIdentifier": "fixture/http-demo",
-                    "evidenceURL": "https://example.com/fixture/http-demo",
-                ],
-            ])
-            headers = [:]
-        default:
-            status = 400
-            responseBody = Data()
-            headers = [:]
-        }
-        let response = HTTPURLResponse(
-            url: request.url!,
-            statusCode: status,
-            httpVersion: "HTTP/1.1",
-            headerFields: headers
-        )!
-        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        if !responseBody.isEmpty { client?.urlProtocol(self, didLoad: responseBody) }
-        client?.urlProtocolDidFinishLoading(self)
-    }
-
-    override func stopLoading() {}
-
-    private static func rpc(id: Int, result: [String: Any]) -> Data {
-        try! JSONSerialization.data(withJSONObject: [
-            "jsonrpc": "2.0",
-            "id": id,
-            "result": result,
-        ], options: [.sortedKeys])
-    }
-
-    private static func bodyData(for request: URLRequest) -> Data? {
-        if let body = request.httpBody { return body }
-        guard let stream = request.httpBodyStream else { return nil }
-        stream.open()
-        defer { stream.close() }
-        var data = Data()
-        var buffer = [UInt8](repeating: 0, count: 4_096)
-        while stream.hasBytesAvailable {
-            let count = stream.read(&buffer, maxLength: buffer.count)
-            if count <= 0 { break }
-            data.append(contentsOf: buffer.prefix(count))
-        }
-        return data
-    }
-}

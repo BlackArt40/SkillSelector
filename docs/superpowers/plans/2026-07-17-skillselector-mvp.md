@@ -2,9 +2,17 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build and package the confirmed SkillSelector macOS 14 application for safely discovering, viewing, managing, enriching, and updating existing local Agent Skills.
+> **Note (2026-07-19):** The following features have been removed from the implementation:
+> - Task 9 (Local tool detection for gh/npm) — deleted
+> - Task 10 (Trusted metadata enrichment with gh/npm) — deleted
+> - Task 11 (MCP tool discovery and invocation) — deleted
+> - Related UI: Trusted Metadata section, Source section, Diagnostics section in skill detail
+> - Related settings: "Enrich Missing Descriptions After Refresh" toggle, "Local Tools" section
+> - Related sidebar: "Manage" section with "Directories" link
 
-**Architecture:** A Swift Package contains a native SwiftUI executable and a `SkillSelectorCore` library. The core exposes deep interfaces for registry lookup, scanning/indexing, file operations, enrichment, and updates; SwiftUI calls those interfaces through one `@MainActor` app model. SwiftData persists metadata, while security-scoped bookmarks and external command execution remain behind dedicated adapters.
+**Goal:** Build and package the confirmed SkillSelector macOS 14 application for safely discovering, viewing, managing, ~~enriching,~~ and updating existing local Agent Skills.
+
+**Architecture:** A Swift Package contains a native SwiftUI executable and a `SkillSelectorCore` library. The core exposes deep interfaces for registry lookup, scanning/indexing, file operations, ~~enrichment,~~ and updates; SwiftUI calls those interfaces through one `@MainActor` app model. SwiftData persists metadata, while security-scoped bookmarks and external command execution remain behind dedicated adapters.
 
 **Tech Stack:** Swift 6.3, SwiftUI, SwiftData, Foundation, AppKit, Security, OSLog, XCTest, Swift Package Manager, shell packaging scripts, Xcode 26.5 toolchain.
 

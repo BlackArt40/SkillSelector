@@ -70,7 +70,7 @@ final class SkillQueryTests: XCTestCase {
         let claude = SkillQuery(agentID: "claude-code")
             .apply(to: snapshots, rootsByID: rootsByID)
 
-        XCTAssertEqual(Set(global.map(\.path)), [shared.path, "/codex/only", "/claude/only"])
+        XCTAssertEqual(Set(global.map(\.path)), [shared.path])
         XCTAssertEqual(codex.map(\.path), ["/codex/only"])
         XCTAssertEqual(claude.map(\.path), ["/claude/only"])
     }
@@ -82,9 +82,9 @@ final class SkillQueryTests: XCTestCase {
             rootIDs: ["project-alpha"]
         )
         let global = [
-            snapshot(path: "/opaque/home", name: "Home", rootIDs: ["home-root"]),
-            snapshot(path: "/opaque/system", name: "System", rootIDs: ["system-root"]),
-            snapshot(path: "/opaque/custom", name: "Custom", rootIDs: ["custom-root"]),
+            snapshot(path: "/opaque/home", name: "Home", agentIDs: [], rootIDs: ["home-root"]),
+            snapshot(path: "/opaque/system", name: "System", agentIDs: [], rootIDs: ["system-root"]),
+            snapshot(path: "/opaque/custom", name: "Custom", agentIDs: [], rootIDs: ["custom-root"]),
         ]
 
         let result = SkillQuery(scope: .global)
@@ -97,6 +97,7 @@ final class SkillQueryTests: XCTestCase {
         let spanning = snapshot(
             path: "/shared/spanning",
             name: "Spanning",
+            agentIDs: [],
             rootIDs: ["home-root", "project-alpha"]
         )
         let snapshots = [
@@ -189,6 +190,42 @@ final class SkillQueryTests: XCTestCase {
             SkillQuery(searchText: "hidden")
                 .apply(to: [skill], rootsByID: rootsByID).isEmpty
         )
+    }
+
+    func testProjectScopeFiltersToOwnSkillsOnly() {
+        let snapshots = [
+            snapshot(path: "/alpha/skill-a", name: "Skill A", rootIDs: ["project-alpha"]),
+            snapshot(path: "/alpha/skill-b", name: "Skill B", rootIDs: ["project-alpha"]),
+            snapshot(path: "/beta/skill-c", name: "Skill C", rootIDs: ["project-beta"]),
+            snapshot(path: "/home/shared", name: "Shared", agentIDs: [], rootIDs: ["home-root"]),
+        ]
+
+        let alpha = SkillQuery(scope: .project(rootID: "project-alpha"))
+            .apply(to: snapshots, rootsByID: rootsByID)
+        let beta = SkillQuery(scope: .project(rootID: "project-beta"))
+            .apply(to: snapshots, rootsByID: rootsByID)
+
+        XCTAssertEqual(alpha.map(\.name).sorted(), ["Skill A", "Skill B"])
+        XCTAssertEqual(beta.map(\.name), ["Skill C"])
+    }
+
+    func testProjectDisplayNameShowsFolderName() {
+        let root = AuthorizedRootSnapshot(
+            id: "proj-1",
+            url: URL(fileURLWithPath: "/Work/my-project"),
+            kind: .project
+        )
+        XCTAssertEqual(root.displayName, "my-project")
+    }
+
+    func testProjectDisplayNameRespectsCustomName() {
+        var root = AuthorizedRootSnapshot(
+            id: "proj-1",
+            url: URL(fileURLWithPath: "/Work/my-project"),
+            kind: .project
+        )
+        root.customName = "My Project"
+        XCTAssertEqual(root.displayName, "My Project")
     }
 
     func testSortModesUsePathAscendingAsFinalTieBreaker() {
