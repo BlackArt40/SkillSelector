@@ -32,6 +32,7 @@ struct BrowserSidebar: View {
     let roots: [AuthorizedRootSnapshot]
     let definitions: [AgentDefinition]
     let detectedAgentIDs: Set<String>
+    var onDrop: ((SkillDragPayload, URL) -> Void)?
 
     private var systemRoots: [AuthorizedRootSnapshot] {
         roots
@@ -90,8 +91,14 @@ struct BrowserSidebar: View {
             if !systemRoots.isEmpty {
                 Section(L10n.string("System")) {
                     ForEach(systemRoots) { root in
-                        Label(root.displayName, systemImage: root.kind.systemImage)
+                        Label(L10n.string(root.kind.localizedName), systemImage: root.kind.systemImage)
                             .tag(BrowserDestination.system(rootID: root.id))
+                            .dropDestination(for: SkillDragPayload.self) { items, _ in
+                                guard let item = items.first,
+                                      let onDrop else { return false }
+                                onDrop(item, root.url)
+                                return true
+                            }
                     }
                 }
             }
@@ -101,6 +108,12 @@ struct BrowserSidebar: View {
                     ForEach(projects) { project in
                         projectLabel(project)
                             .tag(BrowserDestination.project(rootID: project.id))
+                            .dropDestination(for: SkillDragPayload.self) { items, _ in
+                                guard let item = items.first,
+                                      let onDrop else { return false }
+                                onDrop(item, project.url)
+                                return true
+                            }
                     }
                 }
             }

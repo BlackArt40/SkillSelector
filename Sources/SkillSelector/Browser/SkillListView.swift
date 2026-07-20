@@ -15,6 +15,7 @@ struct SkillListView: View {
     let agentNamesByID: [String: String]
     let onRefresh: () -> Void
     let onClearFilters: () -> Void
+    var onOperation: ((FileOperationKind, SkillSnapshot) -> Void)?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -66,7 +67,7 @@ struct SkillListView: View {
             emptyState
         } else {
             List(skills, selection: $selection) { skill in
-                SkillRow(skill: skill, agentNamesByID: agentNamesByID)
+                SkillRow(skill: skill, agentNamesByID: agentNamesByID, onOperation: onOperation)
                     .tag(SkillSelection(path: skill.path))
             }
             .listStyle(.inset)
@@ -79,14 +80,7 @@ struct SkillListView: View {
             ContentUnavailableView {
                 Label(L10n.string("Refresh Failed"), systemImage: "exclamationmark.triangle")
             } description: {
-                VStack(spacing: 4) {
-                    Text(verbatim: L10n.string("Check folder access, then try refreshing again."))
-                    Text(verbatim: message)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            } actions: {
-                Button(L10n.string("Retry Refresh"), action: onRefresh)
+                Text(verbatim: message)
             }
         } else if !hasAuthorization {
             ContentUnavailableView {
@@ -117,13 +111,6 @@ struct SkillListView: View {
             } actions: {
                 Button(L10n.string("Clear Filters"), action: onClearFilters)
             }
-        } else {
-            ContentUnavailableView(
-                L10n.string("No Skills Found"),
-                systemImage: "tray",
-                description: Text(verbatim: L10n.string("Refresh the authorized folders to check again."))
-            )
         }
     }
-
 }

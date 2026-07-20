@@ -4,6 +4,7 @@ import SwiftUI
 struct SkillRow: View {
     let skill: SkillSnapshot
     let agentNamesByID: [String: String]
+    var onOperation: ((FileOperationKind, SkillSnapshot) -> Void)?
 
     private var agentNames: String {
         skill.agentIDs
@@ -48,5 +49,29 @@ struct SkillRow: View {
         }
         .padding(.vertical, 3)
         .accessibilityElement(children: .combine)
+        .draggable(SkillDragPayload(path: skill.path, name: skill.name))
+        .contextMenu {
+            Button {
+                onOperation?(.copy, skill)
+            } label: {
+                Label(L10n.string("Copy"), systemImage: "document.on.document")
+            }
+            Button {
+                onOperation?(.move, skill)
+            } label: {
+                Label(L10n.string("Move"), systemImage: "folder")
+            }
+            Button {
+                onOperation?(.createSymbolicLink, skill)
+            } label: {
+                Label(L10n.string("Create Link"), systemImage: "link")
+            }
+            Divider()
+            Button(role: .destructive) {
+                onOperation?(.delete, skill)
+            } label: {
+                Label(L10n.string("Move to Trash"), systemImage: "trash")
+            }
+        }
     }
 }

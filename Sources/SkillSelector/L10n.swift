@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import SkillSelectorCore
 
 enum L10n {
@@ -12,13 +13,31 @@ enum L10n {
         }
         return Bundle.module
     }()
-    private static let selectedBundle = languageBundle(
-        preferredLanguages: Locale.preferredLanguages
-    )
     private static let englishBundle = languageBundle(preferredLanguages: ["en"])
 
+    static var currentLanguage: String? {
+        UserDefaults.standard.string(forKey: "SkillSelector.preferredLanguage")
+    }
+
+    static let languageDidChangeNotification = Notification.Name("SkillSelectorLanguageDidChange")
+
+    static func setLanguage(_ language: String?) {
+        if let language {
+            UserDefaults.standard.set(language, forKey: "SkillSelector.preferredLanguage")
+        } else {
+            UserDefaults.standard.removeObject(forKey: "SkillSelector.preferredLanguage")
+        }
+        NotificationCenter.default.post(name: languageDidChangeNotification, object: nil)
+    }
+
     static func string(_ key: String) -> String {
-        let selected = selectedBundle.localizedString(
+        let bundle: Bundle
+        if let lang = UserDefaults.standard.string(forKey: "SkillSelector.preferredLanguage") {
+            bundle = languageBundle(preferredLanguages: [lang])
+        } else {
+            bundle = languageBundle(preferredLanguages: Locale.preferredLanguages)
+        }
+        let selected = bundle.localizedString(
             forKey: key,
             value: missingValue,
             table: nil
@@ -54,5 +73,24 @@ enum L10n {
             return resourceBundle
         }
         return bundle
+    }
+}
+
+
+struct LanguageReloading: ViewModifier {
+    @State private var languageVersion = 0
+
+    func body(content: Content) -> some View {
+        content
+            .id(languageVersion)
+            .onReceive(NotificationCenter.default.publisher(for: L10n.languageDidChangeNotification)) { _ in
+                languageVersion += 1
+            }
+    }
+}
+
+extension View {
+    func languageReloading() -> some View {
+        modifier(LanguageReloading())
     }
 }

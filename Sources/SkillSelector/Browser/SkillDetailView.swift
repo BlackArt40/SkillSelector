@@ -73,9 +73,6 @@ struct SkillDetailView: View {
                         }
                         labeledValue(L10n.string("Entry File"), value: skill.entryFilename, monospaced: true)
                     }
-                    detailSection(L10n.string("File Operations")) {
-                        fileOperationControls(skill)
-                    }
                 }
                 .padding(24)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -116,82 +113,6 @@ struct SkillDetailView: View {
         }
     }
 
-    private func fileOperationControls(_ skill: SkillSnapshot) -> some View {
-        LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: 120), spacing: 8)],
-            alignment: .leading,
-            spacing: 8
-        ) {
-            operationButton(
-                L10n.string("Copy"),
-                icon: "document.on.document",
-                help: L10n.string("Copy Skill"),
-                operation: .copy,
-                skill: skill
-            )
-            operationButton(
-                L10n.string("Move"),
-                icon: "folder",
-                help: L10n.string("Move Skill"),
-                operation: .move,
-                skill: skill
-            )
-            operationButton(
-                L10n.string("Create Link"),
-                icon: "link",
-                help: L10n.string("Create Symbolic Link"),
-                operation: .createSymbolicLink,
-                skill: skill
-            )
-            Button(role: .destructive) {
-                Task { await model.planFileOperation(.delete, for: skill) }
-            } label: {
-                Label(L10n.string("Trash"), systemImage: "trash")
-            }
-            .disabled(model.fileOperationCommandsDisabled || skill.availability != .available)
-            .help(L10n.string("Move Skill to Trash"))
-            .accessibilityLabel(L10n.string("Move Skill to Trash"))
-        }
-        .controlSize(.small)
-    }
-
-    private func operationButton(
-        _ title: String,
-        icon: String,
-        help: String,
-        operation: FileOperationKind,
-        skill: SkillSnapshot
-    ) -> some View {
-        Button {
-            chooseDestination(for: operation, skill: skill)
-        } label: {
-            Label(title, systemImage: icon)
-        }
-        .disabled(model.fileOperationCommandsDisabled || skill.availability != .available)
-        .help(help)
-        .accessibilityLabel(help)
-    }
-
-    private func chooseDestination(for operation: FileOperationKind, skill: SkillSnapshot) {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.canCreateDirectories = false
-        panel.title = L10n.string("Choose Skill Root")
-        panel.prompt = L10n.string("Choose Skill Root")
-        panel.message = L10n.string("Choose a registered Skill root")
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        Task {
-            await model.planFileOperation(
-                operation,
-                for: skill,
-                destinationRootURL: url,
-                conflictPolicy: .keepBoth
-            )
-        }
-    }
-
     private func detailSection<Content: View>(
         _ title: String,
         @ViewBuilder content: () -> Content
@@ -220,7 +141,11 @@ struct SkillDetailView: View {
     }
 
     private func rootRow(_ root: AuthorizedRootSnapshot) -> some View {
-        labeledValue(root.kind.localizedName, value: root.url.path, monospaced: true)
+        labeledValue(
+            L10n.string(root.kind.localizedName),
+            value: root.url.path,
+            monospaced: true
+        )
     }
 
     private func provenanceName(_ source: EffectiveDescription.Source) -> String {
@@ -241,6 +166,6 @@ struct SkillDetailView: View {
     }
 }
 
-private extension String {
+extension String {
     var nilIfEmpty: String? { isEmpty ? nil : self }
 }

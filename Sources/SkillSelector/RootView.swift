@@ -28,11 +28,16 @@ struct RootView: View {
         }
 
         NavigationSplitView {
+
             BrowserSidebar(
                 destination: $destination,
                 roots: model.authorizedRoots,
                 definitions: model.agentDefinitions,
-                detectedAgentIDs: detectedAgentIDs
+                detectedAgentIDs: detectedAgentIDs,
+                onDrop: { payload, rootURL in
+                    guard let skill = model.snapshots.first(where: { $0.path == payload.path }) else { return }
+                    Task { await model.planFileOperation(.move, for: skill, destinationRootURL: rootURL) }
+                }
             )
             .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 260)
         } content: {
@@ -48,7 +53,14 @@ struct RootView: View {
                 refreshState: model.refreshState,
                 agentNamesByID: agentNamesByID,
                 onRefresh: refresh,
-                onClearFilters: clearFilters
+                onClearFilters: clearFilters,
+                onOperation: { operation, skill in
+                    if operation == .delete {
+                        Task { await model.planFileOperation(operation, for: skill) }
+                    } else {
+                        chooseDestination(for: operation, skill: skill)
+                    }
+                }
             )
             .navigationSplitViewColumnWidth(min: 280, ideal: 330, max: 380)
         } detail: {
@@ -59,6 +71,7 @@ struct RootView: View {
             )
             .frame(minWidth: 420)
         }
+        .languageReloading()
         .toolbar {
             ToolbarItemGroup {
                 RefreshToolbarControl(
@@ -174,6 +187,26 @@ struct RootView: View {
         destination = .all
         searchText = ""
         status = .all
+    }
+
+    private func chooseDestination(for operation: FileOperationKind, skill: SkillSnapshot) {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = false
+        panel.title = L10n.string("Choose Skill Root")
+        panel.prompt = L10n.string("Choose Skill Root")
+        panel.message = L10n.string("Choose a registered Skill root")
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task {
+            await model.planFileOperation(
+                operation,
+                for: skill,
+                destinationRootURL: url,
+                conflictPolicy: .keepBoth
+            )
+        }
     }
 }
 

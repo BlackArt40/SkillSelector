@@ -6,7 +6,6 @@ public enum AppLogCategory: String, Codable, CaseIterable, Hashable, Sendable {
     case persistence
     case operations
     case commands
-    case enrichment
     case updates
 }
 
@@ -74,7 +73,6 @@ public enum DiagnosticLogger {
     private static let persistence = Logger(subsystem: subsystem, category: AppLogCategory.persistence.rawValue)
     private static let operations = Logger(subsystem: subsystem, category: AppLogCategory.operations.rawValue)
     private static let commands = Logger(subsystem: subsystem, category: AppLogCategory.commands.rawValue)
-    private static let enrichment = Logger(subsystem: subsystem, category: AppLogCategory.enrichment.rawValue)
     private static let updates = Logger(subsystem: subsystem, category: AppLogCategory.updates.rawValue)
 
     static func write(_ event: AppDiagnostic) {
@@ -88,7 +86,6 @@ public enum DiagnosticLogger {
         case .persistence: persistence
         case .operations: operations
         case .commands: commands
-        case .enrichment: enrichment
         case .updates: updates
         }
     }

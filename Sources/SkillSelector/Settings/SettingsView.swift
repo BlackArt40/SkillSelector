@@ -70,6 +70,28 @@ struct SettingsView: View {
                 Divider()
 
                 settingsSection(
+                    title: L10n.string("Interface Language"),
+                    systemImage: "globe"
+                ) {
+                    Text(L10n.string("Language description"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Picker("", selection: Binding(
+                        get: { L10n.currentLanguage },
+                        set: { newValue in
+                            L10n.setLanguage(newValue)
+                        }
+                    )) {
+                        Text("简体中文").tag("zh-Hans" as String?)
+                        Text("English").tag("en" as String?)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                }
+
+                Divider()
+
+                settingsSection(
                     title: L10n.string("Authorized Directories"),
                     systemImage: "folder.badge.gearshape"
                 ) {
@@ -108,6 +130,7 @@ struct SettingsView: View {
         }
         .frame(width: 660, height: 720)
         .background(SettingsWindowTitle(title: L10n.string("SkillSelector Settings")))
+        .languageReloading()
         .alert(
             L10n.string("Settings Error"),
             isPresented: Binding(
@@ -146,7 +169,7 @@ struct SettingsView: View {
                         .textFieldStyle(.roundedBorder)
                         .frame(maxWidth: 200)
                     } else {
-                        Text(verbatim: root.displayName)
+                        Text(verbatim: L10n.string(root.kind.localizedName))
                             .fontWeight(.medium)
                     }
                     Text(verbatim: root.url.path)
