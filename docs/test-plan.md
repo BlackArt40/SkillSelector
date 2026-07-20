@@ -1,40 +1,39 @@
-# SkillSelector MVP Test Plan
+# SkillSelector 测试计划
 
-This document records the release checks for the confirmed product specification. Automated checks use an isolated temporary directory; they do not read a real home directory, access the network, or invoke the macOS Trash.
+本文档记录已确认产品规格的发布检查。自动化检查使用隔离的临时目录；不读取真实主目录、不启动已安装的 `gh` 或 `npm`、不访问网络，也不调用 macOS 回收站。
 
-## Automated Acceptance Coverage
+## 自动化验收覆盖
 
-Run the focused suite with:
+运行聚焦测试套件：
 
 ```zsh
 swift test --filter AcceptanceTests
 ```
 
-`AcceptanceTests` creates a unique directory below the system temporary directory, including a disposable home, nested projects, fake executables, and an injected Trash adapter.
+`AcceptanceTests` 在系统临时目录下创建唯一目录，包括一次性主目录、嵌套项目、伪可执行文件和注入的回收站适配器。
 
-| Product behavior | Acceptance evidence |
+| 产品行为 | 验收证据 |
 | --- | --- |
-| Allowlisted discovery and identity | Startup discovery deduplicates shared Agent paths, preserves malformed frontmatter diagnostics and symlink targets, recurses authorized projects, and skips dependency directories. |
-| Refresh and descriptions | Manual refresh retains an inaccessible project record as unavailable; local descriptions override and a custom description overrides local content. |
-| File safety | Copy conflict policies fail, cancel, keep both, and replace with a second confirmation. Move, symbolic-link creation, symbolic-link deletion, injected Trash, and unauthorized-source rejection are asserted. |
-| Updates | Path-traversal and escaping-link archives are rejected. A changed local digest requires a second confirmation. A confirmed replacement updates a symlink target, moves the prior target through the injected Trash adapter, refreshes the affected root, and does not execute downloaded files. |
+| 允许列表发现和身份 | 启动发现去重共享 Agent 路径，保留无效 frontmatter 诊断和符号链接目标，递归授权项目，跳过依赖目录。 |
+| 刷新和描述 | 手动刷新将不可用的项目记录保留为不可用；本地描述覆盖，自定义描述覆盖本地内容。 |
+| 文件安全 | 复制冲突策略失败、取消、保留两个和替换需第二次确认。移动、符号链接创建、符号链接删除、注入回收站和未授权来源拒绝均已断言。 |
+| 更新 | 路径遍历和转义链接归档被拒绝。更改的本地摘要需要第二次确认。确认的替换更新符号链接目标，通过注入回收站适配器移动先前目标，刷新受影响的根目录，且不执行下载的文件。 |
 
-## Packaged-App Sandbox Check
+## 打包应用沙盒检查
 
-Status: **manual, not executed by this automated run**. The release gate validates signing, sandbox entitlement, universal architectures, bundle version, and DMG integrity, but it cannot drive the macOS directory-panel authorization flow or make a trustworthy observation of sandbox boundaries. Perform this check before publishing a release.
+状态：**手动执行，不由自动化运行**。发布门控验证签名、沙盒权限、通用架构、包版本和 DMG 完整性，但无法驱动 macOS 目录面板授权流程或对沙盒边界进行可靠观察。发布前执行此检查。
 
-1. Create a disposable directory with `home/.agents/skills/demo/SKILL.md`, `home/.cursor/skills/copied/SKILL.md`, and a separate `outside/` directory. Keep a small project tree below `home/projects/demo` with a registered project Skill directory.
-2. Mount the versioned DMG and launch the packaged `SkillSelector.app`. In the first authorization panel, select only the disposable `home` directory. Do not grant access to its parent.
-3. In English, run Home Check, add the disposable project, open `demo`, read its Markdown, set and remove a custom description, then copy, move, link, and delete a fixture Skill. Confirm the displayed source and destination for each operation.
-4. Repeat the same actions with the system language set to Simplified Chinese. Confirm the same boundaries and confirmation screens are understandable in Chinese.
-5. ~~Configure fake local `gh`, `npm`, and MCP entries only inside the disposable home. Trigger enrichment and update review; confirm that package runners are not launched, read-only MCP tools require the documented approvals, and update review shows changed files and the local-change warning.~~
-6. Attempt to select, reveal, read, copy to, move to, link into, or delete `outside/`. Expected result: no browsing or structural write outside the individually authorized, registered roots. Verify the fixture outside directory is unchanged after quitting the app.
+1. 创建一次性目录，包含 `home/.agents/skills/demo/SKILL.md`、`home/.cursor/skills/copied/SKILL.md` 和单独的 `outside/` 目录。在 `home/projects/demo` 下保留小型项目树，包含已注册的项目 Skill 目录。
+2. 挂载版本化 DMG 并启动打包的 `SkillSelector.app`。在首次授权面板中，仅选择一次性 `home` 目录。不要授予其父目录访问权限。
+3. 用英文运行主目录检查，添加一次性项目，打开 `demo`，阅读其 Markdown，设置和移除自定义描述，然后复制、移动、链接和删除一个示例 Skill。确认每个操作的显示源和目标。
+4. 将系统语言设置为简体中文，重复相同操作。确认相同的边界和确认界面在中文下可理解。
+5. 尝试选择、显示、读取、复制到、移动到、链接到或删除 `outside/`。预期结果：无法在单独授权的已注册根目录外浏览或进行结构写入。退出应用后验证示例外部目录未更改。
 
-Record the package version, macOS version, locale, and observed results with the release evidence. Do not mark this scenario passed based only on unit or acceptance tests.
+记录包版本、macOS 版本、语言环境和观察结果作为发布证据。不要仅基于单元或验收测试标记此场景通过。
 
-## Release Gate
+## 发布门控
 
-Run from the repository root:
+从仓库根目录运行：
 
 ```zsh
 swift test
@@ -44,4 +43,4 @@ zsh Tests/Packaging/package-smoke.sh 0.1.0
 git status --short
 ```
 
-The smoke check verifies both the stable and versioned DMGs, the universal executable, the App Sandbox entitlement, and matching bundle versions. `git status --short` should contain only intended release-evidence changes before commit.
+烟雾检查验证稳定版和版本化 DMG、通用可执行文件、App Sandbox 权限和匹配的包版本。`git status --short` 在提交前应仅包含预期的发布证据更改。

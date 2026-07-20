@@ -1,100 +1,116 @@
-# SkillSelector Product Specification
+# SkillSelector 产品规格
 
-Status: Confirmed on 2026-07-17. Updated 2026-07-19 (features removed).
+状态：2026-07-17 确认，2026-07-19 更新（删除线标注已移除功能）。
 
-## Product boundary
+## 产品边界
 
-SkillSelector is a small native macOS viewer and file manager for local Agent Skills. It discovers, explains, filters, copies, moves, safely deletes, links, and updates Skills that already exist locally. It is not an Agent runner, Skill marketplace, installer, recommendation system, code editor, or AI summarizer.
+SkillSelector 是一个小型原生 macOS 查看器和文件管理器，用于管理本地 Agent Skill。它发现、解释、筛选、复制、移动、安全删除、链接和更新已存在于本地的 Skill。它不是 Agent 运行器、Skill 市场、安装器、推荐系统、代码编辑器或 AI 摘要器。
 
-## Platform and distribution
+## 平台与分发
 
-- Native SwiftUI application using only Apple system frameworks.
-- Minimum deployment target: macOS 14 Sonoma.
-- Universal 2 release for Apple Silicon and Intel.
-- SwiftData stores local index records and settings; full Skill content is not copied into the index.
-- Simplified Chinese and English localizations follow the system language.
-- GitHub Releases hosts an ad-hoc signed `.dmg` with App Sandbox enabled.
-- No Developer ID, notarization, telemetry, analytics SDK, or remote crash reporter.
-- Apache License 2.0.
+- 使用仅 Apple 系统框架的原生 SwiftUI 应用。
+- 最低部署目标：macOS 14 Sonoma。
+- Universal 2 版本，支持 Apple Silicon 和 Intel。
+- SwiftData 存储本地索引记录和设置；完整 Skill 内容不复制到索引中。
+- 简体中文和英文本地化，跟随系统语言。
+- GitHub Releases 托管带 App Sandbox 的 ad-hoc 签名 `.dmg`。
+- 无 Developer ID、公证、遥测、分析 SDK 或远程崩溃报告器。
+- Apache License 2.0。
 
-## Permission model
+## 权限模型
 
-On first environment check, the user authorizes their home directory through a macOS directory panel. SkillSelector persists a security-scoped bookmark and accesses only standard global paths listed in its bundled Agent registry. It never recursively scans unrelated home-directory content.
+首次环境检查时，用户通过 macOS 目录面板授权其主目录。SkillSelector 持久化安全作用域书签，仅访问其捆绑 Agent 注册表中列出的标准全局路径。它从不递归扫描无关的主目录内容。
 
-Project folders are added and authorized individually. Registered project-level path patterns are found recursively inside each project, while `.git`, dependency directories, build output, and caches are skipped. System-level Skill roots outside the home directory require a separate authorization. Structural writes are restricted to authorized and registered Skill roots.
+项目文件夹单独添加和授权。注册的项目级路径模式在每个项目内递归查找，但跳过 `.git`、依赖目录、构建输出和缓存。主目录外的系统级 Skill 根目录需要单独授权。结构写入受限于已授权和已注册的 Skill 根目录。
 
-## Agent registry
+## Agent 注册表
 
-The first release includes Claude Code, Codex, Qoder, CodeBuddy, OpenCode, Cursor, Kilo Code, Cline, Roo Code, Windsurf, Gemini CLI, and GitHub Copilot. Roo Code is legacy compatibility and only appears when detected or manually enabled.
+首次发布包含 Claude Code、Codex、Qoder、CodeBuddy、OpenCode、Cursor、Kilo Code、Cline、Roo Code、Windsurf、Gemini CLI 和 GitHub Copilot。Roo Code 是旧版兼容，仅在检测到或手动启用时显示。
 
-The bundled registry declares names, standard global roots, project-relative patterns, entry filenames, and source capabilities. It changes only with an app release. Users can define custom Agent types with a name, global roots, project patterns, and an entry filename that defaults to `SKILL.md`. The app does not parse Agent-specific custom path settings in the first release; users add those directories manually.
+捆绑注册表声明名称、标准全局根目录、项目相对模式、入口文件名和源能力。它仅随应用发布更改。用户可以定义自定义 Agent 类型，包含名称、全局根目录、项目模式和默认为 `SKILL.md` 的入口文件名。
 
-## Discovery and identity
+## 发现与身份
 
-Every directory containing a recognized `SKILL.md` is parsed best-effort and remains visible even when its frontmatter is invalid. Invalid records show diagnostics instead of silently disappearing.
+包含已识别 `SKILL.md` 的每个目录都会被尽力解析，即使其 frontmatter 无效也保持可见。无效记录显示诊断信息而不是静默消失。
 
-An absolute installation path identifies a Skill record. Agent filters represent the canonical owner of the containing Agent-specific directory, not every tool that can consume it. Shared `.agents/skills` content has no Agent association: home-level shared content appears under Global Skills, while project-level shared content appears only under that project. Copies at different paths remain separate records. Symbolic links remain separate installations and record their resolved target.
+绝对安装路径标识 Skill 记录。Agent 筛选器代表包含 Agent 特定目录的规范所有者，而不是每个可以使用它的工具。共享的 `.agents/skills` 内容没有 Agent 关联：主目录级共享内容出现在"全局 Skill"下，项目级共享内容仅出现在该项目下。不同路径的副本保持独立记录。符号链接保持独立安装并记录其解析目标。
 
-After home authorization, every launch quickly checks only bundled allowlisted global roots and refreshes the local index. Project scans run for authorized projects. The app has no continuous filesystem watcher. Manual refresh and app-initiated file operations refresh affected roots. If a root becomes inaccessible, its records remain with an unavailable status; a record is removed only when its parent root is accessible and the Skill is confirmed absent.
+授权主目录后，每次启动仅快速检查捆绑的允许列表全局根目录并刷新本地索引。授权项目运行项目扫描。应用没有连续的文件系统监视器。手动刷新和应用发起的文件操作刷新受影响的根目录。如果根目录变得不可访问，其记录保持不可用状态；仅当父根目录可访问且 Skill 确认不存在时才移除记录。
 
-## Main experience
+## 主界面
 
-The main window is a native three-column Skill browser:
+主窗口是原生三列 Skill 浏览器：
 
-- Sidebar: all Skills, global Skills, individual projects, and Agent filters.
-- List: one row per installation path with search, status filters, and sorting.
-- Detail: effective description and Markdown rendering, Agent associations, scope, path, and file operations.
+- 侧边栏：所有 Skill、全局 Skill、各个项目和 Agent 筛选器。
+- 列表：每个安装路径一行，支持搜索、状态筛选和排序。
+- 详情：有效描述和 Markdown 渲染、Agent 关联、作用域、路径和文件操作。
 
-`SKILL.md` is read-only in the app. Users can reveal it in Finder or open it in the default editor. Both the description and Skill document sections render Markdown formatting (headers, bold, lists, code, links, tables).
+`SKILL.md` 在应用中是只读的。用户可以在 Finder 中显示或在默认编辑器中打开。描述和 Skill 文档部分都渲染 Markdown 格式（标题、加粗、列表、代码、链接、表格）。
 
-The effective description priority is user customization, local `SKILL.md` description, ~~trusted remote metadata~~, then a deterministic local fallback. All available sources remain visible, and the user can remove a customization to restore the default.
+有效描述优先级为用户自定义、本地 `SKILL.md` 描述、~~可信远程元数据~~，然后是确定性本地回退。所有可用来源保持可见，用户可以移除自定义以恢复默认值。
 
-## ~~Trusted metadata enrichment~~
+## ~~可信元数据补全~~
 
-~~Enrichment is offline by default and user-triggered for one or more existing Skills. An optional setting may enrich missing descriptions after index refresh, but it defaults off. Only minimal identifying information is sent; local project paths, scripts, reference files, and full content are excluded.~~
+~~补全默认关闭，由用户对一个或多个现有 Skill 触发。可选设置可在索引刷新后补全缺失描述，但默认关闭。仅发送最少的标识信息；本地项目路径、脚本、参考文件和完整内容不被上传。~~
 
-~~No model is configured or called. Providers extract source text without rewriting it:~~
+~~不配置或调用模型。提供者提取原始文本而不重写：~~
 
-1. ~~Remote `SKILL.md` description.~~
-2. ~~Official manifest or npm package description.~~
-3. ~~README first descriptive paragraph.~~
+1. ~~远程 `SKILL.md` 描述。~~
+2. ~~官方清单或 npm 包描述。~~
+3. ~~README 第一个描述性段落。~~
 
-~~`gh` performs all GitHub search, metadata, download, and update requests. Authentication remains in the user's `gh` installation. SkillSelector never reads or stores a GitHub token. GitHub-wide search is limited to matching existing local Skills, and every candidate source requires user confirmation.~~
+~~`gh` 执行所有 GitHub 搜索、元数据、下载和更新请求。认证保留在用户的 `gh` 安装中。SkillSelector 从不读取或存储 GitHub 令牌。~~
 
-~~npm is limited to Registry read operations equivalent to `npm search --json` and `npm view --json`. The app never invokes install, exec, package scripts, or an npm lifecycle.~~
+~~npm 限于等效于 `npm search --json` 和 `npm view --json` 的注册表只读操作。~~
 
-~~The app may discover MCP configurations from supported Agents but never starts or invokes a Server until the user enables it and selects a read-only tool. It supports stdio and Streamable HTTP, not legacy HTTP+SSE. Package-runner commands such as `npx` or `uvx` are disabled until the user separately approves the exact executable and arguments; any configuration change invalidates that approval. Unknown or write-capable tools are not invoked automatically.~~
+~~应用可能发现支持的 Agent 的 MCP 配置，但在用户启用并选择只读工具之前从不启动或调用服务器。~~
 
-~~The app does not install `gh`, npm, MCP Servers, or any supporting package. It detects common executable locations and lets the user bind an executable when needed. External commands are launched directly with argument arrays, never through a shell command string.~~
+## 来源与更新
 
-## Sources and updates
+更新来源可以来自显式 Skill 元数据、包含的 Git 仓库和相对路径、SkillSelector 之前记录的来源，或用户确认的候选。搜索相似性本身不足。
 
-An update source can come from explicit Skill metadata, a containing Git repository and relative path, a source previously recorded by SkillSelector, or a user-confirmed candidate. Search similarity by itself is insufficient.
+GitHub 操作使用 `gh`。非 GitHub 公共来源仅在提供清晰可直接下载的 Skill 包时支持。私有仓库认证不在首次发布范围内。
 
-GitHub operations use `gh`. Non-GitHub public sources are supported only when they provide a clear directly downloadable Skill package. Private repository authentication is out of scope for the first release.
+跟踪单元是一个 Skill 目录，即使其仓库包含多个 Skill。更新可用性基于该目录的规范化内容摘要；显示可用版本字符串但不是必需的。分支来源跟踪更改，而标签和提交来源保持固定。
 
-The tracked unit is one Skill directory, even when its repository contains many Skills. Update availability is based on a normalized content digest for that directory; an available version string is displayed but is not required. Branch sources track changes, while tag and commit sources remain pinned.
+更新前，应用下载到临时目录、验证 `SKILL.md`、计算文件更改摘要并请求确认。自上次索引摘要以来的本地更改触发额外警告。批准后，旧目录移至回收站，验证后的目录作为单个操作原子替换。应用拥有的自定义描述保留，因为它们存储在索引中。
 
-Before updating, the app downloads into a temporary directory, validates `SKILL.md`, computes a file change summary, and asks for confirmation. Local changes since the previous index digest trigger an additional warning. On approval, the old directory moves to Trash and the replacement is installed atomically. App-owned custom descriptions survive because they live in the index.
+## 文件操作
 
-Updating a symbolic link updates its resolved target only after showing that target and every affected link. The target must be authorized. Deleting a symbolic link removes only the link.
+复制、移动、删除和创建符号链接操作在确认前始终显示源和目标。目标必须是已授权的已注册 Skill 根目录；用户通过目录面板添加新根目录而不是输入任意路径。
 
-## File operations
+名称冲突从不合并或静默覆盖目录。用户可以在非冲突名称下保留两个、在第二次确认后替换（同时将旧目标移至回收站），或取消。所有删除使用 macOS 回收站。
 
-Copy, move, delete, and create-symbolic-link actions always disclose source and destination before confirmation. Destinations must be authorized registered Skill roots; users add new roots through a directory panel rather than entering arbitrary paths.
+## 诊断与安全
 
-Name conflicts never merge or silently overwrite directories. The user can keep both under a non-conflicting name, replace after a second confirmation while moving the old target to Trash, or cancel. All deletion uses macOS Trash.
+应用不存储远程凭据，仅存储授权路径所需的安全作用域书签数据。本地统一日志脱敏主目录路径、命令环境变量和远程响应体。用户发起的诊断导出也经过脱敏。
 
-## Diagnostics and safety
+## 交付里程碑
 
-The app stores no remote credentials except security-scoped bookmark data needed for authorized paths. Local unified logs redact home paths, command environment variables, and remote response bodies. A user-initiated diagnostic export is also redacted.
+1. 应用外壳、授权、注册表、扫描和 SwiftData 索引。
+2. 三列浏览器、Markdown 阅读、自定义描述和本地化。
+3. 安全文件操作和符号链接行为。
+4. ~~`gh`、npm 和 MCP 补全及来源绑定。~~
+5. 原子 Skill 更新、打包、诊断和发布文档。
 
-~~External process output is bounded, parsed as structured data where available, and treated as untrusted input. Remote archives are checked for path traversal and symbolic-link escapes before installation. No downloaded content is executed by update or enrichment flows.~~
+## 架构决策记录
 
-## Delivery milestones
+### 原生 macOS SwiftUI 应用
 
-1. App shell, authorization, registry, scanning, and SwiftData index.
-2. Three-column browser, Markdown reading, custom descriptions, and localization.
-3. Safe file operations and symbolic-link behavior.
-4. ~~`gh`, npm, and MCP enrichment plus source binding.~~
-5. Atomic Skill updates, packaging, diagnostics, and release documentation.
+SkillSelector 作为原生 macOS 应用构建，使用 SwiftUI 打包为 `.dmg`。此选择支持产品目标：小巧、内存轻量，且比 Electron、Tauri 或基于浏览器的 shell 更好地对齐 macOS 目录权限流程。
+
+### 用户授权主目录下的允许列表访问
+
+SkillSelector 要求用户授权一次主目录，以便自动检测支持的 Agent 目录。应用保持沙盒状态，仅访问捆绑 Agent 类型注册表声明的全局 Skill 路径；不递归扫描无关的主目录内容。项目文件夹和系统级 Skill 目录需要单独授权。
+
+### 基于路径的 Skill 身份
+
+SkillSelector 每个绝对安装路径存储一条记录，并将该记录与发现它的每个 Agent 关联。这防止共享的 `.agents/skills` 目录产生重复行，同时保持复制目录和符号链接的区别。
+
+### Ad-hoc 签名沙盒分发
+
+SkillSelector 面向 macOS 14 或更高版本，以 Universal 2 `.dmg` 形式在 GitHub Releases 上发布。发布构建使用 ad-hoc 签名以便 App Sandbox 权限生效，但不使用 Apple Developer ID 且不经过公证。
+
+### 原子更新单个 Skill 包
+
+SkillSelector 将包含自己 `SKILL.md` 的仓库子目录视为可独立更新的包。它下载包到临时目录、验证、比较内容并在确认前显示文件级更改摘要。批准后，旧目录移至回收站，验证后的目录作为单个操作替换。

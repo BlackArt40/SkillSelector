@@ -51,11 +51,13 @@ Key modules:
 - **`SKILL.md` is read-only in the app** — users reveal in Finder or open in default editor.
 - **No private repository authentication** in the first release.
 
-## Product spec and ADRs
+## 文档
 
-- Product spec: `docs/product-spec.md`
-- ADRs: `docs/adr/` (5 active decisions, 4 superseded)
-- Agent skill directory research: `docs/research/agent-skill-support.md`
+- 产品规格（含架构决策）：`docs/product-spec.md`
+- 架构文档：`docs/architecture.md`
+- Agent Skill 目录调研：`docs/agent-skill-support-research.md`
+- 测试计划：`docs/test-plan.md`
+- 发布指南：`docs/releasing.md`
 
 ## .gitignore rules
 
