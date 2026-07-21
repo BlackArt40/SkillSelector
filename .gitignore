@@ -8,6 +8,8 @@
 .qoder/
 .codebuddy/
 .skills/
+.mimocode/
+.superpowers/
 
 # Build artifacts
 .build/
@@ -19,10 +21,12 @@ dist/
 
 # App bundle packaging
 scripts/
+Scripts/
 Packaging/
 
-# Documentation (not needed in repo)
+# Documentation
 docs/
+CONTEXT.md
 
 # Other
 .firecrawl/
