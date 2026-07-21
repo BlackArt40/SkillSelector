@@ -1,74 +1,59 @@
 # AGENTS.md
 
-## Project identity
+## 项目
 
-SkillSelector is a native macOS 14 SwiftUI app that discovers, views, manages, and updates local Agent Skills. It is NOT an Agent runner, marketplace, installer, recommendation system, code editor, or AI summarizer.
+SkillSelector 是 macOS 14 SwiftUI 应用，管理本地 Agent Skill。不是 Agent 运行器、市场、安装器、推荐系统、代码编辑器或 AI 摘要器。
 
-## Tech stack
+## 技术栈
 
-- Swift 6.3, SwiftUI, SwiftData, Foundation, AppKit, Security, OSLog
-- Apple system frameworks only — no third-party Swift packages
-- macOS 14 Sonoma minimum deployment target
-- Universal 2 build (Apple Silicon + Intel)
-- Ad-hoc signed with App Sandbox, no Developer ID or notarization
+- Swift 6.3、SwiftUI、SwiftData、Foundation、AppKit、Security、OSLog
+- 仅 Apple 系统框架，无第三方包
+- macOS 14 Sonoma 最低部署
+- Universal 2（Apple Silicon + Intel）
+- Ad-hoc 签名，App Sandbox
 - Apache License 2.0
 
-## Build and test commands
+## 构建和测试
 
 ```bash
-swift build                        # build everything
-swift test                         # run all tests
-swift test --filter SmokeTests     # run a single test class
-swift test --filter AgentRegistryTests  # example: targeted test
+swift build
+swift test
+swift test --filter SmokeTests
+swift test --filter AgentRegistryTests
 ```
 
-The MVP plan in `docs/superpowers/plans/2026-07-17-skillselector-mvp.md` defines the full scaffold including `Package.swift`, domain types, scanner, persistence, browser, operations, and packaging.
+MVP 计划：`docs/superpowers/plans/2026-07-17-skillselector-mvp.md`
 
-## Architecture
+## 架构
 
-Two targets in a single Swift Package:
-- `SkillSelector` — SwiftUI app (executable target)
-- `SkillSelectorCore` — domain logic library (importable by tests and app)
+两个 target 的 Swift Package：
+- `SkillSelector` — SwiftUI 应用
+- `SkillSelectorCore` — 领域逻辑库
 
-Source layout follows the MVP plan's `Sources/SkillSelectorCore/` (Domain, Registry, Scanning, Persistence, Permissions, Operations, Commands, Documents, Updates, Diagnostics) and `Sources/SkillSelector/` (Browser, Resources, Settings).
+关键模块：`AppModel`、`DocumentManager`、`MarkdownRenderer`、`SkillFileOperator`、`URLContainment`
 
-Key modules:
-- `AppModel` — main observable model (760 lines)
-- `DocumentManager` — document loading, Finder reveal, default editor
-- `MarkdownRenderer` — Markdown to AttributedString rendering
-- `SkillFileOperator` — safe file operations with authorization
-- `SkillUpdater` — atomic Skill updates
-- `URLContainment` — `URL.isContained(in:)` utility extension
+## 约束
 
-## Key constraints
-
-- **Skill identity is path-based**: one record per absolute installation path; path is the unique ID. Copies at different paths are separate records.
-- **No shell command strings**: external processes use `executableURL` + `arguments` array directly.
-- **All deletion uses macOS Trash**, never permanent delete.
-- **No telemetry, no AI model, no marketplace, no package installer, no code editor, no continuous file watcher.**
-- **No third-party packages** — Apple system frameworks only.
-- **Localized** in Simplified Chinese and English; path strings and Agent names stay untranslated.
-- **`SKILL.md` is read-only in the app** — users reveal in Finder or open in default editor.
-- **No private repository authentication** in the first release.
+- **Skill 身份基于路径**：每条安装路径一条记录，复制是独立记录
+- **无 Shell 命令字符串**：外部进程用 `executableURL` + `arguments`
+- **删除只用回收站**：从不永久删除
+- **无遥测、无 AI、无市场、无代码编辑器、无文件监视器**
+- **无第三方包**：仅 Apple 框架
+- **中英文本地化**：路径字符串和 Agent 名称不翻译
+- **SKILL.md 只读**：仅 Finder 显示或默认编辑器打开
 
 ## 文档
 
-- 产品规格（含架构决策）：`docs/product-spec.md`
-- 架构文档：`docs/architecture.md`
-- Agent Skill 目录调研：`docs/agent-skill-support-research.md`
+- 产品规格：`docs/product-spec.md`
+- 架构：`docs/architecture.md`
+- Agent Skill 调研：`docs/agent-skill-support-research.md`
 - 测试计划：`docs/test-plan.md`
 - 发布指南：`docs/releasing.md`
 
-## .gitignore rules
+## .gitignore
 
-The following directories are excluded from git (Agent state, planning, worktrees):
-- `.agents/`, `.claude/`, `.codex/`, `.opencode/`, `.qoder/`, `.codebuddy/`, `.skills/`
-- `.worktrees/`, `需求.md`
+排除：`.agents/`、`.claude/`、`.codex/`、`.opencode/`、`.qoder/`、`.codebuddy/`、`.skills/`、`.worktrees/`、`.build/`、`.mimocode/`
 
-## CONTEXT.md terminology
+## 提交规范
 
-`CONTEXT.md` defines precise terms for this project. Respect the "Avoid" lists — e.g., say "Skill" not "plugin" or "extension"; say "Skill viewer" not "marketplace" or "runner".
-
-## Commit convention
-
-Follow conventional commits: `feat:`, `fix:`, `build:`, `test:`, `docs:`.
+`feat:`、`fix:`、`build:`、`test:`、`docs:`

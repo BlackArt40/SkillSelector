@@ -39,15 +39,13 @@ public struct ConfirmationToken: Codable, Hashable, Sendable {
 
 public struct SkillAppMetadata: Codable, Hashable, Sendable {
     public let customDescription: String?
-    public let sourceBinding: String?
 
-    public init(customDescription: String?, sourceBinding: String?) {
+    public init(customDescription: String?) {
         self.customDescription = customDescription
-        self.sourceBinding = sourceBinding
     }
 
     public var isEmpty: Bool {
-        customDescription == nil && sourceBinding == nil
+        customDescription == nil
     }
 }
 
@@ -89,7 +87,7 @@ public struct FileOperationRequest: Hashable, Sendable {
         destinationRootURL: URL? = nil,
         proposedName: String? = nil,
         conflictPolicy: FileConflictPolicy = .fail,
-        metadata: SkillAppMetadata = SkillAppMetadata(customDescription: nil, sourceBinding: nil)
+        metadata: SkillAppMetadata = SkillAppMetadata(customDescription: nil)
     ) {
         self.operation = operation
         self.sourceURL = sourceURL.standardizedFileURL

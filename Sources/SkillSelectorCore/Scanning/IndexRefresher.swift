@@ -394,7 +394,7 @@ public final class IndexRefresher {
                     }
                     guard try probeDirectory(parent) == .directory else { continue }
                     for child in try directoryContents(parent) {
-                        guard segment(child.lastPathComponent, matches: component),
+                        guard TemplateMatching.segment(child.lastPathComponent, matches: component),
                               isContained(child, in: home) else {
                             continue
                         }
@@ -423,17 +423,6 @@ public final class IndexRefresher {
             && !remainder.contains("}")
     }
 
-    private func segment(_ value: String, matches template: String) -> Bool {
-        guard let opening = template.firstIndex(of: "{"),
-              let closing = template[opening...].firstIndex(of: "}") else {
-            return value == template
-        }
-        let prefix = template[..<opening]
-        let suffix = template[template.index(after: closing)...]
-        return value.hasPrefix(prefix)
-            && value.hasSuffix(suffix)
-            && value.count > prefix.count + suffix.count
-    }
 
     private func directoryContents(_ url: URL) throws -> [URL] {
         try fileSystem.contentsOfDirectory(at: url)

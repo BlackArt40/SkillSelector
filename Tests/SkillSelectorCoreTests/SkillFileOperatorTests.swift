@@ -53,7 +53,7 @@ final class SkillFileOperatorTests: XCTestCase {
         XCTAssertEqual(plan.destinationURL, destinationRoot.appending(path: "demo").standardizedFileURL)
         XCTAssertEqual(plan.destinationAgentIDs, ["codex"])
         XCTAssertEqual(plan.entryFilename, "SKILL.md")
-        XCTAssertEqual(plan.metadataTransfer, .copy(SkillAppMetadata(customDescription: "Mine", sourceBinding: "github:x")))
+        XCTAssertEqual(plan.metadataTransfer, .copy(SkillAppMetadata(customDescription: "Mine")))
 
         let result = try await operatorUnderTest.execute(
             plan,
@@ -87,7 +87,7 @@ final class SkillFileOperatorTests: XCTestCase {
         let operatorUnderTest = makeOperator()
         let plan = try operatorUnderTest.plan(request(.move, source: source, destination: destinationRoot))
 
-        XCTAssertEqual(plan.metadataTransfer, .move(SkillAppMetadata(customDescription: "Mine", sourceBinding: "github:x")))
+        XCTAssertEqual(plan.metadataTransfer, .move(SkillAppMetadata(customDescription: "Mine")))
         XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
 
         let result = try await operatorUnderTest.execute(plan, confirmation: plan.confirmationToken)
@@ -960,7 +960,7 @@ final class SkillFileOperatorTests: XCTestCase {
             destinationRootURL: destination,
             proposedName: name,
             conflictPolicy: conflict,
-            metadata: SkillAppMetadata(customDescription: "Mine", sourceBinding: "github:x")
+            metadata: SkillAppMetadata(customDescription: "Mine")
         )
     }
 

@@ -128,7 +128,7 @@ struct BrowserSidebar: View {
             }
         }
         .listStyle(.sidebar)
-        .navigationTitle("SkillSelector")
+        .navigationTitle(L10n.string("SkillSelector"))
     }
 
     @ViewBuilder

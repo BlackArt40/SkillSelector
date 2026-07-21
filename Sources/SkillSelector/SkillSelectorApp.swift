@@ -1,10 +1,18 @@
+import AppKit
 import SkillSelectorCore
 import SwiftData
 import SwiftUI
 import Darwin
 
+private final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
+    }
+}
+
 @main
 struct SkillSelectorApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model: AppModel
 
     init() {

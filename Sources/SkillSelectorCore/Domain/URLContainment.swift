@@ -14,3 +14,19 @@ public extension URL {
         roots.contains { isContained(in: $0) }
     }
 }
+
+public extension Array where Element == AuthorizedRootSnapshot {
+    func rootIDs(containingLogicalURL url: URL) -> Set<String> {
+        Set(filter {
+            url.standardizedFileURL.isContained(in: $0.url.standardizedFileURL)
+        }.map(\.id))
+    }
+
+    func rootIDs(containingResolvedURL url: URL) -> Set<String> {
+        Set(filter {
+            url.standardizedFileURL.isContained(
+                in: $0.url.resolvingSymlinksInPath().standardizedFileURL
+            )
+        }.map(\.id))
+    }
+}

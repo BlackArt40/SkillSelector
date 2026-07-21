@@ -1,7 +1,6 @@
 import Foundation
 
 public struct SkillScanner: Sendable {
-    private let digestLimits: PackageDigestLimits
     private static let skippedDirectoryNames: Set<String> = [
         ".git",
         "node_modules",
@@ -19,9 +18,7 @@ public struct SkillScanner: Sendable {
         "Carthage",
     ]
 
-    public init(digestLimits: PackageDigestLimits = PackageDigestLimits()) {
-        self.digestLimits = digestLimits
-    }
+    public init() {}
 
     public func scan(_ roots: [ScanRoot]) async -> ScanReport {
         let authorizedURLs = roots.map(\.url)
@@ -284,21 +281,10 @@ public struct SkillScanner: Sendable {
     private func pathSuffix(_ path: [String], matches pattern: [String]) -> Bool {
         guard path.count >= pattern.count else { return false }
         return zip(path.suffix(pattern.count), pattern).allSatisfy { value, template in
-            segment(value, matches: template)
+            TemplateMatching.segment(value, matches: template)
         }
     }
 
-    private func segment(_ value: String, matches template: String) -> Bool {
-        guard let opening = template.firstIndex(of: "{"),
-              let closing = template[opening...].firstIndex(of: "}") else {
-            return value == template
-        }
-        let prefix = String(template[..<opening])
-        let suffix = String(template[template.index(after: closing)...])
-        return value.hasPrefix(prefix)
-            && value.hasSuffix(suffix)
-            && value.count > prefix.count + suffix.count
-    }
 
     private func makeCandidate(
         installationURL: URL,
@@ -376,19 +362,6 @@ public struct SkillScanner: Sendable {
         let modificationDate = try? resolvedEntryURL.resourceValues(
             forKeys: [.contentModificationDateKey]
         ).contentModificationDate
-        let digest: String?
-        do {
-            digest = try PackageDigest.compute(
-                at: resolvedTarget ?? installationURL,
-                limits: digestLimits
-            ).value
-        } catch {
-            digest = nil
-            document.issues.append(ParseIssue(
-                code: .digestUnavailable,
-                arguments: [String(describing: error)]
-            ))
-        }
         return ScannedSkill(
             installation: SkillInstallation(
                 path: installationURL,
@@ -399,12 +372,6 @@ public struct SkillScanner: Sendable {
             agentIDsByRoot: [rootID: agentIDs],
             entryFilename: entryFilename,
             entryModificationDate: modificationDate,
-            digest: digest,
-            discoveredSourceBindings: SkillSourceDiscovery().candidates(
-                for: contentDirectory,
-                document: document,
-                authorizedRootURL: sourceDiscoveryRootURL
-            ).map(\.binding)
         )
     }
 

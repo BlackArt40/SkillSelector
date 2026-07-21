@@ -78,12 +78,13 @@ enum L10n {
 
 
 struct LanguageReloading: ViewModifier {
+    @AppStorage("SkillSelector.preferredLanguage") private var preferredLanguage: String?
     @State private var languageVersion = 0
 
     func body(content: Content) -> some View {
         content
             .id(languageVersion)
-            .onReceive(NotificationCenter.default.publisher(for: L10n.languageDidChangeNotification)) { _ in
+            .onChange(of: preferredLanguage) { _, _ in
                 languageVersion += 1
             }
     }

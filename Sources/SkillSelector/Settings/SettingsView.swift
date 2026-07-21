@@ -1,5 +1,6 @@
 import AppKit
 import SkillSelectorCore
+import Foundation
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -50,11 +51,22 @@ struct CustomAgentEditorState {
 
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
+    @AppStorage("SkillSelector.preferredLanguage") private var preferredLanguage: String?
     @State private var customAgentEditor = CustomAgentEditorState()
     @State private var settingsError: String?
     @State private var exportStatus: String?
     @State private var editingRootID: String?
     @State private var editingRootName: String = ""
+
+    private var effectiveLanguage: String {
+        if let preferredLanguage {
+            return preferredLanguage
+        }
+        return LocalizationSelection.preferredLocalization(
+            available: Bundle.main.localizations,
+            preferredLanguages: Locale.preferredLanguages
+        )
+    }
 
     var body: some View {
         @Bindable var model = model
@@ -77,16 +89,20 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Picker("", selection: Binding(
-                        get: { L10n.currentLanguage },
+                        get: { effectiveLanguage },
                         set: { newValue in
+                            preferredLanguage = newValue
                             L10n.setLanguage(newValue)
                         }
                     )) {
-                        Text("简体中文").tag("zh-Hans" as String?)
-                        Text("English").tag("en" as String?)
+                        Text("简体中文").tag("zh-Hans" as String)
+                        Text("English").tag("en" as String)
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
+                    .onChange(of: preferredLanguage) { _, newValue in
+                        L10n.setLanguage(newValue)
+                    }
                 }
 
                 Divider()

@@ -147,7 +147,7 @@ final class SkillQueryTests: XCTestCase {
             snapshot(path: "/name", name: "Release Helper"),
             snapshot(path: "/custom", name: "Custom", customDescription: "CUSTOM summary"),
             snapshot(path: "/local", name: "Local", localDescription: "Local Documentation"),
-            snapshot(path: "/remote", name: "Remote", enrichedDescription: "Remote Metadata"),
+            snapshot(path: "/remote", name: "Remote"),
         ]
 
         XCTAssertEqual(
@@ -165,11 +165,7 @@ final class SkillQueryTests: XCTestCase {
                 .apply(to: snapshots, rootsByID: rootsByID).map(\.path),
             ["/local"]
         )
-        XCTAssertEqual(
-            SkillQuery(searchText: "metadata")
-                .apply(to: snapshots, rootsByID: rootsByID).map(\.path),
-            ["/remote"]
-        )
+        // Remote search test removed (enrichment removed)
     }
 
     func testEffectiveDescriptionSearchHonorsPriority() {
@@ -177,8 +173,7 @@ final class SkillQueryTests: XCTestCase {
             path: "/priority",
             name: "Priority",
             customDescription: "Chosen text",
-            localDescription: "Hidden local text",
-            enrichedDescription: "Hidden remote text"
+            localDescription: "Hidden local text"
         )
 
         XCTAssertEqual(
@@ -253,7 +248,6 @@ final class SkillQueryTests: XCTestCase {
         name: String,
         customDescription: String? = nil,
         localDescription: String? = nil,
-        enrichedDescription: String? = nil,
         agentIDs: [String] = ["cursor"],
         rootIDs: [String] = ["home-root"],
         availability: SkillAvailability = .available,
@@ -264,14 +258,10 @@ final class SkillQueryTests: XCTestCase {
             resolvedTarget: nil,
             name: name,
             localDescription: localDescription,
-            enrichedDescription: enrichedDescription,
-            enrichedDescriptionProvenance: nil,
             customDescription: customDescription,
-            digest: nil,
             modificationDate: nil,
             availability: availability,
             unavailableReason: unavailableReason,
-            sourceBinding: nil,
             agentIDs: agentIDs,
             rootIDs: rootIDs,
             entryFilename: "SKILL.md",

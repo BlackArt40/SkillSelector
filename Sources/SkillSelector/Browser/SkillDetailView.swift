@@ -152,7 +152,6 @@ struct SkillDetailView: View {
         switch source {
         case .custom: L10n.string("Custom")
         case .local: L10n.string("Local Document")
-        case .remote: L10n.string("Remote")
         case .fallback: L10n.string("Fallback")
         }
     }

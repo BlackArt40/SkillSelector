@@ -6,7 +6,6 @@ final class DescriptionResolverTests: XCTestCase {
         let all = DescriptionCandidates(
             custom: " Custom ",
             local: " Local ",
-            remote: " Remote ",
             fallback: " Fallback "
         )
 
@@ -16,19 +15,19 @@ final class DescriptionResolverTests: XCTestCase {
         )
         XCTAssertEqual(
             DescriptionResolver.resolve(
-                DescriptionCandidates(custom: nil, local: all.local, remote: all.remote, fallback: all.fallback)
+                DescriptionCandidates(custom: nil, local: all.local, fallback: all.fallback)
             ),
             EffectiveDescription(text: "Local", source: .local)
         )
         XCTAssertEqual(
             DescriptionResolver.resolve(
-                DescriptionCandidates(custom: nil, local: nil, remote: all.remote, fallback: all.fallback)
+                DescriptionCandidates(custom: nil, local: nil, fallback: all.fallback)
             ),
-            EffectiveDescription(text: "Remote", source: .remote)
+            EffectiveDescription(text: "Fallback", source: .fallback)
         )
         XCTAssertEqual(
             DescriptionResolver.resolve(
-                DescriptionCandidates(custom: nil, local: nil, remote: nil, fallback: all.fallback)
+                DescriptionCandidates(custom: nil, local: nil, fallback: all.fallback)
             ),
             EffectiveDescription(text: "Fallback", source: .fallback)
         )
@@ -37,7 +36,7 @@ final class DescriptionResolverTests: XCTestCase {
     func testWhitespaceCandidatesAreIgnoredAndFallbackMayBeEmpty() {
         XCTAssertEqual(
             DescriptionResolver.resolve(
-                DescriptionCandidates(custom: " \n ", local: "\t", remote: " ", fallback: "")
+                DescriptionCandidates(custom: " \n ", local: "\t", fallback: "")
             ),
             EffectiveDescription(text: "", source: .fallback)
         )
@@ -47,14 +46,14 @@ final class DescriptionResolverTests: XCTestCase {
         let candidates = DescriptionCandidates(
             custom: "Personal summary",
             local: nil,
-            remote: nil,
+            
             fallback: "demo"
         )
 
         XCTAssertEqual(DescriptionResolver.resolve(candidates).source, .custom)
         XCTAssertEqual(
             DescriptionResolver.resolve(
-                DescriptionCandidates(custom: nil, local: nil, remote: nil, fallback: candidates.fallback)
+                DescriptionCandidates(custom: nil, local: nil, fallback: candidates.fallback)
             ),
             EffectiveDescription(text: "demo", source: .fallback)
         )

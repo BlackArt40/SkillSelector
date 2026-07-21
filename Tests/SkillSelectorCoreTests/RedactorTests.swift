@@ -120,14 +120,6 @@ final class RedactorTests: XCTestCase {
         )
     }
 
-    func testRemoteResponseBodiesAreNeverIncluded() {
-        let body = #"{"token":"top-secret","description":"private Skill body"}"#
-
-        XCTAssertEqual(redactor.redactRemoteResponseBody(body), Redactor.redactedRemoteBody)
-        XCTAssertFalse(redactor.redactRemoteResponseBody(body).contains("top-secret"))
-        XCTAssertFalse(redactor.redactRemoteResponseBody(body).contains("private Skill body"))
-    }
-
     func testOrdinaryLongIdentifiersAreNotTreatedAsSecrets() {
         let message = "Agent cursor error diagnostic.unableToReadEntry repository openai/skills request 12345678901234567890"
 
@@ -138,7 +130,7 @@ final class RedactorTests: XCTestCase {
         let diagnostics = [
             AppDiagnostic(
                 timestamp: Date(timeIntervalSince1970: 1_000),
-                category: .commands,
+                category: .operations,
                 code: "ERR_GH_401",
                 message: "gh failed at /Users/alice/Work/Secret Project with Authorization: Bearer abc.def.ghi"
             ),
@@ -172,7 +164,7 @@ final class RedactorTests: XCTestCase {
 
         store.record(category: .scanning, code: "SCAN_1", message: "/Users/alice/one", redactor: redactor)
         store.record(category: .persistence, code: "SAVE_2", message: "Cursor saved", redactor: redactor)
-        store.record(category: .updates, code: "UPDATE_3", message: "Bearer top-secret-token", redactor: redactor)
+        store.record(category: .operations, code: "UPDATE_3", message: "Bearer top-secret-token", redactor: redactor)
 
         XCTAssertEqual(store.recent().map(\.code), ["SAVE_2", "UPDATE_3"])
         XCTAssertEqual(store.recent().map(\.message), ["Cursor saved", "Bearer <redacted>"])

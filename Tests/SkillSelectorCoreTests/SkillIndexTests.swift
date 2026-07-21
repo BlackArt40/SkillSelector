@@ -4,31 +4,6 @@ import XCTest
 @testable import SkillSelectorCore
 
 final class SkillIndexTests: XCTestCase {
-    func testApplyingRemoteMetadataDoesNotImplicitlyBindUpdateSource() throws {
-        let index = try makeIndex()
-        let path = "/tmp/project/.agents/skills/demo"
-        try index.apply(report: report(
-            rootID: "project",
-            availability: .available,
-            installations: [skill(path: path)]
-        ))
-
-        let enriched = try index.setEnrichedDescription(
-            path: path,
-            value: "Exact remote text.",
-            provenance: "github:https://github.com/acme/demo/blob/main/SKILL.md"
-        )
-
-        XCTAssertEqual(enriched.enrichedDescription, "Exact remote text.")
-        XCTAssertEqual(
-            enriched.enrichedDescriptionProvenance,
-            "github:https://github.com/acme/demo/blob/main/SKILL.md"
-        )
-        XCTAssertNil(enriched.sourceBinding)
-
-        let bound = try index.setSourceBinding(path: path, value: "github:acme/demo:.")
-        XCTAssertEqual(bound.sourceBinding, "github:acme/demo:.")
-    }
 
     func testSetCustomDescriptionTrimsPersistsAndClearsOverride() throws {
         let index = try makeIndex()
@@ -68,16 +43,13 @@ final class SkillIndexTests: XCTestCase {
             installations: [skill(path: source), skill(path: destination)]
         ))
         _ = try index.setCustomDescription(path: source, value: "Source custom")
-        _ = try index.setSourceBinding(path: source, value: "github:owner/repo/skill")
-        let metadata = try index.appMetadata(path: source)
+        let metadata = SkillAppMetadata(customDescription: "Source custom")
 
         try index.applyOperationMetadataTransfer(.copy(metadata), to: destination)
         _ = try index.setCustomDescription(path: source, value: "Changed later")
-        _ = try index.setSourceBinding(path: source, value: "github:other/repo")
 
         let destinationSnapshot = try XCTUnwrap(index.skills().first { $0.path == destination })
         XCTAssertEqual(destinationSnapshot.customDescription, "Source custom")
-        XCTAssertEqual(destinationSnapshot.sourceBinding, "github:owner/repo/skill")
     }
 
     func testMoveOperationMetadataCanApplyAfterRefreshRemovedSource() throws {
@@ -90,8 +62,7 @@ final class SkillIndexTests: XCTestCase {
             installations: [skill(path: source)]
         ))
         _ = try index.setCustomDescription(path: source, value: "Moved custom")
-        _ = try index.setSourceBinding(path: source, value: "github:owner/repo/skill")
-        let transfer = FileOperationMetadataTransfer.move(try index.appMetadata(path: source))
+        let transfer = FileOperationMetadataTransfer.move(SkillAppMetadata(customDescription: "Moved custom"))
 
         try index.apply(report: report(
             rootID: "project",
@@ -103,7 +74,6 @@ final class SkillIndexTests: XCTestCase {
         XCTAssertFalse(try index.skills().contains { $0.path == source })
         let moved = try XCTUnwrap(index.skills().first { $0.path == destination })
         XCTAssertEqual(moved.customDescription, "Moved custom")
-        XCTAssertEqual(moved.sourceBinding, "github:owner/repo/skill")
     }
 
     func testUnavailableRootRetainsRecordsAndMarksThemUnavailable() throws {
@@ -218,14 +188,13 @@ final class SkillIndexTests: XCTestCase {
         let record = SkillRecord(
             path: "/tmp/legacy",
             name: "legacy",
-            discoveredSourceBindingsData: nil,
             entryFilename: "SKILL.md"
         )
         context.insert(record)
         try context.save()
 
         let snapshot = try XCTUnwrap(try SkillIndex(container: container).skills().first)
-        XCTAssertEqual(snapshot.discoveredSourceBindings, [])
+        // discoveredSourceBindings removed
     }
 
     func testCorruptProvenanceFailsQueriesAndReconciliation() throws {

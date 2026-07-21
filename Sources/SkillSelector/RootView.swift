@@ -104,21 +104,7 @@ struct RootView: View {
             )
             .id(plan.id)
         }
-        .sheet(item: pendingUpdateBinding) { proposal in
-            UpdateReviewView(
-                proposal: proposal,
-                isUpdating: model.isUpdating,
-                onCancel: model.cancelPendingUpdate,
-                onConfirm: { allowLocalChanges in
-                    Task {
-                        await model.applyPendingUpdate(
-                            allowLocalChanges: allowLocalChanges
-                        )
-                    }
-                }
-            )
-            .id(proposal.id)
-        }
+
         .alert(
             L10n.string("File Operation Failed"),
             isPresented: operationErrorBinding
@@ -127,14 +113,7 @@ struct RootView: View {
         } message: {
             Text(verbatim: model.operationError ?? "")
         }
-        .alert(
-            L10n.string("Skill Update Failed"),
-            isPresented: updateErrorBinding
-        ) {
-            Button(L10n.string("OK")) { model.updateError = nil }
-        } message: {
-            Text(verbatim: model.updateError ?? "")
-        }
+
     }
 
     private var hasActiveFilters: Bool {
@@ -161,23 +140,7 @@ struct RootView: View {
         )
     }
 
-    private var pendingUpdateBinding: Binding<UpdateProposal?> {
-        Binding(
-            get: { model.pendingUpdateProposal },
-            set: { value in
-                if value == nil { model.cancelPendingUpdate() }
-            }
-        )
-    }
 
-    private var updateErrorBinding: Binding<Bool> {
-        Binding(
-            get: { model.updateError != nil },
-            set: { isPresented in
-                if !isPresented { model.updateError = nil }
-            }
-        )
-    }
 
     private func refresh() {
         Task { await model.refresh(.manual) }

@@ -3,13 +3,11 @@ import Foundation
 public struct DescriptionCandidates: Hashable, Sendable {
     public let custom: String?
     public let local: String?
-    public let remote: String?
     public let fallback: String
 
-    public init(custom: String?, local: String?, remote: String?, fallback: String) {
+    public init(custom: String?, local: String?, fallback: String) {
         self.custom = custom
         self.local = local
-        self.remote = remote
         self.fallback = fallback
     }
 
@@ -17,7 +15,6 @@ public struct DescriptionCandidates: Hashable, Sendable {
         self.init(
             custom: snapshot.customDescription,
             local: snapshot.localDescription,
-            remote: snapshot.enrichedDescription,
             fallback: snapshot.name
         )
     }
@@ -27,7 +24,6 @@ public struct EffectiveDescription: Hashable, Sendable {
     public enum Source: Hashable, Sendable {
         case custom
         case local
-        case remote
         case fallback
     }
 
@@ -45,7 +41,6 @@ public enum DescriptionResolver {
         let prioritized: [(String?, EffectiveDescription.Source)] = [
             (candidates.custom, .custom),
             (candidates.local, .local),
-            (candidates.remote, .remote),
         ]
         for (candidate, source) in prioritized {
             if let text = trimmedNonempty(candidate) {

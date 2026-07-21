@@ -89,10 +89,6 @@ public struct Redactor: Sendable {
         return result
     }
 
-    public func redactRemoteResponseBody(_ body: String) -> String {
-        _ = body
-        return Self.redactedRemoteBody
-    }
 
     private func redactPaths(in value: String) -> String {
         pathReplacements.reduce(value) { current, item in

@@ -579,7 +579,7 @@ public final class SkillFileOperator: @unchecked Sendable {
             return false
         }
         return zip(candidateComponents.dropFirst(homeComponents.count), template).allSatisfy {
-            segment($0.0, matches: $0.1)
+            TemplateMatching.segment($0.0, matches: $0.1)
         }
     }
 
@@ -594,21 +594,10 @@ public final class SkillFileOperator: @unchecked Sendable {
         let template = pattern.split(separator: "/").map(String.init)
         guard relative.count >= template.count else { return false }
         return zip(relative.suffix(template.count), template).allSatisfy {
-            segment($0.0, matches: $0.1)
+            TemplateMatching.segment($0.0, matches: $0.1)
         }
     }
 
-    private func segment(_ value: String, matches template: String) -> Bool {
-        guard let opening = template.firstIndex(of: "{"),
-              let closing = template[opening...].firstIndex(of: "}") else {
-            return value == template
-        }
-        let prefix = template[..<opening]
-        let suffix = template[template.index(after: closing)...]
-        return value.hasPrefix(prefix)
-            && value.hasSuffix(suffix)
-            && value.count > prefix.count + suffix.count
-    }
 
     private func isAuthorized(
         _ logical: URL,
@@ -619,35 +608,33 @@ public final class SkillFileOperator: @unchecked Sendable {
             && matchingResolvedAuthorizedRoot(resolved, roots: roots) != nil
     }
 
-    private func matchingLogicalAuthorizedRoot(
+    private func matchingAuthorizedRoots(
         _ logical: URL,
-        roots: [AuthorizedRootSnapshot]
-    ) -> AuthorizedRootSnapshot? {
-        matchingLogicalAuthorizedRoots(logical, roots: roots).first
-    }
-
-    private func matchingLogicalAuthorizedRoots(
-        _ logical: URL,
+        resolved: URL?,
         roots: [AuthorizedRootSnapshot]
     ) -> [AuthorizedRootSnapshot] {
         roots
             .filter { root in
                 contains(logical.standardizedFileURL, in: root.url.standardizedFileURL)
+                    && (resolved == nil || contains(
+                        resolved!.standardizedFileURL,
+                        in: root.url.resolvingSymlinksInPath().standardizedFileURL
+                    ))
             }
             .sorted(by: mostSpecificRoot)
+    }
+
+    private func matchingLogicalAuthorizedRoot(
+        _ logical: URL,
+        roots: [AuthorizedRootSnapshot]
+    ) -> AuthorizedRootSnapshot? {
+        matchingAuthorizedRoots(logical, resolved: nil, roots: roots).first
     }
 
     private func matchingResolvedAuthorizedRoot(
         _ resolved: URL,
         roots: [AuthorizedRootSnapshot]
     ) -> AuthorizedRootSnapshot? {
-        matchingResolvedAuthorizedRoots(resolved, roots: roots).first
-    }
-
-    private func matchingResolvedAuthorizedRoots(
-        _ resolved: URL,
-        roots: [AuthorizedRootSnapshot]
-    ) -> [AuthorizedRootSnapshot] {
         roots
             .filter { root in
                 contains(
@@ -656,30 +643,7 @@ public final class SkillFileOperator: @unchecked Sendable {
                 )
             }
             .sorted(by: mostSpecificRoot)
-    }
-
-    private func matchingAuthorizedRoot(
-        _ logical: URL,
-        resolved: URL,
-        roots: [AuthorizedRootSnapshot]
-    ) -> AuthorizedRootSnapshot? {
-        matchingAuthorizedRoots(logical, resolved: resolved, roots: roots).first
-    }
-
-    private func matchingAuthorizedRoots(
-        _ logical: URL,
-        resolved: URL,
-        roots: [AuthorizedRootSnapshot]
-    ) -> [AuthorizedRootSnapshot] {
-        roots
-            .filter { root in
-                contains(logical.standardizedFileURL, in: root.url.standardizedFileURL)
-                    && contains(
-                        resolved.standardizedFileURL,
-                        in: root.url.resolvingSymlinksInPath().standardizedFileURL
-                    )
-            }
-            .sorted(by: mostSpecificRoot)
+            .first
     }
 
     private func mostSpecificRoot(

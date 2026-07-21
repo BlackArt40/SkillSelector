@@ -1,12 +1,11 @@
 import Foundation
 import OSLog
 
-public enum AppLogCategory: String, Codable, CaseIterable, Hashable, Sendable {
+public enum AppLogCategory: String, Codable, Hashable, Sendable {
     case scanning
     case persistence
     case operations
-    case commands
-    case updates
+
 }
 
 public struct AppDiagnostic: Codable, Hashable, Sendable {
@@ -72,8 +71,7 @@ public enum DiagnosticLogger {
     private static let scanning = Logger(subsystem: subsystem, category: AppLogCategory.scanning.rawValue)
     private static let persistence = Logger(subsystem: subsystem, category: AppLogCategory.persistence.rawValue)
     private static let operations = Logger(subsystem: subsystem, category: AppLogCategory.operations.rawValue)
-    private static let commands = Logger(subsystem: subsystem, category: AppLogCategory.commands.rawValue)
-    private static let updates = Logger(subsystem: subsystem, category: AppLogCategory.updates.rawValue)
+
 
     static func write(_ event: AppDiagnostic) {
         let message = "[\(event.code)] \(event.message)"
@@ -85,8 +83,7 @@ public enum DiagnosticLogger {
         case .scanning: scanning
         case .persistence: persistence
         case .operations: operations
-        case .commands: commands
-        case .updates: updates
+
         }
     }
 }

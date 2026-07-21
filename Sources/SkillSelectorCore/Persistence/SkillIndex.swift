@@ -92,41 +92,6 @@ public final class SkillIndex {
         return try snapshot(record)
     }
 
-    @discardableResult
-    public func setEnrichedDescription(
-        path: String,
-        value: String?,
-        provenance: String?
-    ) throws -> SkillSnapshot {
-        let record = try requiredRecord(path: path)
-        record.enrichedDescription = value.flatMap { candidate in
-            candidate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ? nil : candidate
-        }
-        record.enrichedDescriptionProvenance = provenance.flatMap { candidate in
-            candidate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ? nil : candidate
-        }
-        try context.save()
-        return try snapshot(record)
-    }
-
-    @discardableResult
-    public func setSourceBinding(path: String, value: String?) throws -> SkillSnapshot {
-        let record = try requiredRecord(path: path)
-        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
-        record.sourceBinding = trimmed?.isEmpty == false ? trimmed : nil
-        try context.save()
-        return try snapshot(record)
-    }
-
-    public func appMetadata(path: String) throws -> SkillAppMetadata {
-        let record = try requiredRecord(path: path)
-        return SkillAppMetadata(
-            customDescription: record.customDescription,
-            sourceBinding: record.sourceBinding
-        )
-    }
 
     public func applyOperationMetadataTransfer(
         _ transfer: FileOperationMetadataTransfer,
@@ -141,7 +106,6 @@ public final class SkillIndex {
         }
         let record = try requiredRecord(path: destinationPath)
         record.customDescription = metadata.customDescription
-        record.sourceBinding = metadata.sourceBinding
         try context.save()
     }
 
@@ -167,7 +131,6 @@ public final class SkillIndex {
             ?? scanned.document.title
             ?? scanned.path.lastPathComponent
         record.localDescription = scanned.document.description
-        record.digest = scanned.digest
         record.modificationDate = scanned.entryModificationDate
         record.availabilityRawValue = SkillAvailability.available.rawValue
         record.unavailableReason = nil
@@ -177,9 +140,7 @@ public final class SkillIndex {
             associations[rootID] = agentIDs
         }
         record.agentIDsByRootData = try encode(associations, path: record.path)
-        record.entryFilename = scanned.entryFilename
-        record.discoveredSourceBindingsData = (try? encoder.encode(scanned.discoveredSourceBindings))
-            ?? Data("[]".utf8)
+        record.entryFilename = scanned.entryFilename ?? "SKILL.md"
         record.parseDiagnosticsData = (try? encoder.encode(scanned.document.issues)) ?? Data()
     }
 
@@ -190,14 +151,10 @@ public final class SkillIndex {
             resolvedTarget: record.resolvedTarget,
             name: record.name,
             localDescription: record.localDescription,
-            enrichedDescription: record.enrichedDescription,
-            enrichedDescriptionProvenance: record.enrichedDescriptionProvenance,
             customDescription: record.customDescription,
-            digest: record.digest,
             modificationDate: record.modificationDate,
             availability: SkillAvailability(rawValue: record.availabilityRawValue) ?? .unavailable,
             unavailableReason: record.unavailableReason,
-            sourceBinding: record.sourceBinding,
             agentIDs: associations.values.reduce(into: Set<String>()) { result, agentIDs in
                 result.formUnion(agentIDs)
             }.sorted(),
@@ -206,10 +163,7 @@ public final class SkillIndex {
             parseDiagnostics: (try? decoder.decode([ParseIssue].self, from: record.parseDiagnosticsData)) ?? [],
             unavailableDiagnostic: record.unavailableDiagnosticData.flatMap {
                 try? decoder.decode(StructuredDiagnostic.self, from: $0)
-            },
-            discoveredSourceBindings: record.discoveredSourceBindingsData.flatMap {
-                try? decoder.decode([String].self, from: $0)
-            } ?? []
+            }
         )
     }
 

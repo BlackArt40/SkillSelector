@@ -41,7 +41,6 @@ final class AppModel {
     private let diagnosticStore: DiagnosticStore
     @ObservationIgnored private var activeRefresh: (id: UUID, task: Task<Void, Never>)?
     @ObservationIgnored private var pendingOperationContext: PendingOperationContext?
-    @ObservationIgnored private var pendingUpdateContext: PendingUpdateContext?
 
     var refreshState: RefreshState = .idle
     var selection: SkillSelection?
@@ -53,9 +52,6 @@ final class AppModel {
     var pendingOperationPlan: FileOperationPlan?
     var operationError: String?
     private(set) var isOperating = false
-    var pendingUpdateProposal: UpdateProposal?
-    var updateError: String?
-    private(set) var isUpdating = false
     var refreshOnLaunch: Bool {
         didSet { defaults.set(refreshOnLaunch, forKey: Self.refreshOnLaunchDefaultsKey) }
     }
@@ -248,62 +244,10 @@ final class AppModel {
     var fileOperationCommandsDisabled: Bool {
         isOperating
             || pendingOperationPlan != nil
-            || isUpdating
-            || pendingUpdateProposal != nil
             || activeRefresh != nil
     }
 
-    func cancelPendingUpdate() {
-        guard !isUpdating else { return }
-        closePendingUpdate()
-    }
 
-    func applyPendingUpdate(allowLocalChanges: Bool) async {
-        guard let proposal = pendingUpdateProposal,
-              let context = pendingUpdateContext,
-              !isUpdating else { return }
-        isUpdating = true
-        defer { isUpdating = false }
-        do {
-            guard let bookmarks,
-                  try bookmarks.roots() == context.authorizedRoots else {
-                throw SkillFileOperatorError.authorizationChanged
-            }
-            let result = try await context.updater.apply(
-                proposal.confirmed(allowLocalChanges: allowLocalChanges)
-            )
-            switch result {
-            case .confirmationRequired:
-                return
-            case .localChangesRequireConfirmation(let warning):
-                pendingUpdateProposal = warning
-            case .updated:
-                let summary = try await refresher.refresh(
-                    .manual,
-                    rootIDs: Set(result.affectedRootIDs)
-                )
-                try reloadSnapshot()
-                refreshState = .finished(summary)
-                updateError = nil
-                diagnosticStore.record(
-                    category: .updates,
-                    code: "UPDATE_COMPLETED",
-                    message: "Skill update completed",
-                    redactor: currentRedactor()
-                )
-                closePendingUpdate()
-            }
-        } catch {
-            updateError = localizedUpdateError(error)
-            diagnosticStore.record(
-                category: .updates,
-                code: "UPDATE_FAILED",
-                message: updateError ?? "Skill update failed",
-                redactor: currentRedactor()
-            )
-            closePendingUpdate()
-        }
-    }
 
     func planFileOperation(
         _ operation: FileOperationKind,
@@ -366,7 +310,7 @@ final class AppModel {
                     destinationRootURL: destinationRootURL,
                     proposedName: nil,
                     conflictPolicy: operation == .delete ? .fail : conflictPolicy,
-                    metadata: try index.appMetadata(path: skill.path)
+                    metadata: SkillAppMetadata(customDescription: nil)
                 )
                 let plan = try fileOperator.plan(request)
                 pendingOperationContext = PendingOperationContext(
@@ -610,12 +554,6 @@ final class AppModel {
         let leases: [AccessLease]
     }
 
-    private struct PendingUpdateContext {
-        let updater: SkillUpdater
-        let rootIDs: [String]
-        let authorizedRoots: [AuthorizedRootSnapshot]
-        let leases: [AccessLease]
-    }
 
     private func closePendingOperation() {
         pendingOperationContext?.leases.forEach { $0.close() }
@@ -623,11 +561,6 @@ final class AppModel {
         pendingOperationPlan = nil
     }
 
-    private func closePendingUpdate() {
-        pendingUpdateContext?.leases.forEach { $0.close() }
-        pendingUpdateContext = nil
-        pendingUpdateProposal = nil
-    }
 
     private func operationAccessRootIDs(
         for skill: SkillSnapshot,
@@ -635,10 +568,10 @@ final class AppModel {
     ) -> [String] {
         var ids = Set(skill.rootIDs)
         if let resolvedTarget = skill.resolvedTarget.map(URL.init(fileURLWithPath:)) {
-            ids.formUnion(rootIDs(containingResolvedURL: resolvedTarget))
+            ids.formUnion(authorizedRoots.rootIDs(containingResolvedURL: resolvedTarget))
         }
         if let destinationRootURL {
-            ids.formUnion(rootIDs(containingLogicalURL: destinationRootURL))
+            ids.formUnion(authorizedRoots.rootIDs(containingLogicalURL: destinationRootURL))
         }
         return ids.sorted()
     }
@@ -667,19 +600,7 @@ final class AppModel {
         return logicalSourceCovered && resolvedSourceCovered && destinationCovered
     }
 
-    private func rootIDs(containingLogicalURL url: URL) -> Set<String> {
-        Set(authorizedRoots.filter {
-            url.standardizedFileURL.isContained(in: $0.url.standardizedFileURL)
-        }.map(\.id))
-    }
 
-    private func rootIDs(containingResolvedURL url: URL) -> Set<String> {
-        Set(authorizedRoots.filter {
-            url.standardizedFileURL.isContained(
-                in: $0.url.resolvingSymlinksInPath().standardizedFileURL
-            )
-        }.map(\.id))
-    }
 
     private func localizedOperationError(_ error: Error) -> String {
         if let error = error as? AppModelOperationError {
@@ -725,30 +646,6 @@ final class AppModel {
         }
     }
 
-    private func localizedUpdateError(_ error: Error) -> String {
-        if error is SkillFileOperatorError {
-            return localizedOperationError(error)
-        }
-        if let error = error as? SkillUpdateError {
-            return switch error {
-            case .alreadyUpToDate: L10n.string("Skill is already up to date.")
-            case .unsupportedSource: L10n.string("The update source or GitHub CLI is unavailable.")
-            case .unauthorizedInstallation: L10n.string("The update target is not authorized.")
-            case .resolvedTargetMismatch: L10n.string("The symbolic link target changed.")
-            case .commandFailed: L10n.string("The GitHub update command failed.")
-            case .invalidRemoteResponse, .truncatedRepositoryTree, .remotePackageTooLarge:
-                L10n.string("The downloaded Skill package is invalid.")
-            case .proposalExpired, .proposalAlreadyConsumed:
-                L10n.string("This update confirmation is no longer valid.")
-            case .stagedPackageChanged:
-                L10n.string("The downloaded Skill package changed before installation.")
-            }
-        }
-        if error is PackageValidationError {
-            return L10n.string("The downloaded Skill package is invalid.")
-        }
-        return String(describing: error)
-    }
 
 }
 

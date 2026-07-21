@@ -66,7 +66,7 @@ final class DocumentManager {
 
         var requiredRootIDs = Set(skill.rootIDs)
         if let resolvedTarget = skill.resolvedTarget.map(URL.init(fileURLWithPath:)) {
-            requiredRootIDs.formUnion(rootIDs(containingResolvedURL: resolvedTarget, authorizedRoots: authorizedRoots))
+            requiredRootIDs.formUnion(authorizedRoots.rootIDs(containingResolvedURL: resolvedTarget))
         }
         var accesses: [AuthorizedRootAccess] = []
         var firstResolutionError: Error?
@@ -105,17 +105,5 @@ final class DocumentManager {
         ), accesses.map(\.lease))
     }
 
-    private func rootIDs(containingLogicalURL url: URL, authorizedRoots: [AuthorizedRootSnapshot]) -> Set<String> {
-        Set(authorizedRoots.filter {
-            url.standardizedFileURL.isContained(in: $0.url.standardizedFileURL)
-        }.map(\.id))
-    }
 
-    private func rootIDs(containingResolvedURL url: URL, authorizedRoots: [AuthorizedRootSnapshot]) -> Set<String> {
-        Set(authorizedRoots.filter {
-            url.standardizedFileURL.isContained(
-                in: $0.url.resolvingSymlinksInPath().standardizedFileURL
-            )
-        }.map(\.id))
-    }
 }

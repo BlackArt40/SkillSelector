@@ -9,13 +9,24 @@
 .codebuddy/
 .skills/
 
-# Local planning notes
-需求.md
-
-# Isolated implementation worktrees
-.worktrees/
+# Build artifacts
 .build/
 DerivedData/
 dist/
+
+# Swift Package Manager
+.swiftpm/
+
+# App bundle packaging
+scripts/
+Packaging/
+
+# Documentation (not needed in repo)
+docs/
+
+# Other
 .firecrawl/
 *.dmg
+skills-lock.json
+需求.md
+.worktrees/
