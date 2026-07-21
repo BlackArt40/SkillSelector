@@ -1,27 +1,27 @@
-[![English](https://img.shields.io/badge/English-blue)](README.md)
-[![简体中文](https://img.shields.io/badge/简体中文-blue)](README.zh-CN.md)
+[![English](https://img.shields.io/badge/English-blue)](README.en.md)
+[![简体中文](https://img.shields.io/badge/简体中文-blue)](README.md)
 
 # SkillSelector
 
-A native macOS app for managing Agent Skills on your local machine. Browse, copy, move, delete, link, and update Skills. Not a marketplace, not an installer, not an AI tool.
+macOS 原生应用，管理本地 Agent Skill。浏览、复制、移动、删除、链接、更新 Skill。不是市场，不是安装器，不是 AI 工具。
 
-## Requirements
+## 系统要求
 
-- macOS 14 Sonoma or later
-- Universal 2 build (Apple Silicon + Intel)
-- English and Simplified Chinese
+- macOS 14 Sonoma 或更高
+- Universal 2（Apple Silicon + Intel）
+- 英文和简体中文
 
-## Supported Agents
+## 支持的 Agent
 
-Claude Code, Codex, Qoder, CodeBuddy, OpenCode, Cursor, Kilo Code, Cline, Roo Code, Windsurf, Gemini CLI, and GitHub Copilot. Roo Code works but only shows when detected or manually enabled. You can define custom Agents pointing to any local Skill directory.
+Claude Code、Codex、Qoder、CodeBuddy、OpenCode、Cursor、Kilo Code、Cline、Roo Code、Windsurf、Gemini CLI、GitHub Copilot。Roo Code 仅在检测到或手动启用时显示。可自定义 Agent 指向任意本地 Skill 目录。
 
-## Privacy
+## 隐私
 
-Runs offline. Stores index records and security-scoped bookmarks—never copies Skill content. No telemetry, no crash reporter, no bundled model.
+离线运行。只存储索引记录和安全作用域书签，不复制 Skill 内容。无遥测、无崩溃报告、无捆绑模型。
 
-File operations touch only authorized Skill roots. Deletion goes to Trash.
+文件操作限于已授权的 Skill 根目录。删除走回收站。
 
-## Build
+## 构建
 
 ```zsh
 swift test
@@ -30,16 +30,16 @@ zsh Scripts/package-dmg.sh 0.1.0
 zsh Tests/Packaging/package-smoke.sh 0.1.0
 ```
 
-Produces `dist/SkillSelector.app`, `dist/SkillSelector.dmg`, and `dist/SkillSelector-0.1.0.dmg` for GitHub Releases.
+输出 `dist/SkillSelector.app`、`dist/SkillSelector.dmg` 和 `dist/SkillSelector-0.1.0.dmg`。
 
-## Installation
+## 安装
 
-1. Download the `.dmg` from GitHub Releases
-2. Drag `SkillSelector.app` to Applications
-3. Right-click the app → **Open** → confirm **Open**
+1. 从 GitHub Releases 下载 `.dmg`
+2. 拖拽 `SkillSelector.app` 到 Applications
+3. 右键点击应用 → **打开** → 确认 **打开**
 
-macOS Gatekeeper blocks unsigned apps by default. If the right-click menu doesn't show **Open**, go to System Settings → Privacy & Security → click **Open Anyway** next to the SkillSelector entry.
+macOS Gatekeeper 默认阻止未签名应用。如果右键菜单没有"打开"选项，前往系统设置 → 隐私与安全性 → 点击 SkillSelector 旁边的"仍然打开"。
 
-## License
+## 许可证
 
-Apache 2.0. See [LICENSE](LICENSE).
+Apache 2.0。见 [LICENSE](LICENSE)。
