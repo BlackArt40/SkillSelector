@@ -26,7 +26,7 @@ struct DescriptionEditor: View {
                         .keyboardShortcut(.defaultAction)
                     Button(L10n.string("Cancel"), action: cancel)
                     if skill.customDescription != nil {
-                        Button(L10n.string("Restore Default"), role: .destructive, action: restore)
+                        Button(L10n.string("Delete Custom Description"), role: .destructive, action: restore)
                     }
                 }
             } else {
@@ -39,7 +39,7 @@ struct DescriptionEditor: View {
                         Label(L10n.string("Edit Custom Description"), systemImage: "pencil")
                     }
                     if skill.customDescription != nil {
-                        Button(L10n.string("Restore Default"), role: .destructive, action: restore)
+                        Button(L10n.string("Delete Custom Description"), role: .destructive, action: restore)
                     }
                 }
             }

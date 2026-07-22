@@ -14,34 +14,31 @@ struct SkillDetailView: View {
                 VStack(alignment: .leading, spacing: 22) {
                     summary(skill)
                     detailSection(L10n.string("Description")) {
-                        let effective = DescriptionResolver.resolve(
-                            DescriptionCandidates(snapshot: skill)
-                        )
-                        let lines = MarkdownRenderer.extractBody(effective.text)
-                        if let attributed = MarkdownRenderer.buildAttributedString(from: lines) {
-                            Text(attributed)
-                                .textSelection(.enabled)
+                        if let localDesc = skill.localDescription,
+                           !localDesc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            let lines = MarkdownRenderer.extractBody(localDesc)
+                            if let attributed = MarkdownRenderer.buildAttributedString(from: lines) {
+                                Text(attributed)
+                                    .textSelection(.enabled)
+                            } else {
+                                Text(verbatim: localDesc)
+                                    .textSelection(.enabled)
+                            }
                         } else {
-                            Text(verbatim: effective.text)
+                            Text(verbatim: skill.name)
+                                .foregroundStyle(.secondary)
                                 .textSelection(.enabled)
                         }
-                        Text(verbatim: String.localizedStringWithFormat(
-                            L10n.string("Description source: %@"),
-                            provenanceName(effective.source)
-                        ))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
 
-                        Divider()
-                        labeledValue(
-                            L10n.string("Custom Description"),
-                            value: candidateValue(skill.customDescription)
-                        )
-                        labeledValue(
-                            L10n.string("Local Skill Document"),
-                            value: candidateValue(skill.localDescription)
-                        )
-                        labeledValue(L10n.string("Local Fallback"), value: skill.name)
+                        if let customDesc = skill.customDescription,
+                           !customDesc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Divider()
+                            labeledValue(
+                                L10n.string("Custom Description"),
+                                value: customDesc
+                            )
+                        }
+
                         DescriptionEditor(skill: skill)
                             .id(skill.path)
                     }
@@ -146,22 +143,6 @@ struct SkillDetailView: View {
             value: root.url.path,
             monospaced: true
         )
-    }
-
-    private func provenanceName(_ source: EffectiveDescription.Source) -> String {
-        switch source {
-        case .custom: L10n.string("Custom")
-        case .local: L10n.string("Local Document")
-        case .fallback: L10n.string("Fallback")
-        }
-    }
-
-    private func candidateValue(_ value: String?) -> String {
-        guard let value,
-              !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return L10n.string("Not available")
-        }
-        return value
     }
 }
 
