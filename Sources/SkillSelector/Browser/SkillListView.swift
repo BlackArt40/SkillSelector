@@ -71,13 +71,12 @@ struct SkillListView: View {
                 ForEach(folderGroups) { group in
                     DisclosureGroup {
                         ForEach(group.skills) { skill in
-                            SkillRow(skill: skill, agentNamesByID: agentNamesByID, onOperation: onOperation)
-                                .tag(SkillSelection(path: skill.path))
+                            skillRow(skill)
                         }
                     } label: {
                         HStack {
                             Image(systemName: "folder")
-                            Text(group.name)
+                            Text(verbatim: group.name)
                             Spacer()
                             Text(verbatim: "\(group.skills.count)")
                                 .foregroundStyle(.secondary)
@@ -89,11 +88,15 @@ struct SkillListView: View {
             .listStyle(.inset)
         } else {
             List(skills, selection: $selection) { skill in
-                SkillRow(skill: skill, agentNamesByID: agentNamesByID, onOperation: onOperation)
-                    .tag(SkillSelection(path: skill.path))
+                skillRow(skill)
             }
             .listStyle(.inset)
         }
+    }
+
+    private func skillRow(_ skill: SkillSnapshot) -> some View {
+        SkillRow(skill: skill, agentNamesByID: agentNamesByID, onOperation: onOperation)
+            .tag(SkillSelection(path: skill.path))
     }
 
     private var folderGroups: [SkillFolderGroup] {
@@ -103,7 +106,6 @@ struct SkillListView: View {
         return grouped.map { folderName, folderSkills in
             SkillFolderGroup(
                 name: folderName,
-                path: folderName,
                 skills: folderSkills.sorted {
                     $0.name.localizedStandardCompare($1.name) == .orderedAscending
                 }
@@ -164,7 +166,6 @@ struct SkillListView: View {
 
 private struct SkillFolderGroup: Identifiable {
     let name: String
-    let path: String
     let skills: [SkillSnapshot]
-    var id: String { path }
+    var id: String { name }
 }
