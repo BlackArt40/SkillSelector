@@ -101,6 +101,8 @@ struct SkillListView: View {
             .tag(SkillSelection(path: skill.path))
     }
 
+    // Recomputed on every SwiftUI body pass. Fine for typical skill counts;
+    // cache with @State or onChange if profiling shows a bottleneck.
     private var folderGroups: [SkillFolderGroup] {
         let grouped = Dictionary(grouping: skills) { skill in
             Self.skillFolderName(for: skill.path)
@@ -115,10 +117,12 @@ struct SkillListView: View {
         }.sorted { $0.name.lowercased() < $1.name.lowercased() }
     }
 
+    private static let skillsDirName = "skills"
+
     private static func skillFolderName(for skillPath: String) -> String {
         let components = URL(fileURLWithPath: skillPath).pathComponents
         for (index, component) in components.enumerated() {
-            if component == "skills", index + 1 < components.count {
+            if component == skillsDirName, index + 1 < components.count {
                 return components[index + 1]
             }
         }
