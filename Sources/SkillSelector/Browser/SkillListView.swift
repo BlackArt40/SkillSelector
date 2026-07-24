@@ -78,7 +78,9 @@ struct SkillListView: View {
                             Image(systemName: "folder")
                             Text(verbatim: group.name)
                             Spacer()
-                            Text(verbatim: "\(group.skills.count)")
+                            Text(verbatim: String.localizedStringWithFormat(
+                                L10n.string("%d Skills"), group.skills.count
+                            ))
                                 .foregroundStyle(.secondary)
                                 .font(.caption)
                         }
