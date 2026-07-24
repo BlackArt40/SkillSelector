@@ -11,6 +11,7 @@ struct SkillListView: View {
     let allSkillCount: Int
     let hasAuthorization: Bool
     let hasActiveFilters: Bool
+    let showFolderGroups: Bool
     let refreshState: RefreshState
     let agentNamesByID: [String: String]
     let onRefresh: () -> Void
@@ -65,6 +66,27 @@ struct SkillListView: View {
     private var content: some View {
         if skills.isEmpty {
             emptyState
+        } else if showFolderGroups {
+            List(selection: $selection) {
+                ForEach(folderGroups) { group in
+                    DisclosureGroup {
+                        ForEach(group.skills) { skill in
+                            SkillRow(skill: skill, agentNamesByID: agentNamesByID, onOperation: onOperation)
+                                .tag(SkillSelection(path: skill.path))
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: "folder")
+                            Text(group.name)
+                            Spacer()
+                            Text(verbatim: "\(group.skills.count)")
+                                .foregroundStyle(.secondary)
+                                .font(.caption)
+                        }
+                    }
+                }
+            }
+            .listStyle(.inset)
         } else {
             List(skills, selection: $selection) { skill in
                 SkillRow(skill: skill, agentNamesByID: agentNamesByID, onOperation: onOperation)
@@ -72,6 +94,31 @@ struct SkillListView: View {
             }
             .listStyle(.inset)
         }
+    }
+
+    private var folderGroups: [SkillFolderGroup] {
+        let grouped = Dictionary(grouping: skills) { skill in
+            Self.skillFolderName(for: skill.path)
+        }
+        return grouped.map { folderName, folderSkills in
+            SkillFolderGroup(
+                name: folderName,
+                path: folderName,
+                skills: folderSkills.sorted {
+                    $0.name.localizedStandardCompare($1.name) == .orderedAscending
+                }
+            )
+        }.sorted { $0.name.lowercased() < $1.name.lowercased() }
+    }
+
+    private static func skillFolderName(for skillPath: String) -> String {
+        let components = URL(fileURLWithPath: skillPath).pathComponents
+        for (index, component) in components.enumerated() {
+            if component == "skills", index + 1 < components.count {
+                return components[index + 1]
+            }
+        }
+        return URL(fileURLWithPath: skillPath).deletingLastPathComponent().lastPathComponent
     }
 
     @ViewBuilder
@@ -113,4 +160,11 @@ struct SkillListView: View {
             }
         }
     }
+}
+
+private struct SkillFolderGroup: Identifiable {
+    let name: String
+    let path: String
+    let skills: [SkillSnapshot]
+    var id: String { path }
 }

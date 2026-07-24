@@ -25,6 +25,15 @@ enum BrowserDestination: Hashable {
         guard case .agent(let id) = self else { return nil }
         return id
     }
+
+    var showsFolderGroups: Bool {
+        switch self {
+        case .all, .system:
+            true
+        case .global, .project, .agent:
+            false
+        }
+    }
 }
 
 struct BrowserSidebar: View {

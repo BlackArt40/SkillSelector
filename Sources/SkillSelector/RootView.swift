@@ -50,6 +50,7 @@ struct RootView: View {
                 allSkillCount: model.snapshots.count,
                 hasAuthorization: model.hasAuthorization,
                 hasActiveFilters: hasActiveFilters,
+                showFolderGroups: currentDestination.showsFolderGroups,
                 refreshState: model.refreshState,
                 agentNamesByID: agentNamesByID,
                 onRefresh: refresh,
