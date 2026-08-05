@@ -22,6 +22,20 @@ enum AppModelOperationError: Error {
     case noAuthorizedRoot
 }
 
+enum AppModelValidationError: Error, LocalizedError {
+    case invalidEntryFilename(String)
+    case invalidPathTemplate(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidEntryFilename(let filename):
+            return "Invalid entry filename: \(filename)"
+        case .invalidPathTemplate(let path):
+            return "Invalid path template: \(path)"
+        }
+    }
+}
+
 struct SkillSelection: Hashable, Identifiable {
     let path: String
     var id: String { path }
@@ -182,13 +196,28 @@ final class AppModel {
     ) throws {
         let name = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return }
+
+        let resolvedEntry = entryFilename.trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalEntry = resolvedEntry.isEmpty ? "SKILL.md" : resolvedEntry
+        guard SkillDocumentReader.isSimpleEntryFilename(finalEntry) else {
+            throw AppModelValidationError.invalidEntryFilename(finalEntry)
+        }
+
+        let resolvedRoots = normalizedLines(globalRoots)
+        let resolvedPatterns = normalizedLines(projectPatterns)
+        for template in resolvedRoots + resolvedPatterns {
+            let stripped = template.replacingOccurrences(of: "*", with: "")
+                .trimmingCharacters(in: .whitespaces)
+            guard template != "/", template != "~", !stripped.isEmpty else {
+                throw AppModelValidationError.invalidPathTemplate(template)
+            }
+        }
+
         let definition = AgentDefinition.custom(
             displayName: name,
-            globalRoots: normalizedLines(globalRoots),
-            projectPatterns: normalizedLines(projectPatterns),
-            entryFilename: entryFilename.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ? "SKILL.md"
-                : entryFilename.trimmingCharacters(in: .whitespacesAndNewlines),
+            globalRoots: resolvedRoots,
+            projectPatterns: resolvedPatterns,
+            entryFilename: finalEntry,
             id: existingID
         )
         if existingID == nil {

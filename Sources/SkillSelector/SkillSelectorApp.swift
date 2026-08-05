@@ -1,8 +1,11 @@
 import AppKit
+import OSLog
 import SkillSelectorCore
 import SwiftData
 import SwiftUI
 import Darwin
+
+private let logger = Logger(subsystem: "com.SkillSelector", category: "App")
 
 private final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -27,7 +30,12 @@ struct SkillSelectorApp: App {
                 AuthorizedRootRecord.self
             )
         } catch {
-            fatalError("Unable to initialize SkillSelector storage: \(error)")
+            logger.fault("Persistent store initialization failed, falling back to in-memory: \(error.localizedDescription)")
+            container = try! ModelContainer(
+                for: SkillRecord.self,
+                AuthorizedRootRecord.self,
+                configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            )
         }
         let bookmarks = BookmarkStore(container: container)
         let index = SkillIndex(container: container)

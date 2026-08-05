@@ -17,63 +17,68 @@ public final class SkillIndex {
     }
 
     public func apply(report: ScanReport) throws {
-        var records = try recordsByPath()
+        do {
+            var records = try recordsByPath()
 
-        for root in report.roots {
-            guard case .unavailable(let reason) = root.availability else { continue }
-            for record in records.values {
-                let associations = try agentIDsByRoot(for: record)
-                guard associations[root.id] != nil else { continue }
-                record.availabilityRawValue = SkillAvailability.unavailable.rawValue
-                record.unavailableReason = reason
-                record.unavailableDiagnosticData = root.unavailableDiagnostic.flatMap {
-                    try? encoder.encode($0)
+            for root in report.roots {
+                guard case .unavailable(let reason) = root.availability else { continue }
+                for record in records.values {
+                    let associations = try agentIDsByRoot(for: record)
+                    guard associations[root.id] != nil else { continue }
+                    record.availabilityRawValue = SkillAvailability.unavailable.rawValue
+                    record.unavailableReason = reason
+                    record.unavailableDiagnosticData = root.unavailableDiagnostic.flatMap {
+                        try? encoder.encode($0)
+                    }
                 }
             }
-        }
 
-        for root in report.roots where root.availability == .available {
-            let reportedPaths = Set(
-                report.installations
-                    .filter { $0.rootIDs.contains(root.id) }
-                    .map { $0.path.standardizedFileURL.path }
-            )
-            for record in Array(records.values) {
-                var associations = try agentIDsByRoot(for: record)
-                guard associations[root.id] != nil,
-                      !reportedPaths.contains(record.path) else {
-                    continue
-                }
-                associations[root.id] = nil
-                if associations.isEmpty {
-                    context.delete(record)
-                    records[record.path] = nil
-                } else {
-                    record.agentIDsByRootData = try encode(associations, path: record.path)
-                }
-            }
-        }
-
-        for scanned in report.installations {
-            let path = scanned.path.standardizedFileURL.path
-            let record: SkillRecord
-            if let existing = records[path] {
-                record = existing
-            } else {
-                record = SkillRecord(
-                    path: path,
-                    name: scanned.document.name
-                        ?? scanned.document.title
-                        ?? scanned.path.lastPathComponent,
-                    entryFilename: scanned.entryFilename
+            for root in report.roots where root.availability == .available {
+                let reportedPaths = Set(
+                    report.installations
+                        .filter { $0.rootIDs.contains(root.id) }
+                        .map { $0.path.standardizedFileURL.path }
                 )
-                context.insert(record)
-                records[path] = record
+                for record in Array(records.values) {
+                    var associations = try agentIDsByRoot(for: record)
+                    guard associations[root.id] != nil,
+                          !reportedPaths.contains(record.path) else {
+                        continue
+                    }
+                    associations[root.id] = nil
+                    if associations.isEmpty {
+                        context.delete(record)
+                        records[record.path] = nil
+                    } else {
+                        record.agentIDsByRootData = try encode(associations, path: record.path)
+                    }
+                }
             }
-            try update(record, from: scanned)
-        }
 
-        try context.save()
+            for scanned in report.installations {
+                let path = scanned.path.standardizedFileURL.path
+                let record: SkillRecord
+                if let existing = records[path] {
+                    record = existing
+                } else {
+                    record = SkillRecord(
+                        path: path,
+                        name: scanned.document.name
+                            ?? scanned.document.title
+                            ?? scanned.path.lastPathComponent,
+                        entryFilename: scanned.entryFilename
+                    )
+                    context.insert(record)
+                    records[path] = record
+                }
+                try update(record, from: scanned)
+            }
+
+            try context.save()
+        } catch {
+            context.rollback()
+            throw error
+        }
     }
 
     public func skills() throws -> [SkillSnapshot] {
@@ -140,7 +145,7 @@ public final class SkillIndex {
             associations[rootID] = agentIDs
         }
         record.agentIDsByRootData = try encode(associations, path: record.path)
-        record.entryFilename = scanned.entryFilename ?? "SKILL.md"
+        record.entryFilename = scanned.entryFilename
         record.parseDiagnosticsData = (try? encoder.encode(scanned.document.issues)) ?? Data()
     }
 

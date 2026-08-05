@@ -102,6 +102,97 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(editor.projectPatterns, "")
         XCTAssertEqual(editor.entryFilename, "SKILL.md")
     }
+
+    func testCustomAgentValidationRejectsInvalidPathsAndEntryFilenames() throws {
+        let (model, store) = try makeValidationModel()
+
+        // entryFilename with path separator is rejected
+        XCTAssertThrowsError(try model.saveCustomAgent(
+            displayName: "Bad Entry",
+            globalRoots: ["~/.skills"],
+            projectPatterns: [".skills"],
+            entryFilename: "sub/dir/SKILL.md"
+        )) { error in
+            guard case .invalidEntryFilename = error as? AppModelValidationError else {
+                return XCTFail("Expected invalidEntryFilename, got \(error)")
+            }
+        }
+
+        // entryFilename with backslash is rejected
+        XCTAssertThrowsError(try model.saveCustomAgent(
+            displayName: "Bad Entry",
+            globalRoots: ["~/.skills"],
+            projectPatterns: [".skills"],
+            entryFilename: "SKILL\\.md"
+        )) { error in
+            guard case .invalidEntryFilename = error as? AppModelValidationError else {
+                return XCTFail("Expected invalidEntryFilename, got \(error)")
+            }
+        }
+
+        // root-only "/" is rejected
+        XCTAssertThrowsError(try model.saveCustomAgent(
+            displayName: "Bad Root",
+            globalRoots: ["/"],
+            projectPatterns: [".skills"],
+            entryFilename: "SKILL.md"
+        )) { error in
+            guard case .invalidPathTemplate = error as? AppModelValidationError else {
+                return XCTFail("Expected invalidPathTemplate, got \(error)")
+            }
+        }
+
+        // bare "~" is rejected
+        XCTAssertThrowsError(try model.saveCustomAgent(
+            displayName: "Bad Root",
+            globalRoots: ["~"],
+            projectPatterns: [".skills"],
+            entryFilename: "SKILL.md"
+        )) { error in
+            guard case .invalidPathTemplate = error as? AppModelValidationError else {
+                return XCTFail("Expected invalidPathTemplate, got \(error)")
+            }
+        }
+
+        // pure wildcard "*" is rejected
+        XCTAssertThrowsError(try model.saveCustomAgent(
+            displayName: "Bad Root",
+            globalRoots: ["*"],
+            projectPatterns: [".skills"],
+            entryFilename: "SKILL.md"
+        )) { error in
+            guard case .invalidPathTemplate = error as? AppModelValidationError else {
+                return XCTFail("Expected invalidPathTemplate, got \(error)")
+            }
+        }
+
+        // nothing was persisted despite multiple attempts
+        XCTAssertTrue(store.values.isEmpty)
+    }
+
+    private func makeValidationModel() throws -> (AppModel, RecordingAgentDefinitionStore) {
+        let suite = "AppModelValidationTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(
+            for: SkillRecord.self,
+            AuthorizedRootRecord.self,
+            configurations: configuration
+        )
+        let index = SkillIndex(container: container)
+        let registry = BuiltInAgentRegistry.make()
+        let bookmarks = BookmarkStore(container: container)
+        let refresher = IndexRefresher(registry: registry, bookmarks: bookmarks, index: index)
+        let store = RecordingAgentDefinitionStore()
+        let model = AppModel(
+            refresher: refresher,
+            index: index,
+            registry: registry,
+            defaults: defaults,
+            customAgentStore: store
+        )
+        return (model, store)
+    }
 }
 
 private final class RecordingAgentDefinitionStore: AgentDefinitionStoring, @unchecked Sendable {

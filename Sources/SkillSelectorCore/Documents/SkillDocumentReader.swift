@@ -298,7 +298,7 @@ public struct SkillDocumentReader {
         return try operation(descriptor, metadata, canonicalURL)
     }
 
-    private static func isSimpleEntryFilename(_ filename: String) -> Bool {
+    public static func isSimpleEntryFilename(_ filename: String) -> Bool {
         !filename.isEmpty
             && filename != "."
             && filename != ".."

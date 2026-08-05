@@ -28,6 +28,13 @@ final class RedactorTests: XCTestCase {
         )
     }
 
+    func testPathRedactionIsCaseInsensitive() {
+        XCTAssertEqual(
+            redactor.redact("Found at /USERS/alice/.codex/skills and /users/alice/Work/Secret Project/.agents"),
+            "Found at <home>/.codex/skills and <project:1>/.agents"
+        )
+    }
+
     func testRedactsConfiguredPathsInsideQuotesAndCommonPunctuation() {
         let input = "ASCII \"/Users/alice/.codex/skills\", project '/Users/alice/Work/Secret Project/.agents'; exact home \u{2018}/Users/alice\u{2019}, exact project \u{201C}/Users/alice/Work/Secret Project\u{201D}!"
 

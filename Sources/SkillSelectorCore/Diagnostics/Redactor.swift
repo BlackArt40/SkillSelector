@@ -98,7 +98,7 @@ public struct Redactor: Sendable {
 
     private func replacePath(_ path: String, with replacement: String, in value: String) -> String {
         guard !path.isEmpty else { return value }
-        let pattern = NSRegularExpression.escapedPattern(for: path)
+        let pattern = "(?i)" + NSRegularExpression.escapedPattern(for: path)
             + #"(?=$|/|[\s,;:.!?\)\]\}'\"“”‘’])"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return value }
         let range = NSRange(value.startIndex..<value.endIndex, in: value)
