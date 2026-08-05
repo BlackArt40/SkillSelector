@@ -135,6 +135,29 @@ enum MarkdownRenderer {
         }
     }
 
+    /// URL schemes that are safe to expose as a clickable link inside an
+    /// untrusted Skill document.
+    ///
+    /// Everything else — `file:`, `shortcuts:`, `javascript:`, arbitrary app
+    /// schemes — can hand execution to another process running *outside* the
+    /// App Sandbox, so those destinations are rendered as inert text instead.
+    private static let allowedLinkSchemes: Set<String> = ["http", "https"]
+
+    /// Whether a resolved URL may be handed to the system opener.
+    static func isAllowedLink(_ url: URL) -> Bool {
+        guard let scheme = url.scheme?.lowercased() else { return false }
+        return allowedLinkSchemes.contains(scheme)
+    }
+
+    /// Returns a URL only when the destination is safe to open from a link tap.
+    ///
+    /// Relative references are rejected too: the renderer has no base URL, so
+    /// how they would resolve at click time is undefined.
+    static func sanitizedLinkURL(_ urlString: String) -> URL? {
+        guard let url = URL(string: urlString), isAllowedLink(url) else { return nil }
+        return url
+    }
+
     private static func looksLikePath(_ text: String) -> Bool {
         text.contains("/") || text.contains("\\") || text.hasSuffix(".md") || text.hasSuffix(".swift")
             || text.hasSuffix(".json") || text.hasSuffix(".yml") || text.hasSuffix(".yaml")
@@ -152,12 +175,14 @@ enum MarkdownRenderer {
                     let codeStart = text.index(after: i)
                     let codeText = String(text[codeStart..<end])
                     if looksLikePath(codeText) {
-                        var link = AttributedString(codeText)
-                        link.font = .system(.body, design: .monospaced)
-                        link.foregroundColor = .blue
-                        link.underlineStyle = .single
-                        link.link = URL(string: "file:///\(codeText)")
-                        result.append(link)
+                        // Paths get their own tint for readability, but are never
+                        // linked: turning them into `file://` links let a malicious
+                        // Skill document launch executables outside the App Sandbox,
+                        // and trained readers to click them.
+                        var path = AttributedString(codeText)
+                        path.font = .system(.body, design: .monospaced)
+                        path.foregroundColor = .secondary
+                        result.append(path)
                     } else {
                         var code = AttributedString(codeText)
                         code.font = .system(.body, design: .monospaced)
@@ -197,13 +222,24 @@ enum MarkdownRenderer {
                     let urlStart = text.index(closeBracket, offsetBy: 2)
                     if let closeParen = text[urlStart...].firstIndex(of: ")") {
                         let urlString = String(text[urlStart..<closeParen])
-                        var link = AttributedString(linkText)
-                        link.foregroundColor = .blue
-                        link.underlineStyle = .single
-                        if let url = URL(string: urlString) {
+                        if let url = sanitizedLinkURL(urlString) {
+                            var link = AttributedString(linkText)
+                            link.foregroundColor = .blue
+                            link.underlineStyle = .single
                             link.link = url
+                            result.append(link)
+                        } else {
+                            // Unsupported scheme. Keep the label and disclose the
+                            // raw destination so the reader can judge it, but do
+                            // not make it clickable.
+                            var label = AttributedString(linkText)
+                            label.font = .body
+                            result.append(label)
+                            var target = AttributedString(" (\(urlString))")
+                            target.font = .system(.body, design: .monospaced)
+                            target.foregroundColor = .secondary
+                            result.append(target)
                         }
-                        result.append(link)
                         i = text.index(after: closeParen)
                         continue
                     }
@@ -215,5 +251,21 @@ enum MarkdownRenderer {
             i = text.index(after: i)
         }
         return result
+    }
+}
+
+extension View {
+    /// Enforces the renderer's link policy again at click time.
+    ///
+    /// This is a second line of defence: even if a link attribute ever slips
+    /// past `MarkdownRenderer`, only http/https reaches the system opener.
+    /// Anything else is discarded.
+    func markdownLinkPolicy() -> some View {
+        environment(
+            \.openURL,
+            OpenURLAction { url in
+                MarkdownRenderer.isAllowedLink(url) ? .systemAction : .discarded
+            }
+        )
     }
 }

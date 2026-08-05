@@ -64,6 +64,7 @@ struct MarkdownDocumentView: View {
                     .textSelection(.enabled)
                     .padding(8)
             }
+            .markdownLinkPolicy()
         case .raw(let source):
             ScrollView {
                 Text(verbatim: source)

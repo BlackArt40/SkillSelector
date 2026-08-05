@@ -20,6 +20,7 @@ struct SkillDetailView: View {
                             if let attributed = MarkdownRenderer.buildAttributedString(from: lines) {
                                 Text(attributed)
                                     .textSelection(.enabled)
+                                    .markdownLinkPolicy()
                             } else {
                                 Text(verbatim: localDesc)
                                     .textSelection(.enabled)
