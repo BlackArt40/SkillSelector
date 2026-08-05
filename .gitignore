@@ -10,22 +10,24 @@
 .skills/
 .mimocode/
 .superpowers/
+.workbuddy/
 
 # Build artifacts
 .build/
 DerivedData/
-dist/
+/dist/
 
 # Swift Package Manager
 .swiftpm/
 
-# App bundle packaging
-scripts/
-Scripts/
-Packaging/
+# Note: packaging inputs (Scripts/, Packaging/, Tests/Packaging/) are tracked on
+# purpose. They define the sandbox entitlements and the release pipeline, so they
+# must be reviewable and diffable. A pattern without a leading slash matches at
+# any depth — "Packaging/" also swallowed "Tests/Packaging/", which hid the only
+# assertion that verifies the app-sandbox entitlement is still present.
 
-# Documentation
-docs/
+# Documentation (local working notes, not published)
+/docs/
 CONTEXT.md
 
 # Other
