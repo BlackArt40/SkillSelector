@@ -36,15 +36,34 @@ zsh Scripts/package-dmg.sh 0.1.0
 zsh Tests/Packaging/package-smoke.sh 0.1.0
 ```
 
-Produces `dist/SkillSelector.app`, `dist/SkillSelector.dmg`, and `dist/SkillSelector-0.1.0.dmg` for GitHub Releases.
+Produces `dist/SkillSelector.app`, `dist/SkillSelector.dmg`, `dist/SkillSelector-0.1.0.dmg`, and a matching `.sha256` for GitHub Releases.
 
 ## Installation
 
-1. Download the `.dmg` from GitHub Releases
-2. Drag `SkillSelector.app` to Applications
-3. Right-click the app → **Open** → confirm **Open**
+1. Download the `.dmg` and its `.sha256` from GitHub Releases
+2. Verify integrity (keep both files in the same directory):
 
-macOS Gatekeeper blocks unsigned apps by default. If the right-click menu doesn't show **Open**, go to System Settings → Privacy & Security → click **Open Anyway** next to the SkillSelector entry.
+   ```zsh
+   shasum -a 256 -c SkillSelector-0.1.0.dmg.sha256
+   ```
+
+   It must print `SkillSelector-0.1.0.dmg: OK`. If it doesn't, don't install it.
+
+3. Mount the `.dmg` and drag `SkillSelector.app` to Applications
+4. Right-click the app → **Open** → confirm **Open**
+
+macOS Gatekeeper blocks un-notarized apps by default. If the right-click menu doesn't show **Open**, go to System Settings → Privacy & Security → click **Open Anyway** next to the SkillSelector entry.
+
+## Code signing
+
+Releases are **ad-hoc signed** (`codesign --sign -`): **no Apple Developer certificate, no notarization**. Be clear on what that does and does not buy you:
+
+- ✅ App Sandbox is enabled; the requested entitlements are in [`Packaging/SkillSelector.entitlements`](Packaging/SkillSelector.entitlements)
+- ✅ The signature detects tampering with the app bundle after signing
+- ❌ **It proves nothing about who published it** — anyone can produce an ad-hoc signature. Download only from this repository's GitHub Releases and check the `.sha256`
+- ❌ Not notarized, so Gatekeeper blocks the first launch and you must allow it manually per step 4
+
+If that's not acceptable, build from source (see **Build**) — releases go through the same packaging script.
 
 ## License
 

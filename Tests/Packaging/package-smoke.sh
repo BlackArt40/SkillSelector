@@ -21,8 +21,16 @@ ROOT_DIR="${0:A:h:h:h}"
 test -x "$APP/Contents/MacOS/SkillSelector"
 test -d "$APP/Contents/Resources/SkillSelector_SkillSelector.bundle"
 lipo "$APP/Contents/MacOS/SkillSelector" -verify_arch arm64 x86_64
+
+# `--deep` is deprecated for signing but is the correct flag for verification:
+# it walks nested code, which package-dmg.sh now signs explicitly.
 codesign --verify --deep --strict "$APP"
 codesign -d --entitlements :- "$APP" 2>&1 | grep -q 'com.apple.security.app-sandbox'
+
+# The README tells users this build is ad-hoc signed. Assert that stays true so
+# the disclosure never silently drifts from the artifact.
+codesign -dvv "$APP" 2>&1 | grep -q '^Signature=adhoc$'
+
 plutil -lint "$INFO_PLIST"
 test "$(plutil -extract CFBundleShortVersionString raw "$INFO_PLIST")" = "$VERSION"
 test "$(plutil -extract CFBundleVersion raw "$INFO_PLIST")" = "$VERSION"
@@ -30,6 +38,9 @@ test -f "$STABLE_DMG"
 hdiutil verify "$STABLE_DMG"
 test -f "$RELEASE_DMG"
 hdiutil verify "$RELEASE_DMG"
+
+test -f "$RELEASE_DMG.sha256"
+( cd dist && shasum -a 256 -c "SkillSelector-$VERSION.dmg.sha256" )
 
 typeset -a fallbackBundles
 for bundle in "$ROOT_DIR"/.build/**/SkillSelector_SkillSelector.bundle(N); do

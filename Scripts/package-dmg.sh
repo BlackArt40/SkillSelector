@@ -41,7 +41,15 @@ ditto "$ROOT_DIR/Packaging/Info.plist" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$APP/Contents/Info.plist"
 
-codesign --force --deep --sign - \
+# Sign nested code inside-out. `codesign --deep` is deprecated for signing:
+# it applies the outer identity to nested items without their own entitlements
+# and silently skips anything it fails to recognise. Signing each nested bundle
+# explicitly keeps the set of signed items visible in this script.
+for nested_bundle in "$APP/Contents/Resources"/*.bundle(N); do
+    codesign --force --sign - "$nested_bundle"
+done
+
+codesign --force --sign - \
     --entitlements "$ROOT_DIR/Packaging/SkillSelector.entitlements" \
     "$APP"
 
@@ -52,3 +60,10 @@ hdiutil create \
     -srcfolder "$APP" \
     "$DIST_DIR/SkillSelector.dmg"
 cp "$DIST_DIR/SkillSelector.dmg" "$DIST_DIR/SkillSelector-$VERSION.dmg"
+
+# Checksum is written with a bare filename so downloaders can run
+# `shasum -a 256 -c SkillSelector-$VERSION.dmg.sha256` next to the DMG.
+(
+    cd "$DIST_DIR"
+    shasum -a 256 "SkillSelector-$VERSION.dmg" > "SkillSelector-$VERSION.dmg.sha256"
+)
