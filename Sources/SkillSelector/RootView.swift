@@ -7,6 +7,7 @@ struct RootView: View {
     @State private var searchText = ""
     @State private var status: SkillQuery.Status = .all
     @State private var sort: SkillQuery.Sort = .default
+    @State private var revealError: String?
 
     var body: some View {
         @Bindable var model = model
@@ -64,6 +65,14 @@ struct RootView: View {
                     } else {
                         chooseDestination(for: operation, skill: skill)
                     }
+                },
+                onRevealInFinder: { skill in
+                    do {
+                        try model.revealDocumentInFinder(for: skill)
+                    } catch {
+                        revealError = (error as? LocalizedError)?.errorDescription
+                            ?? String(describing: error)
+                    }
                 }
             )
             .navigationSplitViewColumnWidth(min: 280, ideal: 330, max: 380)
@@ -118,6 +127,15 @@ struct RootView: View {
             Text(verbatim: model.operationError ?? "")
         }
 
+        .alert(
+            L10n.string("Unable to Reveal in Finder"),
+            isPresented: revealErrorBinding
+        ) {
+            Button(L10n.string("OK")) { revealError = nil }
+        } message: {
+            Text(verbatim: revealError ?? "")
+        }
+
     }
 
     private var hasActiveFilters: Bool {
@@ -140,6 +158,15 @@ struct RootView: View {
             get: { model.operationError != nil },
             set: { isPresented in
                 if !isPresented { model.operationError = nil }
+            }
+        )
+    }
+
+    private var revealErrorBinding: Binding<Bool> {
+        Binding(
+            get: { revealError != nil },
+            set: { isPresented in
+                if !isPresented { revealError = nil }
             }
         )
     }

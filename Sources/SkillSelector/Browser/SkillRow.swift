@@ -5,6 +5,7 @@ struct SkillRow: View {
     let skill: SkillSnapshot
     let agentNamesByID: [String: String]
     var onOperation: ((FileOperationKind, SkillSnapshot) -> Void)?
+    var onRevealInFinder: ((SkillSnapshot) -> Void)?
 
     private var agentNames: String {
         skill.agentDisplayNames(by: agentNamesByID).joined(separator: " · ")
@@ -47,6 +48,12 @@ struct SkillRow: View {
         .accessibilityElement(children: .combine)
         .draggable(SkillDragPayload(path: skill.path, name: skill.name))
         .contextMenu {
+            Button {
+                onRevealInFinder?(skill)
+            } label: {
+                Label(L10n.string("Reveal Skill Document in Finder"), systemImage: "folder")
+            }
+            Divider()
             Button {
                 onOperation?(.copy, skill)
             } label: {

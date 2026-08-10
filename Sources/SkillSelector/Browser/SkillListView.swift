@@ -17,6 +17,7 @@ struct SkillListView: View {
     let onRefresh: () -> Void
     let onClearFilters: () -> Void
     var onOperation: ((FileOperationKind, SkillSnapshot) -> Void)?
+    var onRevealInFinder: ((SkillSnapshot) -> Void)?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -97,8 +98,13 @@ struct SkillListView: View {
     }
 
     private func skillRow(_ skill: SkillSnapshot) -> some View {
-        SkillRow(skill: skill, agentNamesByID: agentNamesByID, onOperation: onOperation)
-            .tag(SkillSelection(path: skill.path))
+        SkillRow(
+            skill: skill,
+            agentNamesByID: agentNamesByID,
+            onOperation: onOperation,
+            onRevealInFinder: onRevealInFinder
+        )
+        .tag(SkillSelection(path: skill.path))
     }
 
     // Recomputed on every SwiftUI body pass. Fine for typical skill counts;

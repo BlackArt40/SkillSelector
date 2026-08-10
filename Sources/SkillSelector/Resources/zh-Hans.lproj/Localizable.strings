@@ -140,6 +140,7 @@
 "Unavailable" = "不可用";
 "Unable to Load Skill Document" = "无法载入 Skill 文档";
 "Unable to Open Skill Document" = "无法打开 Skill 文档";
+"Unable to Reveal in Finder" = "无法在访达中显示 Skill 文档";
 "Unable to Save Description" = "无法保存简介";
 "Update Source" = "更新来源";
 "Document Too Large to Render" = "文档过大，无法渲染";
