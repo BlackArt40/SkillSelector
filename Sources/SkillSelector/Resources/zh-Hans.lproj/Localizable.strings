@@ -189,6 +189,8 @@
 "Rename" = "重命名";
 "Refresh" = "刷新";
 "Refresh Skills at Launch" = "启动时刷新 Skill";
+"Auto-scan Home Directory" = "自动扫描主目录";
+"Scan agent skill folders in the home directory when the app launches." = "启动时自动扫描主目录中的 Agent Skill 文件夹。";
 "Remove Custom Agent" = "移除自定义 Agent";
 "Revoke Authorization" = "撤销授权";
 "Settings Error" = "设置错误";

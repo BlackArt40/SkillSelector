@@ -54,6 +54,9 @@ struct SkillSelection: Hashable, Identifiable {
     var refreshOnLaunch: Bool {
         didSet { defaults.set(refreshOnLaunch, forKey: Self.refreshOnLaunchDefaultsKey) }
     }
+    var autoScanHome: Bool {
+        didSet { defaults.set(autoScanHome, forKey: Self.autoScanHomeDefaultsKey) }
+    }
 
     var pendingOperationPlan: FileOperationPlan? { fileOperations.pendingOperationPlan }
     var operationError: String? {
@@ -88,6 +91,9 @@ struct SkillSelection: Hashable, Identifiable {
         refreshOnLaunch = defaults.object(forKey: Self.refreshOnLaunchDefaultsKey) == nil
             ? true
             : defaults.bool(forKey: Self.refreshOnLaunchDefaultsKey)
+        autoScanHome = defaults.object(forKey: Self.autoScanHomeDefaultsKey) == nil
+            ? true
+            : defaults.bool(forKey: Self.autoScanHomeDefaultsKey)
         agentDefinitions = effectiveRegistry.definitions
         refresher.updateRegistry(effectiveRegistry)
         fileOperations = FileOperationCoordinator(
@@ -110,10 +116,32 @@ struct SkillSelection: Hashable, Identifiable {
 
     func checkEnvironmentOnLaunch() async {
         do {
-            guard refreshOnLaunch, try bookmarks?.roots().isEmpty == false else { return }
+            guard refreshOnLaunch else { return }
+            if autoScanHome {
+                await ensureHomeAuthorized()
+            }
+            guard try bookmarks?.roots().isEmpty == false else { return }
             await checkEnvironment()
         } catch {
             refreshState = .failed(String(describing: error))
+        }
+    }
+
+    /// Authorizes the user's home directory as a `.home` root when the
+    /// auto-scan setting is enabled and no home root exists yet. Sandboxed
+    /// builds cannot silently acquire home-directory access, so a failure is
+    /// ignored — the user can import it through the panel instead.
+    private func ensureHomeAuthorized() async {
+        guard let bookmarks else { return }
+        do {
+            let roots = try bookmarks.roots()
+            guard !roots.contains(where: { $0.kind == .home }) else { return }
+            let home = FileManager.default.homeDirectoryForCurrentUser
+            _ = try bookmarks.save(url: home, kind: .home)
+            authorizedRoots = try bookmarks.roots()
+            rootsByID = Dictionary(uniqueKeysWithValues: authorizedRoots.map { ($0.id, $0) })
+        } catch {
+            // Non-fatal: auto-scan is best-effort.
         }
     }
 
@@ -351,6 +379,7 @@ struct SkillSelection: Hashable, Identifiable {
     }
 
     private static let refreshOnLaunchDefaultsKey = "SkillSelector.refreshOnLaunch"
+    private static let autoScanHomeDefaultsKey = "SkillSelector.autoScanHome"
     private static let rootNameDefaultsKeyPrefix = "SkillSelector.rootName."
 
     private func reloadAgentDefinitions() throws {

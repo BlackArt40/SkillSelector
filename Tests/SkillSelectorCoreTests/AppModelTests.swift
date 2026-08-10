@@ -6,6 +6,61 @@ import XCTest
 
 @MainActor
 final class AppModelTests: XCTestCase {
+    func testAutoScanHomeDefaultsEnabledAndPersists() {
+        let suite = "AppModelAutoScanTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let model = makeModel(defaults: defaults)
+
+        XCTAssertTrue(model.autoScanHome)
+        model.autoScanHome = false
+        XCTAssertFalse(model.autoScanHome)
+        XCTAssertFalse(defaults.bool(forKey: "SkillSelector.autoScanHome"))
+    }
+
+    func testCheckEnvironmentOnLaunchAuthorizesHomeWhenAutoScanEnabled() async throws {
+        let model = makeModel()
+
+        await model.checkEnvironmentOnLaunch()
+
+        let homeRoot = model.authorizedRoots.first { $0.kind == .home }
+        XCTAssertEqual(homeRoot?.url.standardizedFileURL, FileManager.default.homeDirectoryForCurrentUser.standardizedFileURL)
+    }
+
+    func testCheckEnvironmentOnLaunchSkipsAuthorizationWhenAutoScanDisabled() async throws {
+        let model = makeModel()
+        model.autoScanHome = false
+
+        await model.checkEnvironmentOnLaunch()
+
+        XCTAssertTrue(model.authorizedRoots.isEmpty)
+    }
+
+    private func makeModel(defaults: UserDefaults? = nil) -> AppModel {
+        let suite = "AppModelGeneralTests-\(UUID().uuidString)"
+        let isolatedDefaults = defaults ?? UserDefaults(suiteName: suite)!
+        if defaults == nil {
+            isolatedDefaults.removePersistentDomain(forName: suite)
+        }
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try! ModelContainer(
+            for: SkillRecord.self,
+            AuthorizedRootRecord.self,
+            configurations: configuration
+        )
+        let index = SkillIndex(container: container)
+        let bookmarks = BookmarkStore(container: container)
+        let registry = BuiltInAgentRegistry.make()
+        let refresher = IndexRefresher(registry: registry, bookmarks: bookmarks, index: index)
+        return AppModel(
+            refresher: refresher,
+            index: index,
+            bookmarks: bookmarks,
+            registry: registry,
+            defaults: isolatedDefaults
+        )
+    }
+
     func testEditingCustomAgentRetainsIdentifierAndUpdatesDefinition() throws {
         let suite = "AppModelCustomAgentTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!

@@ -189,6 +189,8 @@
 "Rename" = "Rename";
 "Refresh" = "Refresh";
 "Refresh Skills at Launch" = "Refresh Skills at Launch";
+"Auto-scan Home Directory" = "Auto-scan Home Directory";
+"Scan agent skill folders in the home directory when the app launches." = "Scan agent skill folders in the home directory when the app launches.";
 "Remove Custom Agent" = "Remove Custom Agent";
 "Revoke Authorization" = "Revoke Authorization";
 "Settings Error" = "Settings Error";

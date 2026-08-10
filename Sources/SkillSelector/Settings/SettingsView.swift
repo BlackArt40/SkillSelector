@@ -77,6 +77,10 @@ struct SettingsView: View {
                     systemImage: "arrow.clockwise"
                 ) {
                     Toggle(L10n.string("Refresh Skills at Launch"), isOn: $model.refreshOnLaunch)
+                    Toggle(L10n.string("Auto-scan Home Directory"), isOn: $model.autoScanHome)
+                    Text(L10n.string("Scan agent skill folders in the home directory when the app launches."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 Divider()
