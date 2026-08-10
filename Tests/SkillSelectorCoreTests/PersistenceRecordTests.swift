@@ -14,15 +14,11 @@ final class PersistenceRecordTests: XCTestCase {
 
     // MARK: - AuthorizedRootKind
 
-    func testRootKindLocalizedNamesAndIcons() {
+    func testRootKindLocalizedNames() {
         XCTAssertEqual(AuthorizedRootKind.home.localizedName, "Home Directory")
         XCTAssertEqual(AuthorizedRootKind.project.localizedName, "Project Directory")
         XCTAssertEqual(AuthorizedRootKind.system.localizedName, "System Skill Directory")
         XCTAssertEqual(AuthorizedRootKind.custom.localizedName, "Custom Skill Directory")
-        XCTAssertEqual(AuthorizedRootKind.home.systemImage, "house")
-        XCTAssertEqual(AuthorizedRootKind.project.systemImage, "folder")
-        XCTAssertEqual(AuthorizedRootKind.system.systemImage, "externaldrive")
-        XCTAssertEqual(AuthorizedRootKind.custom.systemImage, "folder.badge.plus")
     }
 
     func testRootKindRawValuesRoundTrip() {

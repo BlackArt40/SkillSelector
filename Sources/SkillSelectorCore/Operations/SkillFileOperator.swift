@@ -220,30 +220,11 @@ public final class SkillFileOperator: @unchecked Sendable {
         let roots = authorizedRootsProvider()
         let registry = registryProvider()
         let source = request.sourceURL.standardizedFileURL
-        guard let sourceSnapshot = try fileSystem.snapshot(source) else {
-            throw SkillFileOperatorError.sourceMissing
-        }
-        let resolvedSource = sourceSnapshot.resolvedURL.standardizedFileURL
-        if let recorded = request.resolvedSourceURL,
-           recorded.standardizedFileURL.path != resolvedSource.path {
-            throw SkillFileOperatorError.resolvedSourceMismatch
-        }
-        guard isAuthorized(source, resolved: resolvedSource, roots: roots) else {
-            throw SkillFileOperatorError.unauthorizedSource
-        }
-        let sourceRootMatch: RegisteredRootMatch
-        do {
-            sourceRootMatch = try validateRegisteredRoot(
-                source.deletingLastPathComponent(),
-                entryFilename: request.sourceEntryFilename,
-                roots: roots,
-                registry: registry
-            )
-        } catch SkillFileOperatorError.unregisteredDestination {
-            throw SkillFileOperatorError.unregisteredSource
-        } catch SkillFileOperatorError.unauthorizedDestination {
-            throw SkillFileOperatorError.unregisteredSource
-        }
+        let (sourceSnapshot, resolvedSource, sourceRootMatch) = try validatedSource(
+            request,
+            roots: roots,
+            registry: registry
+        )
 
         let destination: DestinationPlan?
         if request.operation == .delete {
@@ -301,10 +282,6 @@ public final class SkillFileOperator: @unchecked Sendable {
         }
         let confirmation = ConfirmationToken()
         let replacementConfirmation = replacement ? ConfirmationToken() : nil
-        let usesStaging = request.operation == .copy
-            || request.operation == .createSymbolicLink
-            || replacement
-            || (request.operation == .move && sourceSnapshot.kind == .symbolicLink)
         let plan = FileOperationPlan(
             id: UUID(),
             issuerID: issuerID,
@@ -320,7 +297,6 @@ public final class SkillFileOperator: @unchecked Sendable {
             registrySnapshotFingerprint: registryFingerprint(registry),
             conflictPolicy: request.conflictPolicy,
             hadDestinationConflict: destination?.hadConflict ?? false,
-            stagingBehavior: usesStaging ? .validateBesideDestination : .none,
             movesExistingDestinationToTrash: replacement,
             linkForm: sourceSnapshot.kind == .symbolicLink ? .symbolicLink : .regularDirectory,
             linkTarget: link.target,
@@ -411,29 +387,13 @@ public final class SkillFileOperator: @unchecked Sendable {
         do {
             switch plan.operation {
             case .delete:
-                try validateSourceSnapshot(
-                    plan.logicalSourceURL,
-                    expected: plan.sourceSnapshot
-                )
-                _ = try trash.trashItem(at: plan.logicalSourceURL)
+                try executeDelete(plan)
             case .copy:
-                try installCopy(from: plan.logicalSourceURL, plan: plan, removeSourceAfter: false, roots: roots)
+                try executeCopy(plan, roots: roots)
             case .move:
-                if plan.linkForm == .symbolicLink || plan.movesExistingDestinationToTrash {
-                    try installCopy(from: plan.logicalSourceURL, plan: plan, removeSourceAfter: true, roots: roots)
-                } else {
-                    let destination = try requiredDestination(plan)
-                    try validateSourceSnapshot(
-                        plan.logicalSourceURL,
-                        expected: plan.sourceSnapshot
-                    )
-                    guard try fileSystem.snapshot(destination) == plan.destinationSnapshot else {
-                        throw SkillFileOperatorError.destinationChanged
-                    }
-                    try fileSystem.move(plan.logicalSourceURL, destination)
-                }
+                try executeMove(plan, roots: roots)
             case .createSymbolicLink:
-                try installLink(plan: plan, roots: roots)
+                try executeLink(plan, roots: roots)
             }
         } catch let error as SkillFileOperatorError {
             throw error
@@ -443,12 +403,78 @@ public final class SkillFileOperator: @unchecked Sendable {
         return result(for: plan, outcome: .completed)
     }
 
+    private func executeDelete(_ plan: FileOperationPlan) throws {
+        try validateSourceSnapshot(plan.logicalSourceURL, expected: plan.sourceSnapshot)
+        _ = try trash.trashItem(at: plan.logicalSourceURL)
+    }
+
+    private func executeCopy(_ plan: FileOperationPlan, roots: [AuthorizedRootSnapshot]) throws {
+        try installCopy(from: plan.logicalSourceURL, plan: plan, removeSourceAfter: false, roots: roots)
+    }
+
+    private func executeMove(_ plan: FileOperationPlan, roots: [AuthorizedRootSnapshot]) throws {
+        if plan.linkForm == .symbolicLink || plan.movesExistingDestinationToTrash {
+            try installCopy(from: plan.logicalSourceURL, plan: plan, removeSourceAfter: true, roots: roots)
+        } else {
+            let destination = try requiredDestination(plan)
+            try validateSourceSnapshot(plan.logicalSourceURL, expected: plan.sourceSnapshot)
+            guard try fileSystem.snapshot(destination) == plan.destinationSnapshot else {
+                throw SkillFileOperatorError.destinationChanged
+            }
+            try fileSystem.move(plan.logicalSourceURL, destination)
+        }
+    }
+
+    private func executeLink(_ plan: FileOperationPlan, roots: [AuthorizedRootSnapshot]) throws {
+        try installLink(plan: plan, roots: roots)
+    }
+
     private struct DestinationPlan {
         let root: AuthorizedRootSnapshot
         let url: URL
         let agentIDs: [String]
         let entryFilename: String
         let hadConflict: Bool
+    }
+
+    /// Validates that the requested source exists, resolves where the request
+    /// expects, is authorized, and sits in a registered root. Returns the
+    /// snapshot and match needed by the rest of planning.
+    private func validatedSource(
+        _ request: FileOperationRequest,
+        roots: [AuthorizedRootSnapshot],
+        registry: AgentRegistry
+    ) throws -> (
+        snapshot: FileOperationItemSnapshot,
+        resolvedSource: URL,
+        root: RegisteredRootMatch
+    ) {
+        let source = request.sourceURL.standardizedFileURL
+        guard let sourceSnapshot = try fileSystem.snapshot(source) else {
+            throw SkillFileOperatorError.sourceMissing
+        }
+        let resolvedSource = sourceSnapshot.resolvedURL.standardizedFileURL
+        if let recorded = request.resolvedSourceURL,
+           recorded.standardizedFileURL.path != resolvedSource.path {
+            throw SkillFileOperatorError.resolvedSourceMismatch
+        }
+        guard isAuthorized(source, resolved: resolvedSource, roots: roots) else {
+            throw SkillFileOperatorError.unauthorizedSource
+        }
+        let sourceRootMatch: RegisteredRootMatch
+        do {
+            sourceRootMatch = try validateRegisteredRoot(
+                source.deletingLastPathComponent(),
+                entryFilename: request.sourceEntryFilename,
+                roots: roots,
+                registry: registry
+            )
+        } catch SkillFileOperatorError.unregisteredDestination {
+            throw SkillFileOperatorError.unregisteredSource
+        } catch SkillFileOperatorError.unauthorizedDestination {
+            throw SkillFileOperatorError.unregisteredSource
+        }
+        return (sourceSnapshot, resolvedSource, sourceRootMatch)
     }
 
     private func planDestination(
@@ -555,11 +581,7 @@ public final class SkillFileOperator: @unchecked Sendable {
     }
 
     private func validateName(_ name: String) throws {
-        guard !name.isEmpty,
-              name != ".",
-              name != "..",
-              !name.contains("/"),
-              !name.contains("\\"),
+        guard EntryFilename.isValid(name),
               !name.hasPrefix(".skillselector-staging-") else {
             throw SkillFileOperatorError.invalidName(name)
         }
@@ -592,10 +614,7 @@ public final class SkillFileOperator: @unchecked Sendable {
         }
         let relative = Array(candidateComponents.dropFirst(projectComponents.count))
         let template = pattern.split(separator: "/").map(String.init)
-        guard relative.count >= template.count else { return false }
-        return zip(relative.suffix(template.count), template).allSatisfy {
-            TemplateMatching.segment($0.0, matches: $0.1)
-        }
+        return TemplateMatching.suffix(relative, matches: template)
     }
 
 
@@ -764,6 +783,12 @@ public final class SkillFileOperator: @unchecked Sendable {
             try validateSourceSnapshot(source, expected: plan.sourceSnapshot)
             try fileSystem.copy(source, stage)
         }
+        // The operation contract requires the source to be unchanged from plan
+        // time through installation. Stage validation reads the stage, so the
+        // source is re-checked afterwards to close the window where a
+        // concurrent source modification could slip in before the stage is
+        // installed; the removeSourceAfter path re-validates again before
+        // deleting.
         try validateSourceSnapshot(source, expected: plan.sourceSnapshot)
         try validateStagedSkill(stage, plan: plan, roots: roots)
         try validateSourceSnapshot(source, expected: plan.sourceSnapshot)
@@ -798,6 +823,9 @@ public final class SkillFileOperator: @unchecked Sendable {
         }
         try validateSourceSnapshot(plan.logicalSourceURL, expected: plan.sourceSnapshot)
         try fileSystem.createSymbolicLink(stage, target)
+        // The stage link is validated by reading through it; the source is
+        // re-checked before and after that read so the installation can only
+        // proceed while the source matches the planned state.
         try validateSourceSnapshot(plan.logicalSourceURL, expected: plan.sourceSnapshot)
         try validateStagedSkill(stage, plan: plan, roots: roots)
         try validateSourceSnapshot(plan.logicalSourceURL, expected: plan.sourceSnapshot)

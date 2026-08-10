@@ -92,7 +92,6 @@ struct SettingsView: View {
                         get: { effectiveLanguage },
                         set: { newValue in
                             preferredLanguage = newValue
-                            L10n.setLanguage(newValue)
                         }
                     )) {
                         Text("简体中文").tag("zh-Hans" as String)

@@ -24,11 +24,6 @@ public enum LinkTargetForm: String, Codable, Hashable, Sendable {
     case absolute
 }
 
-public enum FileOperationStagingBehavior: String, Codable, Hashable, Sendable {
-    case none
-    case validateBesideDestination
-}
-
 public struct ConfirmationToken: Codable, Hashable, Sendable {
     fileprivate let value: UUID
 
@@ -42,10 +37,6 @@ public struct SkillAppMetadata: Codable, Hashable, Sendable {
 
     public init(customDescription: String?) {
         self.customDescription = customDescription
-    }
-
-    public var isEmpty: Bool {
-        customDescription == nil
     }
 }
 
@@ -114,7 +105,6 @@ public struct FileOperationPlan: Hashable, Identifiable, Sendable {
     public let registrySnapshotFingerprint: String
     public let conflictPolicy: FileConflictPolicy
     public let hadDestinationConflict: Bool
-    public let stagingBehavior: FileOperationStagingBehavior
     public let movesExistingDestinationToTrash: Bool
     public let linkForm: FileOperationLinkForm
     public let linkTarget: String?
@@ -145,7 +135,6 @@ public struct FileOperationPlan: Hashable, Identifiable, Sendable {
         registrySnapshotFingerprint: String,
         conflictPolicy: FileConflictPolicy,
         hadDestinationConflict: Bool,
-        stagingBehavior: FileOperationStagingBehavior,
         movesExistingDestinationToTrash: Bool,
         linkForm: FileOperationLinkForm,
         linkTarget: String?,
@@ -173,7 +162,6 @@ public struct FileOperationPlan: Hashable, Identifiable, Sendable {
         self.registrySnapshotFingerprint = registrySnapshotFingerprint
         self.conflictPolicy = conflictPolicy
         self.hadDestinationConflict = hadDestinationConflict
-        self.stagingBehavior = stagingBehavior
         self.movesExistingDestinationToTrash = movesExistingDestinationToTrash
         self.linkForm = linkForm
         self.linkTarget = linkTarget

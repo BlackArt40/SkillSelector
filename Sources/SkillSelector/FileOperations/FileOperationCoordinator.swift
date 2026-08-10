@@ -164,7 +164,6 @@ final class FileOperationCoordinator {
             )
             guard result.outcome == .completed else { return }
             let summary = try await refresher.refresh(
-                .manual,
                 rootIDs: Set(result.refreshRootIDs)
             )
             try owner?.reloadSnapshot()

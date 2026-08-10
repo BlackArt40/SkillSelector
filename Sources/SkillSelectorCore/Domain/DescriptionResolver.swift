@@ -20,37 +20,11 @@ public struct DescriptionCandidates: Hashable, Sendable {
     }
 }
 
-public struct EffectiveDescription: Hashable, Sendable {
-    public enum Source: Hashable, Sendable {
-        case custom
-        case local
-        case fallback
-    }
-
-    public let text: String
-    public let source: Source
-
-    public init(text: String, source: Source) {
-        self.text = text
-        self.source = source
-    }
-}
-
 public enum DescriptionResolver {
-    public static func resolve(_ candidates: DescriptionCandidates) -> EffectiveDescription {
-        let prioritized: [(String?, EffectiveDescription.Source)] = [
-            (candidates.custom, .custom),
-            (candidates.local, .local),
-        ]
-        for (candidate, source) in prioritized {
-            if let text = trimmedNonempty(candidate) {
-                return EffectiveDescription(text: text, source: source)
-            }
-        }
-        return EffectiveDescription(
-            text: candidates.fallback.trimmingCharacters(in: .whitespacesAndNewlines),
-            source: .fallback
-        )
+    public static func resolve(_ candidates: DescriptionCandidates) -> String {
+        if let text = trimmedNonempty(candidates.custom) { return text }
+        if let text = trimmedNonempty(candidates.local) { return text }
+        return candidates.fallback.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private static func trimmedNonempty(_ value: String?) -> String? {

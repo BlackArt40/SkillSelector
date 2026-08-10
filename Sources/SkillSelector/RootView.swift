@@ -144,7 +144,7 @@ struct RootView: View {
 
 
     private func refresh() {
-        Task { await model.refresh(.manual) }
+        Task { await model.refresh() }
     }
 
     private func clearFilters() {

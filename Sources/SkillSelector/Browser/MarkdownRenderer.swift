@@ -1,19 +1,12 @@
+import SkillSelectorCore
 import SwiftUI
 
 enum MarkdownRenderer {
+    /// Lines after the frontmatter block, or the whole text when there is no
+    /// frontmatter. Delegates to the parser's shared boundary detection so the
+    /// renderer cannot drift from how the document is parsed.
     static func extractBody(_ source: String) -> [String] {
-        let lines = source.components(separatedBy: .newlines)
-        var start = 0
-        if lines.first?.trimmingCharacters(in: .whitespaces) == "---" {
-            for i in 1..<lines.count {
-                if lines[i].trimmingCharacters(in: .whitespaces) == "---" {
-                    start = i + 1
-                    break
-                }
-            }
-        }
-        guard start < lines.count else { return [] }
-        return Array(lines[start...])
+        FrontmatterParser.bodyLines(from: source)
     }
 
     static func buildAttributedString(from lines: [String]) -> AttributedString? {

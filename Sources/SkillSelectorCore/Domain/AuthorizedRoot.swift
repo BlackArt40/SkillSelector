@@ -14,15 +14,6 @@ public enum AuthorizedRootKind: String, Codable, CaseIterable, Hashable, Sendabl
         case .custom: "Custom Skill Directory"
         }
     }
-
-    public var systemImage: String {
-        switch self {
-        case .home: "house"
-        case .project: "folder"
-        case .system: "externaldrive"
-        case .custom: "folder.badge.plus"
-        }
-    }
 }
 
 public struct AuthorizedRootSnapshot: Identifiable, Hashable, Sendable {

@@ -12,4 +12,16 @@ enum TemplateMatching {
             && value.hasSuffix(suffix)
             && value.count > prefix.count + suffix.count
     }
+
+    /// Whether the last `pattern.count` path segments match the pattern, where
+    /// a `{name}` template segment matches any non-empty value.
+    ///
+    /// Single implementation of project-pattern suffix matching shared by the
+    /// scanner and the file operator.
+    static func suffix(_ path: [String], matches pattern: [String]) -> Bool {
+        guard path.count >= pattern.count else { return false }
+        return zip(path.suffix(pattern.count), pattern).allSatisfy {
+            segment($0.0, matches: $0.1)
+        }
+    }
 }

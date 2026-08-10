@@ -49,10 +49,7 @@ struct SkillDetailView: View {
                     detailSection(L10n.string("Associations")) {
                         labeledValue(
                             L10n.string("Agents"),
-                            value: skill.agentIDs
-                                .filter { $0 != "system" && $0 != "custom" }
-                                .map { agentNamesByID[$0] ?? $0 }
-                                .sorted()
+                            value: skill.agentDisplayNames(by: agentNamesByID)
                                 .joined(separator: ", ")
                                 .nilIfEmpty ?? L10n.string("None")
                         )

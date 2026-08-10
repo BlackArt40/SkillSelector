@@ -105,7 +105,7 @@ struct SkillSelection: Hashable, Identifiable {
     }
 
     func checkEnvironment() async {
-        await refresh(.startup)
+        await refresh()
     }
 
     func checkEnvironmentOnLaunch() async {
@@ -132,7 +132,7 @@ struct SkillSelection: Hashable, Identifiable {
             _ = try bookmarks.save(url: url, kind: kind)
             authorizedRoots = try bookmarks.roots()
             rootsByID = Dictionary(uniqueKeysWithValues: authorizedRoots.map { ($0.id, $0) })
-            await refresh(.manual)
+            await refresh()
             recordPathDiagnostic(
                 category: .persistence,
                 code: "ROOT_AUTHORIZED",
@@ -199,7 +199,7 @@ struct SkillSelection: Hashable, Identifiable {
 
         let resolvedEntry = entryFilename.trimmingCharacters(in: .whitespacesAndNewlines)
         let finalEntry = resolvedEntry.isEmpty ? "SKILL.md" : resolvedEntry
-        guard SkillDocumentReader.isSimpleEntryFilename(finalEntry) else {
+        guard EntryFilename.isValid(finalEntry) else {
             throw AppModelValidationError.invalidEntryFilename(finalEntry)
         }
 
@@ -245,7 +245,7 @@ struct SkillSelection: Hashable, Identifiable {
         try DiagnosticExporter(redactor: currentRedactor()).write(input, to: url)
     }
 
-    func refresh(_ trigger: RefreshTrigger) async {
+    func refresh() async {
         guard fileOperations.pendingOperationPlan == nil,
               !fileOperations.isOperating else {
             return
@@ -259,7 +259,7 @@ struct SkillSelection: Hashable, Identifiable {
         let id = UUID()
         let task = Task { [weak self] in
             guard let self else { return }
-            await self.performRefresh(trigger)
+            await self.performRefresh()
         }
         activeRefresh = (id, task)
         await task.value
@@ -326,10 +326,10 @@ struct SkillSelection: Hashable, Identifiable {
         try saveCustomDescription(path: path, value: nil)
     }
 
-    private func performRefresh(_ trigger: RefreshTrigger) async {
+    private func performRefresh() async {
         refreshState = .running
         do {
-            let summary = try await refresher.refresh(trigger)
+            let summary = try await refresher.refresh()
             try reloadSnapshot()
             refreshState = .finished(summary)
             diagnosticStore.record(

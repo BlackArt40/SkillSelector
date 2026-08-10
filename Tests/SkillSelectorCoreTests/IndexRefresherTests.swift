@@ -20,7 +20,7 @@ final class IndexRefresherTests: XCTestCase {
             index: index
         )
 
-        _ = try await refresher.refresh(.startup)
+        _ = try await refresher.refresh()
         let skills = Dictionary(uniqueKeysWithValues: try index.skills().map { ($0.name, $0) })
 
         XCTAssertEqual(skills["codex-only"]?.agentIDs, ["codex"])
@@ -56,7 +56,7 @@ final class IndexRefresherTests: XCTestCase {
             index: index
         )
 
-        _ = try await refresher.refresh(.manual)
+        _ = try await refresher.refresh()
         let refreshed = try XCTUnwrap(index.skills().first { $0.name == "shared" })
 
         XCTAssertEqual(refreshed.agentIDs, [])
@@ -81,7 +81,7 @@ final class IndexRefresherTests: XCTestCase {
             index: index
         )
 
-        let summary = try await refresher.refresh(.startup)
+        let summary = try await refresher.refresh()
         let skills = try index.skills()
 
         XCTAssertEqual(summary.added, 2)
@@ -105,7 +105,7 @@ final class IndexRefresherTests: XCTestCase {
             index: index
         )
 
-        _ = try await refresher.refresh(.startup)
+        _ = try await refresher.refresh()
 
         XCTAssertTrue(try index.skills().isEmpty)
     }
@@ -125,9 +125,9 @@ final class IndexRefresherTests: XCTestCase {
             index: index
         )
 
-        let first = try await refresher.refresh(.startup)
+        let first = try await refresher.refresh()
         try FileManager.default.removeItem(at: project)
-        let second = try await refresher.refresh(.manual)
+        let second = try await refresher.refresh()
 
         XCTAssertEqual(first.added, 1)
         XCTAssertEqual(second.changed, 0)
@@ -158,9 +158,9 @@ final class IndexRefresherTests: XCTestCase {
             fileSystem: fileSystem
         )
 
-        let first = try await refresher.refresh(.startup)
+        let first = try await refresher.refresh()
         fileSystem.inaccessiblePaths.insert(project.standardizedFileURL.path)
-        let second = try await refresher.refresh(.manual)
+        let second = try await refresher.refresh()
 
         XCTAssertEqual(first.added, 1)
         XCTAssertEqual(second.unavailable, 1)
@@ -186,9 +186,9 @@ final class IndexRefresherTests: XCTestCase {
             index: index
         )
 
-        let first = try await refresher.refresh(.startup)
+        let first = try await refresher.refresh()
         adapter.shouldFailResolution = true
-        let second = try await refresher.refresh(.manual)
+        let second = try await refresher.refresh()
 
         XCTAssertEqual(first.added, 1)
         XCTAssertEqual(second.unavailable, 1)
@@ -220,9 +220,9 @@ final class IndexRefresherTests: XCTestCase {
             index: index
         )
 
-        let first = try await refresher.refresh(.startup)
+        let first = try await refresher.refresh()
         adapter.shouldFailResolution = true
-        let second = try await refresher.refresh(.manual)
+        let second = try await refresher.refresh()
 
         XCTAssertEqual(first.added, 1)
         XCTAssertEqual(second.unavailable, 1)
@@ -257,9 +257,9 @@ final class IndexRefresherTests: XCTestCase {
             fileSystem: fileSystem
         )
 
-        let first = try await refresher.refresh(.startup)
+        let first = try await refresher.refresh()
         fileSystem.inaccessiblePaths = Set([system.path, custom.path])
-        let second = try await refresher.refresh(.manual)
+        let second = try await refresher.refresh()
         let skills = try index.skills()
 
         XCTAssertEqual(first.added, 2)
@@ -284,9 +284,9 @@ final class IndexRefresherTests: XCTestCase {
             fileSystem: fileSystem
         )
 
-        let first = try await refresher.refresh(.startup)
+        let first = try await refresher.refresh()
         fileSystem.inaccessiblePaths.insert(fixture.home.standardizedFileURL.path)
-        let second = try await refresher.refresh(.manual)
+        let second = try await refresher.refresh()
 
         XCTAssertEqual(first.added, 1)
         XCTAssertEqual(second.unavailable, 1)
@@ -326,9 +326,9 @@ final class IndexRefresherTests: XCTestCase {
             fileSystem: fileSystem
         )
 
-        let first = try await refresher.refresh(.startup)
+        let first = try await refresher.refresh()
         fileSystem.inaccessiblePaths.insert(firstRoot.path)
-        let second = try await refresher.refresh(.manual)
+        let second = try await refresher.refresh()
         let skills = try index.skills()
 
         XCTAssertEqual(first.added, 2)
@@ -353,9 +353,9 @@ final class IndexRefresherTests: XCTestCase {
             index: index
         )
 
-        let first = try await refresher.refresh(.startup)
+        let first = try await refresher.refresh()
         try FileManager.default.removeItem(at: skillsRoot)
-        let second = try await refresher.refresh(.manual)
+        let second = try await refresher.refresh()
 
         XCTAssertEqual(first.added, 1)
         XCTAssertEqual(second.removed, 1)
@@ -386,7 +386,7 @@ final class IndexRefresherTests: XCTestCase {
             fileSystem: fileSystem
         )
 
-        _ = try await refresher.refresh(.startup)
+        _ = try await refresher.refresh()
 
         XCTAssertTrue(try index.skills().isEmpty)
         XCTAssertFalse(fileSystem.enumeratedURLs.contains(fixture.home.appending(path: ".roo")))
@@ -418,9 +418,9 @@ final class IndexRefresherTests: XCTestCase {
             index: index
         )
 
-        let first = try await refresher.refresh(.startup)
+        let first = try await refresher.refresh()
         try FileManager.default.removeItem(at: skillsRoot)
-        let second = try await refresher.refresh(.manual)
+        let second = try await refresher.refresh()
 
         XCTAssertEqual(first.added, 1)
         XCTAssertEqual(second.removed, 1)
@@ -444,11 +444,11 @@ final class IndexRefresherTests: XCTestCase {
             bookmarks: bookmarks,
             index: index
         )
-        _ = try await refresher.refresh(.startup)
+        _ = try await refresher.refresh()
         try FileManager.default.removeItem(at: firstURL)
         try FileManager.default.removeItem(at: secondURL)
 
-        _ = try await refresher.refresh(.manual, rootIDs: [first.id])
+        _ = try await refresher.refresh(rootIDs: [first.id])
 
         let skills = try index.skills()
         XCTAssertEqual(skills.map(\.name), ["one", "two"])

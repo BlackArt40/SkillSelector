@@ -63,9 +63,7 @@ public final class SkillIndex {
                 } else {
                     record = SkillRecord(
                         path: path,
-                        name: scanned.document.name
-                            ?? scanned.document.title
-                            ?? scanned.path.lastPathComponent,
+                        name: resolvedName(for: scanned),
                         entryFilename: scanned.entryFilename
                     )
                     context.insert(record)
@@ -123,6 +121,12 @@ public final class SkillIndex {
         return record
     }
 
+    private func resolvedName(for scanned: ScannedSkill) -> String {
+        scanned.document.name
+            ?? scanned.document.title
+            ?? scanned.path.lastPathComponent
+    }
+
     private func recordsByPath() throws -> [String: SkillRecord] {
         Dictionary(
             uniqueKeysWithValues: try context.fetch(FetchDescriptor<SkillRecord>())
@@ -132,9 +136,7 @@ public final class SkillIndex {
 
     private func update(_ record: SkillRecord, from scanned: ScannedSkill) throws {
         record.resolvedTarget = scanned.resolvedTarget?.standardizedFileURL.path
-        record.name = scanned.document.name
-            ?? scanned.document.title
-            ?? scanned.path.lastPathComponent
+        record.name = resolvedName(for: scanned)
         record.localDescription = scanned.document.description
         record.modificationDate = scanned.entryModificationDate
         record.availabilityRawValue = SkillAvailability.available.rawValue

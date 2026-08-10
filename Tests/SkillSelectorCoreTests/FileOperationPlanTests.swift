@@ -36,12 +36,6 @@ final class FileOperationPlanTests: XCTestCase {
         XCTAssertEqual(alias.rootIDs, [])
     }
 
-    func testAppMetadataIsEmptyOnlyWithoutCustomDescription() {
-        XCTAssertTrue(SkillAppMetadata(customDescription: nil).isEmpty)
-        XCTAssertFalse(SkillAppMetadata(customDescription: "").isEmpty)
-        XCTAssertFalse(SkillAppMetadata(customDescription: "notes").isEmpty)
-    }
-
     func testConfirmationTokensAreUniqueAndNotInterchangeable() {
         let first = ConfirmationToken()
         let second = ConfirmationToken()

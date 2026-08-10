@@ -71,7 +71,7 @@ public struct SkillScanner: Sendable {
             let issues: [ScanIssue]
             switch root.kind {
             case .skillDirectory(let agentIDs, let entryFilename):
-                if Self.isValidEntryFilename(entryFilename) {
+                if EntryFilename.isValid(entryFilename) {
                     installations = try scanSkillDirectory(
                         root,
                         agentIDs: agentIDs,
@@ -233,7 +233,7 @@ public struct SkillScanner: Sendable {
         let parentComponents = Array(skillDirectoryComponents.dropLast())
         let matches = declarations.compactMap { declaration -> (Set<String>, String)? in
             let components = declaration.value.split(separator: "/").map(String.init)
-            guard pathSuffix(parentComponents, matches: components) else { return nil }
+            guard TemplateMatching.suffix(parentComponents, matches: components) else { return nil }
             return (declaration.agentID.map { Set([$0]) } ?? [], declaration.entryFilename)
         }
 
@@ -278,14 +278,6 @@ public struct SkillScanner: Sendable {
         return result
     }
 
-    private func pathSuffix(_ path: [String], matches pattern: [String]) -> Bool {
-        guard path.count >= pattern.count else { return false }
-        return zip(path.suffix(pattern.count), pattern).allSatisfy { value, template in
-            TemplateMatching.segment(value, matches: template)
-        }
-    }
-
-
     private func makeCandidate(
         installationURL: URL,
         agentIDs: Set<String>,
@@ -294,7 +286,7 @@ public struct SkillScanner: Sendable {
         authorizedURLs: [URL],
         sourceDiscoveryRootURL: URL
     ) -> ScannedSkill? {
-        guard Self.isValidEntryFilename(entryFilename) else { return nil }
+        guard EntryFilename.isValid(entryFilename) else { return nil }
 
         let installationURL = installationURL.standardizedFileURL
         let symbolicLink = isSymbolicLink(installationURL)
@@ -440,21 +432,13 @@ public struct SkillScanner: Sendable {
         ) && isDirectory(target)
     }
 
-    private static func isValidEntryFilename(_ entryFilename: String) -> Bool {
-        !entryFilename.isEmpty
-            && entryFilename != "."
-            && entryFilename != ".."
-            && !entryFilename.contains("/")
-            && !entryFilename.contains("\\")
-    }
-
     private func validatedDeclarations(
         _ declarations: [SkillRootDeclaration]
     ) -> (declarations: [SkillRootDeclaration], issues: [ScanIssue]) {
         var valid: [SkillRootDeclaration] = []
         var issues: [ScanIssue] = []
         for declaration in declarations {
-            if Self.isValidEntryFilename(declaration.entryFilename) {
+            if EntryFilename.isValid(declaration.entryFilename) {
                 valid.append(declaration)
             } else {
                 issues.append(invalidEntryFilenameIssue(

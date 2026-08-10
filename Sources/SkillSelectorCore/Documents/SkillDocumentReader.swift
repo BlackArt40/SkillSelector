@@ -191,7 +191,7 @@ public struct SkillDocumentReader {
     private func prepareInstallation(
         _ request: SkillDocumentRequest
     ) throws -> PreparedInstallation {
-        guard Self.isSimpleEntryFilename(request.entryFilename) else {
+        guard EntryFilename.isValid(request.entryFilename) else {
             throw SkillDocumentReaderError.invalidEntryFilename(request.entryFilename)
         }
 
@@ -296,14 +296,6 @@ public struct SkillDocumentReader {
             throw SkillDocumentReaderError.entryEscapesAuthorizedRoot
         }
         return try operation(descriptor, metadata, canonicalURL)
-    }
-
-    public static func isSimpleEntryFilename(_ filename: String) -> Bool {
-        !filename.isEmpty
-            && filename != "."
-            && filename != ".."
-            && !filename.contains("/")
-            && !filename.contains("\\")
     }
 
     private static func contains(_ candidate: URL, in root: URL) -> Bool {

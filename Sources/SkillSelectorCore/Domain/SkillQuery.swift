@@ -61,7 +61,7 @@ public struct SkillQuery: Hashable, Sendable {
     }
 
     public static func effectiveDescription(for snapshot: SkillSnapshot) -> String {
-        DescriptionResolver.resolve(DescriptionCandidates(snapshot: snapshot)).text
+        DescriptionResolver.resolve(DescriptionCandidates(snapshot: snapshot))
     }
 
     private func matchesScope(

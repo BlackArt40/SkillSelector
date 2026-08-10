@@ -61,6 +61,25 @@ public enum FrontmatterParser {
             .components(separatedBy: "\n")
     }
 
+    /// Lines after the closing frontmatter boundary when the text opens with
+    /// one, otherwise the whole text.
+    ///
+    /// Single implementation of body-extraction for the display path; parsing
+    /// itself requires a `---` delimiter in column zero, while this helper
+    /// tolerates whitespace around the delimiters because it also feeds the
+    /// renderer.
+    public static func bodyLines(from text: String) -> [String] {
+        let lines = normalizedLines(text)
+        let opensWithBoundary = lines.first?.trimmingCharacters(in: .whitespaces) == "---"
+        guard opensWithBoundary,
+              let boundary = lines.dropFirst().firstIndex(where: {
+                  $0.trimmingCharacters(in: .whitespaces) == "---"
+              }) else {
+            return lines
+        }
+        return Array(lines[(boundary + 1)...])
+    }
+
     private static func parseFrontmatter(
         _ lines: [String],
         into fields: inout [String: String],

@@ -7,11 +7,7 @@ struct SkillRow: View {
     var onOperation: ((FileOperationKind, SkillSnapshot) -> Void)?
 
     private var agentNames: String {
-        skill.agentIDs
-            .filter { $0 != "system" && $0 != "custom" }
-            .map { agentNamesByID[$0] ?? $0 }
-            .sorted()
-            .joined(separator: " · ")
+        skill.agentDisplayNames(by: agentNamesByID).joined(separator: " · ")
     }
 
     var body: some View {

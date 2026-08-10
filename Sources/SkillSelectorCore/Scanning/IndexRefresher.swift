@@ -40,11 +40,6 @@ private struct LocalIndexRefresherFileSystem: IndexRefresherFileSystem {
     }
 }
 
-public enum RefreshTrigger: Sendable {
-    case startup
-    case manual
-}
-
 public struct RefreshSummary: Hashable, Sendable {
     public let added: Int
     public let changed: Int
@@ -99,24 +94,21 @@ public final class IndexRefresher {
     }
 
     @MainActor
-    public func refresh(_ trigger: RefreshTrigger) async throws -> RefreshSummary {
-        try await refresh(trigger, selectedRootIDs: nil)
+    public func refresh() async throws -> RefreshSummary {
+        try await refresh(selectedRootIDs: nil)
     }
 
     @MainActor
     public func refresh(
-        _ trigger: RefreshTrigger,
         rootIDs: Set<String>
     ) async throws -> RefreshSummary {
-        try await refresh(trigger, selectedRootIDs: rootIDs)
+        try await refresh(selectedRootIDs: rootIDs)
     }
 
     @MainActor
     private func refresh(
-        _ trigger: RefreshTrigger,
         selectedRootIDs: Set<String>?
     ) async throws -> RefreshSummary {
-        _ = trigger
         let before = try index.skills()
         let snapshots = try bookmarks.roots().filter { root in
             selectedRootIDs?.contains(root.id) ?? true
