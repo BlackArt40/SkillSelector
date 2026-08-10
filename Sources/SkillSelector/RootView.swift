@@ -84,12 +84,6 @@ struct RootView: View {
         .languageReloading()
         .toolbar {
             ToolbarItemGroup {
-                RefreshToolbarControl(
-                    state: model.refreshState,
-                    isDisabled: model.fileOperationCommandsDisabled,
-                    onRefresh: refresh
-                )
-
                 SettingsLink {
                     Image(systemName: "gearshape")
                         .frame(width: 18, height: 18)
@@ -195,55 +189,6 @@ struct RootView: View {
                 destinationRootURL: url,
                 conflictPolicy: .keepBoth
             )
-        }
-    }
-}
-
-private struct RefreshToolbarControl: View {
-    let state: RefreshState
-    let isDisabled: Bool
-    let onRefresh: () -> Void
-
-    @ViewBuilder
-    var body: some View {
-        if case .failed(let message) = state {
-            Menu {
-                Section {
-                    Text(verbatim: L10n.string("Refresh Failed"))
-                    Text(verbatim: message)
-                }
-                Button(L10n.string("Retry Refresh"), action: onRefresh)
-            } label: {
-                Image(systemName: "exclamationmark.arrow.triangle.2.circlepath")
-                    .foregroundStyle(.orange)
-                    .frame(width: 18, height: 18)
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .disabled(isDisabled)
-            .frame(width: 24, height: 24)
-            .help(L10n.string("Refresh Failed"))
-            .accessibilityLabel(L10n.string("Refresh Failed"))
-        } else {
-            Button(action: onRefresh) {
-                Group {
-                    if state == .running {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else {
-                        Image(systemName: "arrow.clockwise")
-                    }
-                }
-                .frame(width: 18, height: 18)
-            }
-            .disabled(state == .running || isDisabled)
-            .frame(width: 24, height: 24)
-            .help(state == .running
-                ? L10n.string("Refreshing Skills")
-                : L10n.string("Refresh Skills"))
-            .accessibilityLabel(state == .running
-                ? L10n.string("Refreshing Skills")
-                : L10n.string("Refresh Skills"))
         }
     }
 }

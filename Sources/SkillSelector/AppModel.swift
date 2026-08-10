@@ -51,9 +51,6 @@ struct SkillSelection: Hashable, Identifiable {
     private(set) var rootsByID: [String: AuthorizedRootSnapshot] = [:]
     private(set) var agentDefinitions: [AgentDefinition]
     private(set) var customAgentDefinitions: [AgentDefinition]
-    var refreshOnLaunch: Bool {
-        didSet { defaults.set(refreshOnLaunch, forKey: Self.refreshOnLaunchDefaultsKey) }
-    }
     var autoScanHome: Bool {
         didSet { defaults.set(autoScanHome, forKey: Self.autoScanHomeDefaultsKey) }
     }
@@ -88,9 +85,6 @@ struct SkillSelection: Hashable, Identifiable {
         var effectiveRegistry = registry
         effectiveRegistry.merge(customDefinitions: storedCustomDefinitions)
         self.registry = effectiveRegistry
-        refreshOnLaunch = defaults.object(forKey: Self.refreshOnLaunchDefaultsKey) == nil
-            ? true
-            : defaults.bool(forKey: Self.refreshOnLaunchDefaultsKey)
         autoScanHome = defaults.object(forKey: Self.autoScanHomeDefaultsKey) == nil
             ? true
             : defaults.bool(forKey: Self.autoScanHomeDefaultsKey)
@@ -115,11 +109,9 @@ struct SkillSelection: Hashable, Identifiable {
     }
 
     func checkEnvironmentOnLaunch() async {
+        guard autoScanHome else { return }
+        await ensureHomeAuthorized()
         do {
-            guard refreshOnLaunch else { return }
-            if autoScanHome {
-                await ensureHomeAuthorized()
-            }
             guard try bookmarks?.roots().isEmpty == false else { return }
             await checkEnvironment()
         } catch {
@@ -378,7 +370,6 @@ struct SkillSelection: Hashable, Identifiable {
         }
     }
 
-    private static let refreshOnLaunchDefaultsKey = "SkillSelector.refreshOnLaunch"
     private static let autoScanHomeDefaultsKey = "SkillSelector.autoScanHome"
     private static let rootNameDefaultsKeyPrefix = "SkillSelector.rootName."
 

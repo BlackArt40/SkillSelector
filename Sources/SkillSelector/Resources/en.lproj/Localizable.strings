@@ -64,12 +64,10 @@
 "Refresh Failed" = "Refresh Failed";
 "Refresh the authorized folders to check again." = "Refresh the authorized folders to check again.";
 "Refresh Skills" = "Refresh Skills";
-"Refreshing Skills" = "Refreshing Skills";
 "Remote" = "Remote";
 "Delete Custom Description" = "Delete Custom Description";
 "Reveal Skill Document in Finder" = "Reveal Skill Document in Finder";
 "Resolved Target" = "Resolved Target";
-"Retry Refresh" = "Retry Refresh";
 "Root" = "Root";
 "Search Skills" = "Search Skills";
 "Save" = "Save";
@@ -188,7 +186,6 @@
 "Re-authorize Directory" = "Re-authorize Directory";
 "Rename" = "Rename";
 "Refresh" = "Refresh";
-"Refresh Skills at Launch" = "Refresh Skills at Launch";
 "Auto-scan Home Directory" = "Auto-scan Home Directory";
 "Scan agent skill folders in the home directory when the app launches." = "Scan agent skill folders in the home directory when the app launches.";
 "Remove Custom Agent" = "Remove Custom Agent";

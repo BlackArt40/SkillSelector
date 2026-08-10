@@ -64,12 +64,10 @@
 "Refresh Failed" = "刷新失败";
 "Refresh the authorized folders to check again." = "刷新已授权的文件夹以再次检查。";
 "Refresh Skills" = "刷新 Skill";
-"Refreshing Skills" = "正在刷新 Skill";
 "Remote" = "远程";
 "Delete Custom Description" = "删除自定义简介";
 "Reveal Skill Document in Finder" = "在访达中显示 Skill 文档";
 "Resolved Target" = "解析后的目标";
-"Retry Refresh" = "重试刷新";
 "Root" = "根目录";
 "Search Skills" = "搜索 Skill";
 "Save" = "保存";
@@ -188,7 +186,6 @@
 "Re-authorize Directory" = "重新授权目录";
 "Rename" = "重命名";
 "Refresh" = "刷新";
-"Refresh Skills at Launch" = "启动时刷新 Skill";
 "Auto-scan Home Directory" = "自动扫描主目录";
 "Scan agent skill folders in the home directory when the app launches." = "启动时自动扫描主目录中的 Agent Skill 文件夹。";
 "Remove Custom Agent" = "移除自定义 Agent";

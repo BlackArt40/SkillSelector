@@ -74,9 +74,8 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 22) {
                 settingsSection(
                     title: L10n.string("Refresh"),
-                    systemImage: "arrow.clockwise"
+                    systemImage: nil
                 ) {
-                    Toggle(L10n.string("Refresh Skills at Launch"), isOn: $model.refreshOnLaunch)
                     Toggle(L10n.string("Auto-scan Home Directory"), isOn: $model.autoScanHome)
                     Text(L10n.string("Scan agent skill folders in the home directory when the app launches."))
                         .font(.caption)
@@ -308,11 +307,15 @@ struct SettingsView: View {
 
     private func settingsSection<Content: View>(
         title: String,
-        systemImage: String,
+        systemImage: String?,
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label(title, systemImage: systemImage).font(.headline)
+            if let systemImage {
+                Label(title, systemImage: systemImage).font(.headline)
+            } else {
+                Text(title).font(.headline)
+            }
             content()
         }
     }
