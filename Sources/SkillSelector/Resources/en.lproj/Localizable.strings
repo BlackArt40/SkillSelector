@@ -6,7 +6,6 @@
 "Authorize" = "Authorize";
 "Authorize Skill Folders" = "Authorize Skill Folders";
 "Authorize your home directory or add a project to find local Skills." = "Authorize your home directory or add a project to find local Skills.";
-"Available" = "Available";
 "Change the search or filters to show more Skills." = "Change the search or filters to show more Skills.";
 "Choose a Skill from the list to inspect its local details." = "Choose a Skill from the list to inspect its local details.";
 "Choose a project directory to scan for all Skills." = "Choose a project directory to scan for all Skills.";
@@ -44,7 +43,6 @@
 "Entry File" = "Entry File";
 "Edit Custom Description" = "Edit Custom Description";
 "Fallback" = "Fallback";
-"Filter by status" = "Filter by status";
 "Global Skills" = "Global Skills";
 "Has diagnostics" = "Has diagnostics";
 "Installation Path" = "Installation Path";
@@ -79,14 +77,11 @@
 "Select a Skill" = "Select a Skill";
 "SkillSelector Settings" = "SkillSelector Settings";
 "Skill Document" = "Skill Document";
-"Skill Document Unavailable" = "Skill Document Unavailable";
 "Skills" = "Skills";
 "Sort" = "Sort";
 "Sort Skills" = "Sort Skills";
 "Source" = "Source";
-"Status" = "Status";
 "The document is outside its authorized folder." = "The document is outside its authorized folder.";
-"The document is unavailable until its authorized folder can be accessed." = "The document is unavailable until its authorized folder can be accessed.";
 "The default editor could not open the Skill document." = "The default editor could not open the Skill document.";
 "The entry filename is invalid." = "The entry filename is invalid.";
 "The Skill document cannot be read." = "The Skill document cannot be read.";
@@ -137,7 +132,6 @@
 "The symbolic link target changed." = "The symbolic link target changed.";
 "This Skill will be moved to Trash." = "This Skill will be moved to Trash.";
 "This confirmation is no longer valid." = "This confirmation is no longer valid.";
-"Unavailable" = "Unavailable";
 "Unable to Load Skill Document" = "Unable to Load Skill Document";
 "Unable to Open Skill Document" = "Unable to Open Skill Document";
 "Unable to Reveal in Finder" = "Unable to Reveal in Finder";

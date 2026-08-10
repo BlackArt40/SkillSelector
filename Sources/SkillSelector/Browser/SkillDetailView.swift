@@ -88,23 +88,6 @@ struct SkillDetailView: View {
                 .font(.title2)
                 .fontWeight(.semibold)
                 .textSelection(.enabled)
-            Label {
-                Text(verbatim: skill.availability == .available
-                    ? L10n.string("Available")
-                    : L10n.string("Unavailable"))
-            } icon: {
-                Image(systemName: skill.availability == .available
-                    ? "checkmark.circle.fill"
-                    : "exclamationmark.triangle.fill")
-            }
-            .foregroundStyle(skill.availability == .available ? Color.secondary : Color.orange)
-
-            if let reason = skill.unavailableReason {
-                Text(verbatim: skill.unavailableDiagnostic.map(L10n.diagnostic) ?? reason)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-            }
         }
     }
 

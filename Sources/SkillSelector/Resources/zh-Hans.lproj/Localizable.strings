@@ -6,7 +6,6 @@
 "Authorize" = "授权";
 "Authorize Skill Folders" = "授权 Skill 文件夹";
 "Authorize your home directory or add a project to find local Skills." = "授权主目录或添加项目，以查找本机 Skill。";
-"Available" = "可用";
 "Change the search or filters to show more Skills." = "更改搜索条件或筛选器以显示更多 Skill。";
 "Choose a Skill from the list to inspect its local details." = "从列表中选择一个 Skill 以查看本机详情。";
 "Choose a project directory to scan for all Skills." = "选择要扫描所有 Skill 的项目目录。";
@@ -44,7 +43,6 @@
 "Entry File" = "入口文件";
 "Edit Custom Description" = "编辑自定义简介";
 "Fallback" = "回退内容";
-"Filter by status" = "按状态筛选";
 "Global Skills" = "全局 Skill";
 "Has diagnostics" = "存在诊断";
 "Installation Path" = "安装路径";
@@ -79,14 +77,11 @@
 "Select a Skill" = "选择一个 Skill";
 "SkillSelector Settings" = "SkillSelector 设置";
 "Skill Document" = "Skill 文档";
-"Skill Document Unavailable" = "Skill 文档不可用";
 "Skills" = "Skill";
 "Sort" = "排序";
 "Sort Skills" = "排序 Skill";
 "Source" = "来源";
-"Status" = "状态";
 "The document is outside its authorized folder." = "文档位于已授权文件夹之外。";
-"The document is unavailable until its authorized folder can be accessed." = "重新获得已授权文件夹的访问权限后才能读取此文档。";
 "The default editor could not open the Skill document." = "默认编辑器无法打开 Skill 文档。";
 "The entry filename is invalid." = "入口文件名无效。";
 "The Skill document cannot be read." = "无法读取 Skill 文档。";
@@ -137,7 +132,6 @@
 "The symbolic link target changed." = "符号链接目标已更改。";
 "This Skill will be moved to Trash." = "此 Skill 将移到废纸篓。";
 "This confirmation is no longer valid." = "此确认已失效。";
-"Unavailable" = "不可用";
 "Unable to Load Skill Document" = "无法载入 Skill 文档";
 "Unable to Open Skill Document" = "无法打开 Skill 文档";
 "Unable to Reveal in Finder" = "无法在访达中显示 Skill 文档";

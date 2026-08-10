@@ -8,12 +8,6 @@ public struct SkillQuery: Hashable, Sendable {
         case root(rootID: String)
     }
 
-    public enum Status: Hashable, Sendable {
-        case all
-        case available
-        case unavailable
-    }
-
     public enum Sort: Hashable, Sendable {
         case `default`
         case name
@@ -23,20 +17,17 @@ public struct SkillQuery: Hashable, Sendable {
     public var scope: Scope
     public var agentID: String?
     public var searchText: String
-    public var status: Status
     public var sort: Sort
 
     public init(
         scope: Scope = .all,
         agentID: String? = nil,
         searchText: String = "",
-        status: Status = .all,
         sort: Sort = .default
     ) {
         self.scope = scope
         self.agentID = agentID
         self.searchText = searchText
-        self.status = status
         self.sort = sort
     }
 
@@ -55,7 +46,6 @@ public struct SkillQuery: Hashable, Sendable {
         return snapshotsByPath.values
             .filter { matchesScope($0, rootsByID: rootsByID) }
             .filter { matchesAgent($0) }
-            .filter { matchesStatus($0) }
             .filter { matchesSearch($0, term: searchTerm) }
             .sorted(by: comesBefore)
     }
@@ -88,17 +78,6 @@ public struct SkillQuery: Hashable, Sendable {
         return snapshot.agentIDs.contains(agentID)
     }
 
-    private func matchesStatus(_ snapshot: SkillSnapshot) -> Bool {
-        switch status {
-        case .all:
-            true
-        case .available:
-            snapshot.availability == .available
-        case .unavailable:
-            snapshot.availability == .unavailable
-        }
-    }
-
     private func matchesSearch(_ snapshot: SkillSnapshot, term: String) -> Bool {
         guard !term.isEmpty else { return true }
         return Self.searchKey(snapshot.name).contains(term)
@@ -109,14 +88,7 @@ public struct SkillQuery: Hashable, Sendable {
         switch sort {
         case .path:
             return lhs.path < rhs.path
-        case .name:
-            let lhsName = Self.searchKey(lhs.name)
-            let rhsName = Self.searchKey(rhs.name)
-            return lhsName == rhsName ? lhs.path < rhs.path : lhsName < rhsName
-        case .default:
-            if lhs.availability != rhs.availability {
-                return lhs.availability == .available
-            }
+        case .name, .default:
             let lhsName = Self.searchKey(lhs.name)
             let rhsName = Self.searchKey(rhs.name)
             return lhsName == rhsName ? lhs.path < rhs.path : lhsName < rhsName

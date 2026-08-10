@@ -119,29 +119,6 @@ final class SkillQueryTests: XCTestCase {
         XCTAssertEqual(beta.map(\.path), ["/beta/only"])
     }
 
-    func testStatusFiltersAvailableAndUnavailableSkills() {
-        let available = snapshot(path: "/available", name: "Available")
-        let unavailable = snapshot(
-            path: "/unavailable",
-            name: "Unavailable",
-            availability: .unavailable,
-            unavailableReason: "Permission denied"
-        )
-
-        XCTAssertEqual(
-            SkillQuery(status: .available)
-                .apply(to: [unavailable, available], rootsByID: rootsByID)
-                .map(\.path),
-            [available.path]
-        )
-        XCTAssertEqual(
-            SkillQuery(status: .unavailable)
-                .apply(to: [unavailable, available], rootsByID: rootsByID)
-                .map(\.path),
-            [unavailable.path]
-        )
-    }
-
     func testSearchIsCaseInsensitiveAcrossNameAndEffectiveDescription() {
         let snapshots = [
             snapshot(path: "/name", name: "Release Helper"),
@@ -225,7 +202,7 @@ final class SkillQueryTests: XCTestCase {
 
     func testSortModesUsePathAscendingAsFinalTieBreaker() {
         let snapshots = [
-            snapshot(path: "/z/alpha", name: "Alpha", availability: .unavailable),
+            snapshot(path: "/z/alpha", name: "Alpha"),
             snapshot(path: "/b/same", name: "Same"),
             snapshot(path: "/a/same", name: "same"),
             snapshot(path: "/c/beta", name: "Beta"),
@@ -240,7 +217,7 @@ final class SkillQueryTests: XCTestCase {
 
         XCTAssertEqual(nameSorted.map(\.path), ["/z/alpha", "/c/beta", "/a/same", "/b/same"])
         XCTAssertEqual(pathSorted.map(\.path), ["/a/same", "/b/same", "/c/beta", "/z/alpha"])
-        XCTAssertEqual(defaultSorted.map(\.path), ["/c/beta", "/a/same", "/b/same", "/z/alpha"])
+        XCTAssertEqual(defaultSorted.map(\.path), nameSorted.map(\.path))
     }
 
     private func snapshot(
@@ -249,9 +226,7 @@ final class SkillQueryTests: XCTestCase {
         customDescription: String? = nil,
         localDescription: String? = nil,
         agentIDs: [String] = ["cursor"],
-        rootIDs: [String] = ["home-root"],
-        availability: SkillAvailability = .available,
-        unavailableReason: String? = nil
+        rootIDs: [String] = ["home-root"]
     ) -> SkillSnapshot {
         SkillSnapshot(
             path: path,
@@ -260,8 +235,6 @@ final class SkillQueryTests: XCTestCase {
             localDescription: localDescription,
             customDescription: customDescription,
             modificationDate: nil,
-            availability: availability,
-            unavailableReason: unavailableReason,
             agentIDs: agentIDs,
             rootIDs: rootIDs,
             entryFilename: "SKILL.md",

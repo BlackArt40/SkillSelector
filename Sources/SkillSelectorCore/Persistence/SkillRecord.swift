@@ -9,9 +9,6 @@ public final class SkillRecord {
     public var localDescription: String?
     public var customDescription: String?
     public var modificationDate: Date?
-    public var availabilityRawValue: String
-    public var unavailableReason: String?
-    public var unavailableDiagnosticData: Data?
     // Optional preserves compatibility with stores created before source discovery existed.
     public var agentIDsByRootData: Data
     public var entryFilename: String
@@ -24,9 +21,6 @@ public final class SkillRecord {
         localDescription: String? = nil,
         customDescription: String? = nil,
         modificationDate: Date? = nil,
-        availability: SkillAvailability = .available,
-        unavailableReason: String? = nil,
-        unavailableDiagnosticData: Data? = nil,
         agentIDsByRootData: Data = Data("{}".utf8),
         entryFilename: String,
         parseDiagnosticsData: Data = Data()
@@ -37,9 +31,6 @@ public final class SkillRecord {
         self.localDescription = localDescription
         self.customDescription = customDescription
         self.modificationDate = modificationDate
-        self.availabilityRawValue = availability.rawValue
-        self.unavailableReason = unavailableReason
-        self.unavailableDiagnosticData = unavailableDiagnosticData
         self.agentIDsByRootData = agentIDsByRootData
         self.entryFilename = entryFilename
         self.parseDiagnosticsData = parseDiagnosticsData

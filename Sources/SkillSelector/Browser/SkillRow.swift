@@ -18,12 +18,7 @@ struct SkillRow: View {
                     .fontWeight(.medium)
                     .lineLimit(1)
                 Spacer(minLength: 4)
-                if skill.availability == .unavailable {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
-                        .help(L10n.string("Unavailable"))
-                        .accessibilityLabel(L10n.string("Unavailable"))
-                } else if !skill.parseDiagnostics.isEmpty {
+                if !skill.parseDiagnostics.isEmpty {
                     Image(systemName: "exclamationmark.circle")
                         .foregroundStyle(.secondary)
                         .help(L10n.string("Has diagnostics"))

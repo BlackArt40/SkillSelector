@@ -43,13 +43,11 @@ private struct LocalIndexRefresherFileSystem: IndexRefresherFileSystem {
 public struct RefreshSummary: Hashable, Sendable {
     public let added: Int
     public let changed: Int
-    public let unavailable: Int
     public let removed: Int
 
-    public init(added: Int, changed: Int, unavailable: Int, removed: Int) {
+    public init(added: Int, changed: Int, removed: Int) {
         self.added = added
         self.changed = changed
-        self.unavailable = unavailable
         self.removed = removed
     }
 }
@@ -352,13 +350,11 @@ public final class IndexRefresher {
             guard let old = oldByPath[path], let snapshot = newByPath[path] else {
                 return false
             }
-            return snapshot.availability == .available && old != snapshot
+            return old != snapshot
         }.count
-        let unavailable = after.filter { $0.availability == .unavailable }.count
         return RefreshSummary(
             added: added,
             changed: changed,
-            unavailable: unavailable,
             removed: removed
         )
     }

@@ -131,17 +131,12 @@ final class IndexRefresherTests: XCTestCase {
 
         XCTAssertEqual(first.added, 1)
         XCTAssertEqual(second.changed, 0)
-        XCTAssertEqual(second.unavailable, 1)
-        XCTAssertEqual(second.removed, 0)
-        XCTAssertEqual(try index.skills().first?.availability, .unavailable)
-        XCTAssertEqual(
-            try index.skills().first?.unavailableDiagnostic?.code,
-            .authorizedProjectMissing
-        )
+        XCTAssertEqual(second.removed, 1)
+        XCTAssertTrue(try index.skills().isEmpty)
         XCTAssertEqual(adapter.stoppedURLs.map(\.path), [project.path, project.path])
     }
 
-    func testInaccessibleAuthorizedProjectRetainsItsPriorInstallationsAsUnavailable() async throws {
+    func testInaccessibleAuthorizedProjectDropsItsPriorInstallations() async throws {
         let fixture = try RefreshFixture()
         try fixture.writeSkill(at: "project/.cursor/skills/demo", name: "demo")
         let project = fixture.home.appending(path: "project")
@@ -163,16 +158,11 @@ final class IndexRefresherTests: XCTestCase {
         let second = try await refresher.refresh()
 
         XCTAssertEqual(first.added, 1)
-        XCTAssertEqual(second.unavailable, 1)
-        XCTAssertEqual(second.removed, 0)
-        XCTAssertEqual(try index.skills().first?.availability, .unavailable)
-        XCTAssertEqual(
-            try index.skills().first?.unavailableDiagnostic?.code,
-            .unableToInspectAuthorizedDirectory
-        )
+        XCTAssertEqual(second.removed, 1)
+        XCTAssertTrue(try index.skills().isEmpty)
     }
 
-    func testFailedHomeBookmarkMarksPreviouslyIndexedSkillUnavailable() async throws {
+    func testFailedHomeBookmarkDropsPreviouslyIndexedSkill() async throws {
         let fixture = try RefreshFixture()
         try fixture.writeSkill(at: ".claude/skills/demo", name: "demo")
         let adapter = FixtureBookmarkAdapter()
@@ -191,13 +181,11 @@ final class IndexRefresherTests: XCTestCase {
         let second = try await refresher.refresh()
 
         XCTAssertEqual(first.added, 1)
-        XCTAssertEqual(second.unavailable, 1)
-        let skill = try XCTUnwrap(index.skills().first)
-        XCTAssertEqual(skill.availability, .unavailable)
-        XCTAssertEqual(skill.unavailableDiagnostic?.code, .unableToResolveAuthorizedDirectory)
+        XCTAssertEqual(second.removed, 1)
+        XCTAssertTrue(try index.skills().isEmpty)
     }
 
-    func testFailedMatchedSystemBookmarkMarksPreviouslyIndexedSkillUnavailable() async throws {
+    func testFailedMatchedSystemBookmarkDropsPreviouslyIndexedSkill() async throws {
         let fixture = try RefreshFixture()
         try fixture.writeSkill(at: "system/demo", name: "demo")
         let system = fixture.home.appending(path: "system")
@@ -225,11 +213,11 @@ final class IndexRefresherTests: XCTestCase {
         let second = try await refresher.refresh()
 
         XCTAssertEqual(first.added, 1)
-        XCTAssertEqual(second.unavailable, 1)
-        XCTAssertEqual(try index.skills().first?.availability, .unavailable)
+        XCTAssertEqual(second.removed, 1)
+        XCTAssertTrue(try index.skills().isEmpty)
     }
 
-    func testInaccessibleExactSystemAndCustomRootsRetainPriorInstallations() async throws {
+    func testInaccessibleExactSystemAndCustomRootsDropPriorInstallations() async throws {
         let fixture = try RefreshFixture()
         try fixture.writeSkill(at: "system/system-demo", name: "system-demo")
         try fixture.writeSkill(at: "custom/custom-demo", name: "custom-demo")
@@ -260,15 +248,13 @@ final class IndexRefresherTests: XCTestCase {
         let first = try await refresher.refresh()
         fileSystem.inaccessiblePaths = Set([system.path, custom.path])
         let second = try await refresher.refresh()
-        let skills = try index.skills()
 
         XCTAssertEqual(first.added, 2)
-        XCTAssertEqual(second.unavailable, 2)
-        XCTAssertEqual(second.removed, 0)
-        XCTAssertEqual(skills.map(\.availability), [.unavailable, .unavailable])
+        XCTAssertEqual(second.removed, 2)
+        XCTAssertTrue(try index.skills().isEmpty)
     }
 
-    func testInaccessibleAuthorizedHomeRetainsPriorInstallations() async throws {
+    func testInaccessibleAuthorizedHomeDropsPriorInstallations() async throws {
         let fixture = try RefreshFixture()
         try fixture.writeSkill(at: ".claude/skills/demo", name: "demo")
         let adapter = FixtureBookmarkAdapter()
@@ -289,12 +275,11 @@ final class IndexRefresherTests: XCTestCase {
         let second = try await refresher.refresh()
 
         XCTAssertEqual(first.added, 1)
-        XCTAssertEqual(second.unavailable, 1)
-        XCTAssertEqual(second.removed, 0)
-        XCTAssertEqual(try index.skills().first?.availability, .unavailable)
+        XCTAssertEqual(second.removed, 1)
+        XCTAssertTrue(try index.skills().isEmpty)
     }
 
-    func testUnavailableHomeChildIsNotDeletedByAvailableSiblingDisposition() async throws {
+    func testUnavailableHomeChildIsDroppedWhileAvailableSiblingSurvives() async throws {
         let fixture = try RefreshFixture()
         try fixture.writeSkill(at: ".first/skills/first", name: "first")
         try fixture.writeSkill(at: ".second/skills/second", name: "second")
@@ -332,10 +317,8 @@ final class IndexRefresherTests: XCTestCase {
         let skills = try index.skills()
 
         XCTAssertEqual(first.added, 2)
-        XCTAssertEqual(second.removed, 0)
-        XCTAssertEqual(skills.map(\.name), ["first", "second"])
-        XCTAssertEqual(skills.first { $0.name == "first" }?.availability, .unavailable)
-        XCTAssertEqual(skills.first { $0.name == "second" }?.availability, .available)
+        XCTAssertEqual(second.removed, 1)
+        XCTAssertEqual(skills.map(\.name), ["second"])
     }
 
     func testDisappearingRegisteredHomeRootRemovesItsPriorInstallations() async throws {
@@ -451,9 +434,7 @@ final class IndexRefresherTests: XCTestCase {
         _ = try await refresher.refresh(rootIDs: [first.id])
 
         let skills = try index.skills()
-        XCTAssertEqual(skills.map(\.name), ["one", "two"])
-        XCTAssertEqual(skills.first { $0.name == "one" }?.availability, .unavailable)
-        XCTAssertEqual(skills.first { $0.name == "two" }?.availability, .available)
+        XCTAssertEqual(skills.map(\.name), ["two"])
         XCTAssertEqual(adapter.stoppedURLs.filter { $0.path == firstURL.path }.count, 2)
         XCTAssertEqual(adapter.stoppedURLs.filter { $0.path == secondURL.path }.count, 1)
     }

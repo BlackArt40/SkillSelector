@@ -5,7 +5,6 @@ struct RootView: View {
     @Environment(AppModel.self) private var model
     @State private var destination: BrowserDestination? = .all
     @State private var searchText = ""
-    @State private var status: SkillQuery.Status = .all
     @State private var sort: SkillQuery.Sort = .default
     @State private var revealError: String?
 
@@ -16,7 +15,6 @@ struct RootView: View {
             scope: currentDestination.queryScope,
             agentID: currentDestination.agentID,
             searchText: searchText,
-            status: status,
             sort: sort
         )
         let filteredSkills = query.apply(to: model.snapshots, rootsByID: model.rootsByID)
@@ -48,7 +46,6 @@ struct RootView: View {
             SkillListView(
                 selection: $model.selection,
                 searchText: $searchText,
-                status: $status,
                 sort: $sort,
                 skills: filteredSkills,
                 allSkillCount: model.snapshots.count,
@@ -141,7 +138,11 @@ struct RootView: View {
     private var hasActiveFilters: Bool {
         destination != .all
             || !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || status != .all
+    }
+
+    private func clearFilters() {
+        destination = .all
+        searchText = ""
     }
 
     private var pendingOperationBinding: Binding<FileOperationPlan?> {
@@ -175,12 +176,6 @@ struct RootView: View {
 
     private func refresh() {
         Task { await model.refresh() }
-    }
-
-    private func clearFilters() {
-        destination = .all
-        searchText = ""
-        status = .all
     }
 
     private func chooseDestination(for operation: FileOperationKind, skill: SkillSnapshot) {

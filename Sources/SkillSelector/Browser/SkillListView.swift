@@ -4,7 +4,6 @@ import SwiftUI
 struct SkillListView: View {
     @Binding var selection: SkillSelection?
     @Binding var searchText: String
-    @Binding var status: SkillQuery.Status
     @Binding var sort: SkillQuery.Sort
 
     let skills: [SkillSnapshot]
@@ -36,15 +35,6 @@ struct SkillListView: View {
 
     private var controls: some View {
         HStack(spacing: 8) {
-            Picker(L10n.string("Status"), selection: $status) {
-                Text(verbatim: L10n.string("All")).tag(SkillQuery.Status.all)
-                Text(verbatim: L10n.string("Available")).tag(SkillQuery.Status.available)
-                Text(verbatim: L10n.string("Unavailable")).tag(SkillQuery.Status.unavailable)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .accessibilityLabel(L10n.string("Filter by status"))
-
             Menu {
                 Picker(L10n.string("Sort"), selection: $sort) {
                     Text(verbatim: L10n.string("Default Order")).tag(SkillQuery.Sort.default)

@@ -7,7 +7,6 @@ struct MarkdownDocumentView: View {
         case rendered(AttributedString)
         case raw(String)
         case tooLarge
-        case unavailable
         case failed(String)
     }
 
@@ -78,11 +77,6 @@ struct MarkdownDocumentView: View {
                 title: L10n.string("Document Too Large to Render"),
                 detail: L10n.string("Documents larger than 1 MiB can be opened in the default editor.")
             )
-        case .unavailable:
-            messageShell(
-                title: L10n.string("Skill Document Unavailable"),
-                detail: L10n.string("The document is unavailable until its authorized folder can be accessed.")
-            )
         case .failed(let detail):
             errorShell(title: L10n.string("Unable to Load Skill Document"), detail: detail)
         }
@@ -91,10 +85,6 @@ struct MarkdownDocumentView: View {
     @MainActor
     private func load() async {
         actionErrorDetail = nil
-        guard skill.availability == .available else {
-            state = .unavailable
-            return
-        }
         state = .loading
         do {
             let document = try await model.loadDocument(for: skill)
@@ -146,7 +136,6 @@ struct MarkdownDocumentView: View {
                 .frame(width: 18, height: 18)
         }
         .buttonStyle(.borderless)
-        .disabled(skill.availability != .available)
         .help(label)
         .accessibilityLabel(label)
     }

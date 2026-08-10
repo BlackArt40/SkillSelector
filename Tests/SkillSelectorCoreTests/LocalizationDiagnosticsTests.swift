@@ -19,7 +19,7 @@ final class LocalizationDiagnosticsTests: XCTestCase {
         XCTAssertEqual(required.diagnostic?.arguments, ["description"])
     }
 
-    func testIndexPersistsStructuredUnavailableDiagnostic() throws {
+    func testUnavailableRootDropsIndexedRecords() throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(
             for: SkillRecord.self,
@@ -63,7 +63,9 @@ final class LocalizationDiagnosticsTests: XCTestCase {
             )
         )
 
-        XCTAssertEqual(try index.skills().first?.unavailableDiagnostic, diagnostic)
+        // An unavailable root drops its records: the index only reflects
+        // Skills that exist on disk right now.
+        XCTAssertTrue(try index.skills().isEmpty)
     }
 
     func testLocalizationSelectionMatchesLanguageVariantsAndFallsBackToEnglish() {

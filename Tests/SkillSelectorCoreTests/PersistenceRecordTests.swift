@@ -100,9 +100,6 @@ final class PersistenceRecordTests: XCTestCase {
             localDescription: "local",
             customDescription: "custom",
             modificationDate: date,
-            availability: .unavailable,
-            unavailableReason: "root missing",
-            unavailableDiagnosticData: Data("diag".utf8),
             agentIDsByRootData: Data("{\"root-1\":[\"codex\"]}".utf8),
             entryFilename: "SKILL.md",
             parseDiagnosticsData: Data("issues".utf8)
@@ -119,9 +116,6 @@ final class PersistenceRecordTests: XCTestCase {
         XCTAssertEqual(loaded.localDescription, "local")
         XCTAssertEqual(loaded.customDescription, "custom")
         XCTAssertEqual(loaded.modificationDate, date)
-        XCTAssertEqual(loaded.availabilityRawValue, "unavailable")
-        XCTAssertEqual(loaded.unavailableReason, "root missing")
-        XCTAssertEqual(loaded.unavailableDiagnosticData, Data("diag".utf8))
         XCTAssertEqual(
             loaded.agentIDsByRootData,
             Data("{\"root-1\":[\"codex\"]}".utf8)
@@ -137,9 +131,6 @@ final class PersistenceRecordTests: XCTestCase {
         XCTAssertNil(record.localDescription)
         XCTAssertNil(record.customDescription)
         XCTAssertNil(record.modificationDate)
-        XCTAssertEqual(record.availabilityRawValue, SkillAvailability.available.rawValue)
-        XCTAssertNil(record.unavailableReason)
-        XCTAssertNil(record.unavailableDiagnosticData)
         XCTAssertEqual(record.agentIDsByRootData, Data("{}".utf8))
         XCTAssertEqual(record.parseDiagnosticsData, Data())
     }
@@ -169,8 +160,6 @@ final class PersistenceRecordTests: XCTestCase {
             localDescription: nil,
             customDescription: nil,
             modificationDate: nil,
-            availability: .available,
-            unavailableReason: nil,
             agentIDs: ["codex"],
             rootIDs: ["root-1"],
             entryFilename: "SKILL.md",
@@ -178,12 +167,5 @@ final class PersistenceRecordTests: XCTestCase {
         )
 
         XCTAssertEqual(snapshot.id, "/tmp/skills/demo")
-        XCTAssertNil(snapshot.unavailableDiagnostic)
-    }
-
-    func testSkillAvailabilityRawValuesRoundTrip() {
-        XCTAssertEqual(SkillAvailability(rawValue: "available"), .available)
-        XCTAssertEqual(SkillAvailability(rawValue: "unavailable"), .unavailable)
-        XCTAssertNil(SkillAvailability(rawValue: "unknown"))
     }
 }

@@ -70,20 +70,15 @@ struct BrowserSidebar: View {
         )
     }
 
-    /// Agent IDs detected from the current scan: only available, indexed
-    /// Skills count, and nothing shows until an authorized root has been
-    /// imported. Stale records (revoked roots, missing directories) and the
-    /// never-imported state therefore keep the sidebar's Agents section empty.
+    /// Agent IDs detected from the current scan. Nothing shows until an
+    /// authorized root has been imported; the index only holds Skills that
+    /// exist on disk right now, so no availability filter is needed.
     static func detectedAgentIDs(
         from snapshots: [SkillSnapshot],
         hasAuthorization: Bool
     ) -> Set<String> {
         guard hasAuthorization else { return [] }
-        return Set(
-            snapshots
-                .filter { $0.availability == .available }
-                .flatMap(\.agentIDs)
-        )
+        return Set(snapshots.flatMap(\.agentIDs))
     }
 
     static func visibleAgentDefinitions(

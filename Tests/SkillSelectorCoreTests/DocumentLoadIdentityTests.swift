@@ -11,7 +11,6 @@ final class DocumentLoadIdentityTests: XCTestCase {
             snapshot(entryFilename: "AGENT.md"),
             snapshot(resolvedTarget: "/resolved/other"),
             snapshot(modificationDate: Date(timeIntervalSince1970: 2)),
-            snapshot(availability: .unavailable),
             snapshot(rootIDs: ["other-root"]),
         ]
 
@@ -39,7 +38,6 @@ final class DocumentLoadIdentityTests: XCTestCase {
         entryFilename: String = "SKILL.md",
         resolvedTarget: String? = "/resolved/skill",
         modificationDate: Date? = Date(timeIntervalSince1970: 1),
-        availability: SkillAvailability = .available,
         rootIDs: [String] = ["root"],
         customDescription: String? = nil,
         localDescription: String? = nil
@@ -51,8 +49,6 @@ final class DocumentLoadIdentityTests: XCTestCase {
             localDescription: localDescription,
             customDescription: customDescription,
             modificationDate: modificationDate,
-            availability: availability,
-            unavailableReason: nil,
             agentIDs: ["cursor"],
             rootIDs: rootIDs,
             entryFilename: entryFilename,

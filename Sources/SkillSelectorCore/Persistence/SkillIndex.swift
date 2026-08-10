@@ -20,15 +20,20 @@ public final class SkillIndex {
         do {
             var records = try recordsByPath()
 
+            // Roots that are no longer accessible (missing directory, revoked
+            // authorization) drop their associated records entirely: the index
+            // only ever reflects Skills that exist on disk right now.
             for root in report.roots {
-                guard case .unavailable(let reason) = root.availability else { continue }
-                for record in records.values {
-                    let associations = try agentIDsByRoot(for: record)
+                guard case .unavailable = root.availability else { continue }
+                for record in Array(records.values) {
+                    var associations = try agentIDsByRoot(for: record)
                     guard associations[root.id] != nil else { continue }
-                    record.availabilityRawValue = SkillAvailability.unavailable.rawValue
-                    record.unavailableReason = reason
-                    record.unavailableDiagnosticData = root.unavailableDiagnostic.flatMap {
-                        try? encoder.encode($0)
+                    associations[root.id] = nil
+                    if associations.isEmpty {
+                        context.delete(record)
+                        records[record.path] = nil
+                    } else {
+                        record.agentIDsByRootData = try encode(associations, path: record.path)
                     }
                 }
             }
@@ -139,9 +144,6 @@ public final class SkillIndex {
         record.name = resolvedName(for: scanned)
         record.localDescription = scanned.document.description
         record.modificationDate = scanned.entryModificationDate
-        record.availabilityRawValue = SkillAvailability.available.rawValue
-        record.unavailableReason = nil
-        record.unavailableDiagnosticData = nil
         var associations = try agentIDsByRoot(for: record)
         for (rootID, agentIDs) in scanned.agentIDsByRoot {
             associations[rootID] = agentIDs
@@ -160,17 +162,12 @@ public final class SkillIndex {
             localDescription: record.localDescription,
             customDescription: record.customDescription,
             modificationDate: record.modificationDate,
-            availability: SkillAvailability(rawValue: record.availabilityRawValue) ?? .unavailable,
-            unavailableReason: record.unavailableReason,
             agentIDs: associations.values.reduce(into: Set<String>()) { result, agentIDs in
                 result.formUnion(agentIDs)
             }.sorted(),
             rootIDs: associations.keys.sorted(),
             entryFilename: record.entryFilename,
-            parseDiagnostics: (try? decoder.decode([ParseIssue].self, from: record.parseDiagnosticsData)) ?? [],
-            unavailableDiagnostic: record.unavailableDiagnosticData.flatMap {
-                try? decoder.decode(StructuredDiagnostic.self, from: $0)
-            }
+            parseDiagnostics: (try? decoder.decode([ParseIssue].self, from: record.parseDiagnosticsData)) ?? []
         )
     }
 

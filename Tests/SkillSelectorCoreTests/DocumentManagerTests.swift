@@ -44,8 +44,6 @@ final class DocumentManagerTests: XCTestCase {
             localDescription: nil,
             customDescription: nil,
             modificationDate: nil,
-            availability: .available,
-            unavailableReason: nil,
             agentIDs: [],
             rootIDs: rootIDs,
             entryFilename: entryFilename,

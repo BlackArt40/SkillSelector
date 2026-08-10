@@ -76,7 +76,7 @@ final class SkillIndexTests: XCTestCase {
         XCTAssertEqual(moved.customDescription, "Moved custom")
     }
 
-    func testUnavailableRootRetainsRecordsAndMarksThemUnavailable() throws {
+    func testUnavailableRootDropsAssociatedRecords() throws {
         let index = try makeIndex()
         try index.apply(
             report: report(
@@ -93,9 +93,7 @@ final class SkillIndexTests: XCTestCase {
             )
         )
 
-        let snapshot = try XCTUnwrap(index.skills().first)
-        XCTAssertEqual(snapshot.availability, .unavailable)
-        XCTAssertEqual(snapshot.unavailableReason, "bookmark stale")
+        XCTAssertTrue(try index.skills().isEmpty)
     }
 
     func testAccessibleMissingPathRemovesRecord() throws {
@@ -144,7 +142,6 @@ final class SkillIndexTests: XCTestCase {
         XCTAssertEqual(snapshot.agentIDs, ["codex", "cursor"])
         XCTAssertEqual(snapshot.rootIDs, ["project"])
         XCTAssertEqual(snapshot.parseDiagnostics, [ParseIssue(line: 3, message: "Malformed field")])
-        XCTAssertEqual(snapshot.availability, .available)
     }
 
     func testAccessibleRootRemovesOnlyItsAssociationFromSharedRecord() throws {
@@ -168,7 +165,6 @@ final class SkillIndexTests: XCTestCase {
         let snapshot = try XCTUnwrap(index.skills().first)
         XCTAssertEqual(snapshot.rootIDs, ["home"])
         XCTAssertEqual(snapshot.agentIDs, ["cursor"])
-        XCTAssertEqual(snapshot.availability, .available)
     }
 
     func testNewRecordStoresDecodableEmptyProvenanceMap() throws {
