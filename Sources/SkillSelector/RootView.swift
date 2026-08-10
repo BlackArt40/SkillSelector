@@ -22,7 +22,10 @@ struct RootView: View {
         let agentNamesByID = Dictionary(
             uniqueKeysWithValues: model.agentDefinitions.map { ($0.id, $0.displayName) }
         )
-        let detectedAgentIDs = Set(model.snapshots.flatMap(\.agentIDs))
+        let detectedAgentIDs = BrowserSidebar.detectedAgentIDs(
+            from: model.snapshots,
+            hasAuthorization: model.hasAuthorization
+        )
         let selectedSkill = model.selection.flatMap { selection in
             model.snapshots.first { $0.path == selection.path }
         }
