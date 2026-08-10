@@ -2,10 +2,21 @@ import AppKit
 import SkillSelectorCore
 import Foundation
 
-enum DocumentManagerError: Error {
+enum DocumentAccessError: LocalizedError {
     case authorizationStorageUnavailable
     case noAuthorizedRoot
     case externalOpenFailed
+
+    var errorDescription: String? {
+        switch self {
+        case .authorizationStorageUnavailable:
+            L10n.string("Authorization storage is unavailable")
+        case .noAuthorizedRoot:
+            L10n.string("No authorized folder is associated with this Skill.")
+        case .externalOpenFailed:
+            L10n.string("The default editor could not open the Skill document.")
+        }
+    }
 }
 
 @MainActor
@@ -41,7 +52,7 @@ final class DocumentManager {
         try withDocumentAccess(for: skill, authorizedRoots: authorizedRoots) { request in
             let fileURL = try SkillDocumentReader().validatedEntryURL(request)
             guard NSWorkspace.shared.open(fileURL) else {
-                throw DocumentManagerError.externalOpenFailed
+                throw DocumentAccessError.externalOpenFailed
             }
         }
     }
@@ -61,44 +72,17 @@ final class DocumentManager {
         authorizedRoots: [AuthorizedRootSnapshot]
     ) throws -> (request: SkillDocumentRequest, leases: [AccessLease]) {
         guard let bookmarks else {
-            throw DocumentManagerError.authorizationStorageUnavailable
+            throw DocumentAccessError.authorizationStorageUnavailable
         }
-
-        var requiredRootIDs = Set(skill.rootIDs)
-        if let resolvedTarget = skill.resolvedTarget.map(URL.init(fileURLWithPath:)) {
-            requiredRootIDs.formUnion(authorizedRoots.rootIDs(containingResolvedURL: resolvedTarget))
-        }
-        var accesses: [AuthorizedRootAccess] = []
-        var firstResolutionError: Error?
-        for rootID in requiredRootIDs.sorted() {
-            do {
-                accesses.append(try bookmarks.resolve(id: rootID))
-            } catch {
-                firstResolutionError = firstResolutionError ?? error
-            }
-        }
-        guard !accesses.isEmpty else {
-            if let firstResolutionError { throw firstResolutionError }
-            throw DocumentManagerError.noAuthorizedRoot
-        }
-        let installationURL = URL(fileURLWithPath: skill.path)
-        let logicalCovered = accesses.contains {
-            installationURL.isContained(in: $0.root.url.standardizedFileURL)
-        }
-        let targetCovered = skill.resolvedTarget.map(URL.init(fileURLWithPath:)).map { target in
-            accesses.contains {
-                target.standardizedFileURL.isContained(
-                    in: $0.root.url.resolvingSymlinksInPath().standardizedFileURL
-                )
-            }
-        } ?? true
-        guard logicalCovered, targetCovered else {
-            accesses.forEach { $0.lease.close() }
-            if let firstResolutionError { throw firstResolutionError }
-            throw DocumentManagerError.noAuthorizedRoot
+        let accesses: [AuthorizedRootAccess]
+        do {
+            accesses = try AuthorizedAccessResolver(bookmarks: bookmarks)
+                .resolveAccess(for: skill, authorizedRoots: authorizedRoots)
+        } catch AuthorizedAccessError.noAuthorizedRoot {
+            throw DocumentAccessError.noAuthorizedRoot
         }
         return (SkillDocumentRequest(
-            installationURL: installationURL,
+            installationURL: URL(fileURLWithPath: skill.path),
             resolvedTargetURL: skill.resolvedTarget.map(URL.init(fileURLWithPath:)),
             entryFilename: skill.entryFilename,
             authorizedRootURLs: accesses.map(\.root.url)

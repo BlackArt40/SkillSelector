@@ -189,14 +189,8 @@ struct MarkdownDocumentView: View {
             L10n.string("The Skill document is not valid UTF-8 text.")
         case SkillDocumentReaderError.tooLarge:
             L10n.string("The Skill document is larger than the 1 MiB render limit.")
-        case AppModelDocumentError.authorizationStorageUnavailable:
-            L10n.string("Authorization storage is unavailable")
-        case AppModelDocumentError.noAuthorizedRoot:
-            L10n.string("No authorized folder is associated with this Skill.")
-        case AppModelDocumentError.externalOpenFailed:
-            L10n.string("The default editor could not open the Skill document.")
         default:
-            String(describing: error)
+            (error as? LocalizedError)?.errorDescription ?? String(describing: error)
         }
     }
 

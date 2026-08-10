@@ -10,18 +10,6 @@ enum RefreshState: Hashable {
     case failed(String)
 }
 
-enum AppModelDocumentError: Error {
-    case authorizationStorageUnavailable
-    case noAuthorizedRoot
-    case externalOpenFailed
-}
-
-enum AppModelOperationError: Error {
-    case authorizationStorageUnavailable
-    case operationAlreadyPending
-    case noAuthorizedRoot
-}
-
 enum AppModelValidationError: Error, LocalizedError {
     case invalidEntryFilename(String)
     case invalidPathTemplate(String)
@@ -41,20 +29,20 @@ struct SkillSelection: Hashable, Identifiable {
     var id: String { path }
 }
 
-@MainActor
-@Observable
-final class AppModel {
+    @MainActor
+    @Observable
+    final class AppModel {
     private let refresher: IndexRefresher
     private let index: SkillIndex
     private let bookmarks: BookmarkStore?
-    private var registry: AgentRegistry
+    private(set) var registry: AgentRegistry
     private let builtInRegistry: AgentRegistry
     private let customAgentStore: any AgentDefinitionStoring
     private let documentManager: DocumentManager
     private let defaults: UserDefaults
     private let diagnosticStore: DiagnosticStore
+    let fileOperations: FileOperationCoordinator
     @ObservationIgnored private var activeRefresh: (id: UUID, task: Task<Void, Never>)?
-    @ObservationIgnored private var pendingOperationContext: PendingOperationContext?
 
     var refreshState: RefreshState = .idle
     var selection: SkillSelection?
@@ -63,12 +51,16 @@ final class AppModel {
     private(set) var rootsByID: [String: AuthorizedRootSnapshot] = [:]
     private(set) var agentDefinitions: [AgentDefinition]
     private(set) var customAgentDefinitions: [AgentDefinition]
-    var pendingOperationPlan: FileOperationPlan?
-    var operationError: String?
-    private(set) var isOperating = false
     var refreshOnLaunch: Bool {
         didSet { defaults.set(refreshOnLaunch, forKey: Self.refreshOnLaunchDefaultsKey) }
     }
+
+    var pendingOperationPlan: FileOperationPlan? { fileOperations.pendingOperationPlan }
+    var operationError: String? {
+        get { fileOperations.operationError }
+        set { fileOperations.operationError = newValue }
+    }
+    var isOperating: Bool { fileOperations.isOperating }
 
     init(
         refresher: IndexRefresher,
@@ -98,6 +90,13 @@ final class AppModel {
             : defaults.bool(forKey: Self.refreshOnLaunchDefaultsKey)
         agentDefinitions = effectiveRegistry.definitions
         refresher.updateRegistry(effectiveRegistry)
+        fileOperations = FileOperationCoordinator(
+            bookmarks: bookmarks,
+            refresher: refresher,
+            index: index,
+            diagnosticStore: diagnosticStore
+        )
+        fileOperations.owner = self
         do {
             try reloadSnapshot()
         } catch {
@@ -124,7 +123,8 @@ final class AppModel {
             return
         }
         await waitForActiveRefresh()
-        guard pendingOperationPlan == nil, !isOperating else {
+        guard fileOperations.pendingOperationPlan == nil,
+              !fileOperations.isOperating else {
             operationError = L10n.string("Finish the current file operation first.")
             return
         }
@@ -246,8 +246,8 @@ final class AppModel {
     }
 
     func refresh(_ trigger: RefreshTrigger) async {
-        guard pendingOperationPlan == nil,
-              !isOperating else {
+        guard fileOperations.pendingOperationPlan == nil,
+              !fileOperations.isOperating else {
             return
         }
         if let activeRefresh {
@@ -271,8 +271,8 @@ final class AppModel {
     }
 
     var fileOperationCommandsDisabled: Bool {
-        isOperating
-            || pendingOperationPlan != nil
+        fileOperations.isOperating
+            || fileOperations.pendingOperationPlan != nil
             || activeRefresh != nil
     }
 
@@ -285,162 +285,24 @@ final class AppModel {
         conflictPolicy: FileConflictPolicy = .keepBoth
     ) async {
         await waitForActiveRefresh()
-        guard pendingOperationPlan == nil,
-              !isOperating else {
-            operationError = L10n.string("Finish the current file operation first.")
-            return
-        }
-        guard let bookmarks else {
-            operationError = L10n.string("Authorization storage is unavailable")
-            return
-        }
-
-        do {
-            let rootIDs = operationAccessRootIDs(
-                for: skill,
-                destinationRootURL: destinationRootURL
-            )
-            guard !rootIDs.isEmpty else { throw AppModelOperationError.noAuthorizedRoot }
-            var accesses: [AuthorizedRootAccess] = []
-            var firstResolutionError: Error?
-            for rootID in rootIDs {
-                do {
-                    accesses.append(try bookmarks.resolve(id: rootID))
-                } catch {
-                    firstResolutionError = firstResolutionError ?? error
-                }
-            }
-            do {
-                guard operationPathsAreCovered(
-                    skill: skill,
-                    destinationRootURL: destinationRootURL,
-                    accesses: accesses
-                ) else {
-                    throw firstResolutionError ?? AppModelOperationError.noAuthorizedRoot
-                }
-                let currentRoots = try bookmarks.roots()
-                let currentAliases = snapshots.map {
-                    IndexedSkillAlias(
-                        path: $0.path,
-                        resolvedTarget: $0.resolvedTarget,
-                        rootIDs: $0.rootIDs
-                    )
-                }
-                let fileOperator = SkillFileOperator(
-                    registryProvider: { [registry] in registry },
-                    authorizedRootsProvider: { [currentRoots] in currentRoots },
-                    indexedAliasesProvider: { [currentAliases] in currentAliases }
-                )
-                let request = FileOperationRequest(
-                    operation: operation,
-                    sourceURL: URL(fileURLWithPath: skill.path),
-                    resolvedSourceURL: skill.resolvedTarget.map(URL.init(fileURLWithPath:)),
-                    sourceEntryFilename: skill.entryFilename,
-                    destinationRootURL: destinationRootURL,
-                    proposedName: nil,
-                    conflictPolicy: operation == .delete ? .fail : conflictPolicy,
-                    metadata: SkillAppMetadata(customDescription: nil)
-                )
-                let plan = try fileOperator.plan(request)
-                pendingOperationContext = PendingOperationContext(
-                    fileOperator: fileOperator,
-                    request: request,
-                    authorizedRoots: currentRoots,
-                    leases: accesses.map(\.lease)
-                )
-                pendingOperationPlan = plan
-                operationError = nil
-            } catch {
-                accesses.forEach { $0.lease.close() }
-                throw error
-            }
-        } catch {
-            operationError = localizedOperationError(error)
-        }
+        await fileOperations.plan(
+            operation,
+            for: skill,
+            destinationRootURL: destinationRootURL,
+            conflictPolicy: conflictPolicy
+        )
     }
 
     func updatePendingConflictPolicy(_ policy: FileConflictPolicy) {
-        guard let context = pendingOperationContext,
-              context.request.operation != .delete else { return }
-        let request = FileOperationRequest(
-            operation: context.request.operation,
-            sourceURL: context.request.sourceURL,
-            resolvedSourceURL: context.request.resolvedSourceURL,
-            sourceEntryFilename: context.request.sourceEntryFilename,
-            destinationRootURL: context.request.destinationRootURL,
-            proposedName: context.request.proposedName,
-            conflictPolicy: policy,
-            metadata: context.request.metadata
-        )
-        do {
-            pendingOperationPlan = try context.fileOperator.plan(request)
-            pendingOperationContext?.request = request
-            operationError = nil
-        } catch {
-            operationError = localizedOperationError(error)
-        }
+        fileOperations.updateConflictPolicy(policy)
     }
 
     func cancelPendingFileOperation() {
-        closePendingOperation()
+        fileOperations.cancelPending()
     }
 
     func executePendingFileOperation(replacementConfirmed: Bool) async {
-        guard let plan = pendingOperationPlan,
-              let context = pendingOperationContext,
-              !isOperating else {
-            return
-        }
-        isOperating = true
-        defer {
-            isOperating = false
-            closePendingOperation()
-        }
-        do {
-            guard let bookmarks,
-                  try bookmarks.roots() == context.authorizedRoots else {
-                throw SkillFileOperatorError.authorizationChanged
-            }
-            let result = try await context.fileOperator.execute(
-                plan,
-                confirmation: plan.confirmationToken,
-                replacementConfirmation: replacementConfirmed
-                    ? plan.replacementConfirmationToken
-                    : nil
-            )
-            guard result.outcome == .completed else { return }
-            let summary = try await refresher.refresh(
-                .manual,
-                rootIDs: Set(result.refreshRootIDs)
-            )
-            try reloadSnapshot()
-            if let destinationPath = result.destinationURL?.path {
-                try index.applyOperationMetadataTransfer(
-                    result.metadataTransfer,
-                    to: destinationPath
-                )
-                try reloadSnapshot()
-                if result.metadataTransfer.isMove {
-                    selection = SkillSelection(path: destinationPath)
-                }
-            }
-            refreshState = .finished(summary)
-            operationError = nil
-            diagnosticStore.record(
-                category: .operations,
-                code: "OPERATION_COMPLETED",
-                message: "File operation completed",
-                redactor: currentRedactor()
-            )
-        } catch {
-            operationError = localizedOperationError(error)
-            diagnosticStore.record(
-                category: .operations,
-                code: "OPERATION_FAILED",
-                message: operationError ?? "File operation failed",
-                redactor: currentRedactor()
-            )
-        }
+        await fileOperations.execute(replacementConfirmed: replacementConfirmed)
     }
 
     func loadDocument(for skill: SkillSnapshot) async throws -> SkillDocument {
@@ -538,7 +400,7 @@ final class AppModel {
         authorizedRoots.map { root in
             let isAvailable: Bool
             do {
-                guard let bookmarks else { throw AppModelDocumentError.authorizationStorageUnavailable }
+                guard let bookmarks else { throw DocumentAccessError.authorizationStorageUnavailable }
                 let access = try bookmarks.resolve(id: root.id)
                 access.lease.close()
                 isAvailable = true
@@ -564,7 +426,7 @@ final class AppModel {
         activeRefresh = nil
     }
 
-    private func reloadSnapshot() throws {
+    func reloadSnapshot() throws {
         let updatedSnapshots = try index.skills()
         let updatedRoots = try bookmarks?.roots() ?? []
         snapshots = updatedSnapshots
@@ -575,112 +437,18 @@ final class AppModel {
             self.selection = nil
         }
     }
-
-    private struct PendingOperationContext {
-        let fileOperator: SkillFileOperator
-        var request: FileOperationRequest
-        let authorizedRoots: [AuthorizedRootSnapshot]
-        let leases: [AccessLease]
-    }
-
-
-    private func closePendingOperation() {
-        pendingOperationContext?.leases.forEach { $0.close() }
-        pendingOperationContext = nil
-        pendingOperationPlan = nil
-    }
-
-
-    private func operationAccessRootIDs(
-        for skill: SkillSnapshot,
-        destinationRootURL: URL?
-    ) -> [String] {
-        var ids = Set(skill.rootIDs)
-        if let resolvedTarget = skill.resolvedTarget.map(URL.init(fileURLWithPath:)) {
-            ids.formUnion(authorizedRoots.rootIDs(containingResolvedURL: resolvedTarget))
-        }
-        if let destinationRootURL {
-            ids.formUnion(authorizedRoots.rootIDs(containingLogicalURL: destinationRootURL))
-        }
-        return ids.sorted()
-    }
-
-    private func operationPathsAreCovered(
-        skill: SkillSnapshot,
-        destinationRootURL: URL?,
-        accesses: [AuthorizedRootAccess]
-    ) -> Bool {
-        let source = URL(fileURLWithPath: skill.path)
-        let logicalSourceCovered = accesses.contains {
-            source.isContained(in: $0.root.url.standardizedFileURL)
-        }
-        let resolvedSourceCovered = skill.resolvedTarget.map(URL.init(fileURLWithPath:)).map { target in
-            accesses.contains {
-                target.standardizedFileURL.isContained(
-                    in: $0.root.url.resolvingSymlinksInPath().standardizedFileURL
-                )
-            }
-        } ?? true
-        let destinationCovered = destinationRootURL.map { destination in
-            accesses.contains {
-                destination.isContained(in: $0.root.url.standardizedFileURL)
-            }
-        } ?? true
-        return logicalSourceCovered && resolvedSourceCovered && destinationCovered
-    }
-
-
-
-    private func localizedOperationError(_ error: Error) -> String {
-        if let error = error as? AppModelOperationError {
-            return switch error {
-            case .authorizationStorageUnavailable:
-                L10n.string("Authorization storage is unavailable")
-            case .operationAlreadyPending:
-                L10n.string("Finish the current file operation first.")
-            case .noAuthorizedRoot:
-                L10n.string("No authorized directory covers this operation.")
-            }
-        }
-        guard let error = error as? SkillFileOperatorError else {
-            return String(describing: error)
-        }
-        return switch error {
-        case .sourceMissing: L10n.string("The source Skill no longer exists.")
-        case .sourceChanged: L10n.string("The source Skill changed. Plan the operation again.")
-        case .unauthorizedSource: L10n.string("The source Skill is not authorized.")
-        case .unregisteredSource: L10n.string("The source is not in a registered Skill root.")
-        case .resolvedSourceMismatch: L10n.string("The symbolic link target changed.")
-        case .destinationRequired: L10n.string("Choose a destination Skill root.")
-        case .unauthorizedDestination: L10n.string("The destination is not authorized.")
-        case .unregisteredDestination: L10n.string("The destination is not a registered Skill root.")
-        case .invalidName: L10n.string("The Skill name is not valid.")
-        case .destinationConflict: L10n.string("A Skill with this name already exists.")
-        case .destinationChanged: L10n.string("The destination changed. Plan the operation again.")
-        case .authorizationChanged: L10n.string("Directory authorization changed. Plan the operation again.")
-        case .registryChanged: L10n.string("The Agent registry changed. Plan the operation again.")
-        case .invalidConfirmation, .invalidOrConsumedPlan:
-            L10n.string("This confirmation is no longer valid.")
-        case .replacementConfirmationRequired, .invalidReplacementConfirmation:
-            L10n.string("Confirm replacement separately before continuing.")
-        case .invalidStagedSkill: L10n.string("The staged copy is not a readable Skill.")
-        case .filesystemFailure(let detail): String.localizedStringWithFormat(
-            L10n.string("The file operation failed: %@"), detail
-        )
-        case .rollbackFailed(let original, let rollback): String.localizedStringWithFormat(
-            L10n.string("The operation failed and rollback was incomplete: %@ (%@)"),
-            original,
-            rollback
-        )
-        }
-    }
-
-
 }
 
-private extension FileOperationMetadataTransfer {
-    var isMove: Bool {
-        if case .move = self { return true }
-        return false
+extension AppModel: FileOperationCoordinatorOwner {
+    func updateSelection(to path: String?) {
+        selection = path.map(SkillSelection.init(path:))
+    }
+
+    func setRefreshState(_ state: RefreshState) {
+        refreshState = state
+    }
+
+    func makeRedactor() -> Redactor {
+        currentRedactor()
     }
 }

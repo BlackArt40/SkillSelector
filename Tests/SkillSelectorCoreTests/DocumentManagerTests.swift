@@ -61,9 +61,14 @@ final class DocumentManagerTests: XCTestCase {
             try manager.resolveDocumentAccess(for: skill, authorizedRoots: [])
         ) { error in
             XCTAssertEqual(
-                error as? DocumentManagerError,
+                error as? DocumentAccessError,
                 .authorizationStorageUnavailable
             )
+            // W1 regression: the message must come from the localized mapping,
+            // not the raw enum case name (previously the view matched a
+            // different error type and fell through to String(describing:)).
+            XCTAssertFalse(error.localizedDescription.contains("authorizationStorageUnavailable"))
+            XCTAssertFalse(error.localizedDescription.isEmpty)
         }
     }
 
@@ -74,7 +79,7 @@ final class DocumentManagerTests: XCTestCase {
         XCTAssertThrowsError(
             try manager.resolveDocumentAccess(for: skill, authorizedRoots: [])
         ) { error in
-            XCTAssertEqual(error as? DocumentManagerError, .noAuthorizedRoot)
+            XCTAssertEqual(error as? DocumentAccessError, .noAuthorizedRoot)
         }
     }
 
@@ -105,7 +110,7 @@ final class DocumentManagerTests: XCTestCase {
         XCTAssertThrowsError(
             try manager.resolveDocumentAccess(for: skill, authorizedRoots: roots)
         ) { error in
-            XCTAssertEqual(error as? DocumentManagerError, .noAuthorizedRoot)
+            XCTAssertEqual(error as? DocumentAccessError, .noAuthorizedRoot)
         }
     }
 
@@ -127,7 +132,7 @@ final class DocumentManagerTests: XCTestCase {
         XCTAssertThrowsError(
             try manager.resolveDocumentAccess(for: skill, authorizedRoots: roots)
         ) { error in
-            XCTAssertEqual(error as? DocumentManagerError, .noAuthorizedRoot)
+            XCTAssertEqual(error as? DocumentAccessError, .noAuthorizedRoot)
         }
     }
 
