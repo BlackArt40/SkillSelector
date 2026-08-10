@@ -185,7 +185,7 @@
 "Project Patterns" = "Project Patterns";
 "Re-authorize Directory" = "Re-authorize Directory";
 "Rename" = "Rename";
-"Refresh" = "Refresh";
+"Scan" = "Scan";
 "Auto-scan Home Directory" = "Auto-scan Home Directory";
 "Scan agent skill folders in the home directory when the app launches." = "Scan agent skill folders in the home directory when the app launches.";
 "Remove Custom Agent" = "Remove Custom Agent";

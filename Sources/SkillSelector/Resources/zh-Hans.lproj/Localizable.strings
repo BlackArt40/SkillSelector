@@ -185,7 +185,7 @@
 "Project Patterns" = "项目路径模式";
 "Re-authorize Directory" = "重新授权目录";
 "Rename" = "重命名";
-"Refresh" = "刷新";
+"Scan" = "扫描";
 "Auto-scan Home Directory" = "自动扫描主目录";
 "Scan agent skill folders in the home directory when the app launches." = "启动时自动扫描主目录中的 Agent Skill 文件夹。";
 "Remove Custom Agent" = "移除自定义 Agent";

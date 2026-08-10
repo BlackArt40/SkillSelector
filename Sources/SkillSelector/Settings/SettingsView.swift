@@ -73,7 +73,7 @@ struct SettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 settingsSection(
-                    title: L10n.string("Refresh"),
+                    title: L10n.string("Scan"),
                     systemImage: nil
                 ) {
                     Toggle(L10n.string("Auto-scan Home Directory"), isOn: $model.autoScanHome)
