@@ -58,16 +58,6 @@ struct SettingsView: View {
     @State private var editingRootID: String?
     @State private var editingRootName: String = ""
 
-    private var effectiveLanguage: String {
-        if let preferredLanguage {
-            return preferredLanguage
-        }
-        return LocalizationSelection.preferredLocalization(
-            available: L10n.availableLocalizations,
-            preferredLanguages: Locale.preferredLanguages
-        )
-    }
-
     var body: some View {
         @Bindable var model = model
         ScrollView {
@@ -91,14 +81,10 @@ struct SettingsView: View {
                     Text(L10n.string("Language description"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Picker("", selection: Binding(
-                        get: { effectiveLanguage },
-                        set: { newValue in
-                            preferredLanguage = newValue
-                        }
-                    )) {
-                        Text("简体中文").tag("zh-Hans" as String)
-                        Text("English").tag("en" as String)
+                    Picker("", selection: $preferredLanguage) {
+                        Text(verbatim: L10n.string("Follow System")).tag(String?.none)
+                        Text("简体中文").tag("zh-Hans" as String?)
+                        Text("English").tag("en" as String?)
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
