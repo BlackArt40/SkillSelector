@@ -41,6 +41,7 @@ struct SkillSelection: Hashable, Identifiable {
     private let documentManager: DocumentManager
     private let defaults: UserDefaults
     private let diagnosticStore: DiagnosticStore
+    private let homeDirectory: URL
     let fileOperations: FileOperationCoordinator
     @ObservationIgnored private var activeRefresh: (id: UUID, task: Task<Void, Never>)?
 
@@ -69,7 +70,8 @@ struct SkillSelection: Hashable, Identifiable {
         registry: AgentRegistry,
         defaults: UserDefaults = .standard,
         customAgentStore: (any AgentDefinitionStoring)? = nil,
-        diagnosticStore: DiagnosticStore = .shared
+        diagnosticStore: DiagnosticStore = .shared,
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
     ) {
         self.refresher = refresher
         self.index = index
@@ -78,6 +80,7 @@ struct SkillSelection: Hashable, Identifiable {
         builtInRegistry = registry
         self.defaults = defaults
         self.diagnosticStore = diagnosticStore
+        self.homeDirectory = homeDirectory
         let store = customAgentStore ?? UserDefaultsAgentDefinitionStore(defaults: defaults)
         self.customAgentStore = store
         let storedCustomDefinitions = (try? store.definitions()) ?? []
@@ -125,16 +128,26 @@ struct SkillSelection: Hashable, Identifiable {
     /// ignored — the user can import it through the panel instead.
     private func ensureHomeAuthorized() async {
         guard let bookmarks else { return }
+        guard persistedHomeRoot == nil else { return }
         do {
-            let roots = try bookmarks.roots()
-            guard !roots.contains(where: { $0.kind == .home }) else { return }
-            let home = FileManager.default.homeDirectoryForCurrentUser
-            _ = try bookmarks.save(url: home, kind: .home)
-            authorizedRoots = try bookmarks.roots()
-            rootsByID = Dictionary(uniqueKeysWithValues: authorizedRoots.map { ($0.id, $0) })
+            _ = try bookmarks.save(url: homeDirectory, kind: .home)
+            try reloadAuthorizedRoots()
         } catch {
             // Non-fatal: auto-scan is best-effort.
         }
+    }
+
+    /// The persisted home root, if any. Both the auto-scan and the import
+    /// path consult this so home-root uniqueness has a single definition.
+    private var persistedHomeRoot: AuthorizedRootSnapshot? {
+        guard let roots = try? bookmarks?.roots() else { return nil }
+        return roots.first { $0.kind == .home }
+    }
+
+    /// Refreshes the in-memory authorized-root state from the store.
+    private func reloadAuthorizedRoots() throws {
+        authorizedRoots = try bookmarks?.roots() ?? []
+        rootsByID = Dictionary(uniqueKeysWithValues: authorizedRoots.map { ($0.id, $0) })
     }
 
     func authorize(_ url: URL, as kind: AuthorizedRootKind) async {
@@ -153,16 +166,13 @@ struct SkillSelection: Hashable, Identifiable {
             // user's home directory, and scanning it covers every declared
             // ~/.../skills folder. Importing another directory as .home would
             // create a second, empty "Home Directory" entry.
-            if kind == .home,
-               let existingHome = try bookmarks.roots().first(where: { $0.kind == .home }) {
-                authorizedRoots = try bookmarks.roots()
-                rootsByID = Dictionary(uniqueKeysWithValues: authorizedRoots.map { ($0.id, $0) })
+            if kind == .home, persistedHomeRoot != nil {
+                try reloadAuthorizedRoots()
                 await refresh()
                 return
             }
             _ = try bookmarks.save(url: url, kind: kind)
-            authorizedRoots = try bookmarks.roots()
-            rootsByID = Dictionary(uniqueKeysWithValues: authorizedRoots.map { ($0.id, $0) })
+            try reloadAuthorizedRoots()
             await refresh()
             recordPathDiagnostic(
                 category: .persistence,

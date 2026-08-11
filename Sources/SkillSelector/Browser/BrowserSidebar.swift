@@ -95,12 +95,17 @@ struct BrowserSidebar: View {
     }
 
     private var duplicateProjectNames: Set<String> {
-        let groups = Dictionary(grouping: projects, by: { $0.url.lastPathComponent.lowercased() })
-        return Set(groups.compactMap { $0.value.count > 1 ? $0.key : nil })
+        Self.duplicateNameRoots(projects)
     }
 
     private var duplicateSystemNames: Set<String> {
-        let groups = Dictionary(grouping: systemRoots, by: { $0.url.lastPathComponent.lowercased() })
+        Self.duplicateNameRoots(systemRoots)
+    }
+
+    /// Root display names that appear more than once, so their rows can
+    /// disambiguate by showing the full path.
+    private static func duplicateNameRoots(_ roots: [AuthorizedRootSnapshot]) -> Set<String> {
+        let groups = Dictionary(grouping: roots, by: { $0.url.lastPathComponent.lowercased() })
         return Set(groups.compactMap { $0.value.count > 1 ? $0.key : nil })
     }
 
@@ -158,31 +163,37 @@ struct BrowserSidebar: View {
 
     @ViewBuilder
     private func projectLabel(_ project: AuthorizedRootSnapshot) -> some View {
-        if duplicateProjectNames.contains(project.url.lastPathComponent.lowercased()) {
-            HStack(spacing: 8) {
-                Image(systemName: "folder")
-                    .foregroundStyle(.secondary)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(verbatim: project.displayName)
-                    Text(verbatim: project.url.path)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-        } else {
-            Label(project.displayName, systemImage: "folder")
-        }
+        labeledRoot(
+            project,
+            name: project.displayName,
+            icon: "folder",
+            showPath: duplicateProjectNames.contains(project.url.lastPathComponent.lowercased())
+        )
     }
 
     @ViewBuilder
     private func systemLabel(_ root: AuthorizedRootSnapshot) -> some View {
-        if duplicateSystemNames.contains(root.url.lastPathComponent.lowercased()) {
+        labeledRoot(
+            root,
+            name: L10n.string(root.kind.localizedName),
+            icon: root.kind.systemImage,
+            showPath: duplicateSystemNames.contains(root.url.lastPathComponent.lowercased())
+        )
+    }
+
+    @ViewBuilder
+    private func labeledRoot(
+        _ root: AuthorizedRootSnapshot,
+        name: String,
+        icon: String,
+        showPath: Bool
+    ) -> some View {
+        if showPath {
             HStack(spacing: 8) {
-                Image(systemName: root.kind.systemImage)
+                Image(systemName: icon)
                     .foregroundStyle(.secondary)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(verbatim: L10n.string(root.kind.localizedName))
+                    Text(verbatim: name)
                     Text(verbatim: root.url.path)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -190,7 +201,7 @@ struct BrowserSidebar: View {
                 }
             }
         } else {
-            Label(L10n.string(root.kind.localizedName), systemImage: root.kind.systemImage)
+            Label(name, systemImage: icon)
         }
     }
 }

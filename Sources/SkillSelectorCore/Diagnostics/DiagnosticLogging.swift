@@ -32,10 +32,14 @@ public final class DiagnosticStore: @unchecked Sendable {
 
     private let lock = NSLock()
     private let capacity: Int
+    private let subsystem: String
     private var events: [AppDiagnostic] = []
 
-    public init(capacity: Int = 200) {
+    /// - Parameter subsystem: OSLog subsystem for emitted events. The app
+    ///   layer owns its identifier and passes it here.
+    public init(capacity: Int = 200, subsystem: String = "com.skillselector.app") {
         self.capacity = max(1, capacity)
+        self.subsystem = subsystem
     }
 
     public func record(
@@ -55,7 +59,7 @@ public final class DiagnosticStore: @unchecked Sendable {
             events.removeFirst(events.count - capacity)
         }
         lock.unlock()
-        DiagnosticLogger.write(event)
+        DiagnosticLogger.write(event, subsystem: subsystem)
     }
 
     public func recent() -> [AppDiagnostic] {
@@ -67,23 +71,9 @@ public final class DiagnosticStore: @unchecked Sendable {
 }
 
 public enum DiagnosticLogger {
-    private static let subsystem = "com.skillselector.app"
-    private static let scanning = Logger(subsystem: subsystem, category: AppLogCategory.scanning.rawValue)
-    private static let persistence = Logger(subsystem: subsystem, category: AppLogCategory.persistence.rawValue)
-    private static let operations = Logger(subsystem: subsystem, category: AppLogCategory.operations.rawValue)
-
-
-    static func write(_ event: AppDiagnostic) {
+    static func write(_ event: AppDiagnostic, subsystem: String) {
         let message = "[\(event.code)] \(event.message)"
-        logger(for: event.category).info("\(message, privacy: .public)")
-    }
-
-    private static func logger(for category: AppLogCategory) -> Logger {
-        switch category {
-        case .scanning: scanning
-        case .persistence: persistence
-        case .operations: operations
-
-        }
+        Logger(subsystem: subsystem, category: event.category.rawValue)
+            .info("\(message, privacy: .public)")
     }
 }

@@ -163,24 +163,10 @@ struct MarkdownDocumentView: View {
     }
 
     private func localizedDocumentError(_ error: Error) -> String {
-        switch error {
-        case SkillDocumentReaderError.invalidEntryFilename:
-            L10n.string("The entry filename is invalid.")
-        case SkillDocumentReaderError.unauthorizedInstallationPath,
-             SkillDocumentReaderError.invalidResolvedTarget,
-             SkillDocumentReaderError.entryEscapesAuthorizedRoot:
-            L10n.string("The document is outside its authorized folder.")
-        case SkillDocumentReaderError.notRegularFile:
-            L10n.string("The Skill document is not a regular file.")
-        case SkillDocumentReaderError.unreadableFile:
-            L10n.string("The Skill document cannot be read.")
-        case SkillDocumentReaderError.invalidUTF8:
-            L10n.string("The Skill document is not valid UTF-8 text.")
-        case SkillDocumentReaderError.tooLarge:
-            L10n.string("The Skill document is larger than the 1 MiB render limit.")
-        default:
-            (error as? LocalizedError)?.errorDescription ?? String(describing: error)
+        if let error = error as? SkillDocumentReaderError {
+            return L10n.string(error.localizationKey)
         }
+        return (error as? LocalizedError)?.errorDescription ?? String(describing: error)
     }
 
 }

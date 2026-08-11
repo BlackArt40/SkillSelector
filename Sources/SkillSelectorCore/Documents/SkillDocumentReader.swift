@@ -39,6 +39,26 @@ public enum SkillDocumentReaderError: Error, Equatable, Sendable {
     case unreadableFile
     case invalidUTF8
     case tooLarge(limit: Int, actual: Int)
+
+    /// Localization key for the user-facing message. The app layer renders
+    /// it through L10n, so the mapping lives with the strings resources
+    /// instead of a view-level switch.
+    public var localizationKey: String {
+        switch self {
+        case .invalidEntryFilename:
+            "The entry filename is invalid."
+        case .unauthorizedInstallationPath, .invalidResolvedTarget, .entryEscapesAuthorizedRoot:
+            "The document is outside its authorized folder."
+        case .notRegularFile:
+            "The Skill document is not a regular file."
+        case .unreadableFile:
+            "The Skill document cannot be read."
+        case .invalidUTF8:
+            "The Skill document is not valid UTF-8 text."
+        case .tooLarge:
+            "The Skill document is larger than the 1 MiB render limit."
+        }
+    }
 }
 
 struct SkillDocumentFileMetadata {

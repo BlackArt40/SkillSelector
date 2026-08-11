@@ -51,7 +51,25 @@ final class AppModelTests: XCTestCase {
         )
     }
 
-    private func makeModel(defaults: UserDefaults? = nil) -> AppModel {
+    func testCheckEnvironmentOnLaunchAuthorizesInjectedHomeDirectory() async throws {
+        let home = FileManager.default.temporaryDirectory
+            .appending(path: "AppModelHome-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: home) }
+        let model = makeModel(homeDirectory: home)
+
+        await model.checkEnvironmentOnLaunch()
+
+        XCTAssertEqual(
+            model.authorizedRoots.first { $0.kind == .home }?.url.standardizedFileURL,
+            home.standardizedFileURL
+        )
+    }
+
+    private func makeModel(
+        defaults: UserDefaults? = nil,
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) -> AppModel {
         let suite = "AppModelGeneralTests-\(UUID().uuidString)"
         let isolatedDefaults = defaults ?? UserDefaults(suiteName: suite)!
         if defaults == nil {
@@ -72,7 +90,8 @@ final class AppModelTests: XCTestCase {
             index: index,
             bookmarks: bookmarks,
             registry: registry,
-            defaults: isolatedDefaults
+            defaults: isolatedDefaults,
+            homeDirectory: homeDirectory
         )
     }
 
