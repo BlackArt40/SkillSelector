@@ -19,6 +19,17 @@ enum L10n {
         UserDefaults.standard.string(forKey: "SkillSelector.preferredLanguage")
     }
 
+    /// Localizations shipped with the app, in canonical identifier form.
+    ///
+    /// `Bundle.main.localizations` is empty for command-line launches
+    /// (swift run), where resources live in the module bundle, and
+    /// `Bundle.localizations` lowercases identifiers ("zh-hans"), which
+    /// would not match the settings picker's tags. The supported list is
+    /// therefore declared explicitly.
+    static var availableLocalizations: [String] {
+        ["en", "zh-Hans"]
+    }
+
     static let languageDidChangeNotification = Notification.Name("SkillSelectorLanguageDidChange")
 
     static func setLanguage(_ language: String?) {

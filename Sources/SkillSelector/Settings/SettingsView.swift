@@ -63,7 +63,7 @@ struct SettingsView: View {
             return preferredLanguage
         }
         return LocalizationSelection.preferredLocalization(
-            available: Bundle.main.localizations,
+            available: L10n.availableLocalizations,
             preferredLanguages: Locale.preferredLanguages
         )
     }

@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import XCTest
+@testable import SkillSelector
 @testable import SkillSelectorCore
 
 final class LocalizationDiagnosticsTests: XCTestCase {
@@ -105,6 +106,13 @@ final class LocalizationDiagnosticsTests: XCTestCase {
         XCTAssertEqual(Set(english.keys), Set(chinese.keys))
         XCTAssertEqual(english["SkillSelector Settings"], "SkillSelector Settings")
         XCTAssertEqual(chinese["SkillSelector Settings"], "SkillSelector 设置")
+    }
+
+    func testAvailableLocalizationsIncludesEnglishAndChinese() {
+        let available = Set(L10n.availableLocalizations)
+
+        XCTAssertTrue(available.contains("en"))
+        XCTAssertTrue(available.contains("zh-Hans"))
     }
 
     func testLegacyParseIssueWithoutStructuredDiagnosticStillDecodes() throws {
