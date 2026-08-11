@@ -38,6 +38,24 @@ final class BookmarkStoreTests: XCTestCase {
         XCTAssertEqual(adapter.resolvedData, [Data("bookmark-1".utf8), Data("bookmark-2".utf8)])
     }
 
+    func testUnreadableBookmarkRebuildsFromRecordedPath() throws {
+        let adapter = BookmarkAdapterSpy()
+        let container = try makeContainer()
+        let store = BookmarkStore(container: container, adapter: adapter)
+        let url = URL(fileURLWithPath: "/tmp/custom")
+        let saved = try store.save(url: url, kind: .custom)
+        adapter.nextResolutionFails = true
+
+        let access = try store.resolve(id: saved.id)
+        access.lease.close()
+
+        XCTAssertEqual(access.root.url, url.standardizedFileURL)
+        XCTAssertEqual(access.root.kind, .custom)
+        // The failed bookmark was rebuilt from the recorded path and re-resolved.
+        XCTAssertEqual(adapter.createdURLs, [url.standardizedFileURL, url.standardizedFileURL])
+        XCTAssertEqual(adapter.resolvedData, [Data("bookmark-1".utf8), Data("bookmark-2".utf8)])
+    }
+
     func testRootsThrowsForPersistedInvalidKind() throws {
         let container = try makeContainer()
         let context = ModelContext(container)
@@ -144,6 +162,7 @@ final class BookmarkStoreTests: XCTestCase {
 
 private final class BookmarkAdapterSpy: BookmarkDataCreating, @unchecked Sendable {
     var nextResolutionIsStale = false
+    var nextResolutionFails = false
     var shouldStartAccess = true
     private(set) var createdURLs: [URL] = []
     private(set) var resolvedData: [Data] = []
@@ -157,6 +176,10 @@ private final class BookmarkAdapterSpy: BookmarkDataCreating, @unchecked Sendabl
 
     func resolveBookmarkData(_ data: Data) throws -> BookmarkResolution {
         resolvedData.append(data)
+        if nextResolutionFails {
+            nextResolutionFails = false
+            throw CocoaError(.fileReadCorruptFile)
+        }
         let stale = nextResolutionIsStale
         nextResolutionIsStale = false
         let path = createdURLs.last?.path ?? "/tmp/unknown"

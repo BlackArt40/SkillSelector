@@ -129,7 +129,20 @@ public final class BookmarkStore {
             throw BookmarkStoreError.invalidRootKind(record.kindRawValue)
         }
 
-        let resolution = try adapter.resolveBookmarkData(record.bookmarkData)
+        let resolution: BookmarkResolution
+        do {
+            resolution = try adapter.resolveBookmarkData(record.bookmarkData)
+        } catch {
+            // A bookmark that can no longer be resolved (for example one
+            // created outside the sandbox in an earlier session) is rebuilt
+            // from the recorded path so the root heals itself on next use.
+            let rebuilt = try adapter.createBookmarkData(
+                for: URL(fileURLWithPath: record.path)
+            )
+            record.bookmarkData = rebuilt
+            try context.save()
+            resolution = try adapter.resolveBookmarkData(rebuilt)
+        }
         let url = resolution.url.standardizedFileURL
         if resolution.isStale {
             let records = try context.fetch(FetchDescriptor<AuthorizedRootRecord>())
