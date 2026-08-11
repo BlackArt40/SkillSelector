@@ -55,6 +55,7 @@
 "No authorized folder is associated with this Skill." = "此 Skill 没有关联的已授权文件夹。";
 "No Matching Skills" = "没有匹配的 Skill";
 "No Skills Indexed" = "尚未索引 Skill";
+"Add another project to scan for Skills." = "添加另一个项目以扫描 Skill。";
 "None" = "无";
 "Not available" = "不可用";
 "Open Settings" = "打开设置";
@@ -63,7 +64,6 @@
 "Projects" = "项目";
 "Refresh Failed" = "刷新失败";
 "Refresh the authorized folders to check again." = "刷新已授权的文件夹以再次检查。";
-"Refresh Skills" = "刷新 Skill";
 "Remote" = "远程";
 "Delete Custom Description" = "删除自定义简介";
 "Reveal Skill Document in Finder" = "在访达中显示 Skill 文档";

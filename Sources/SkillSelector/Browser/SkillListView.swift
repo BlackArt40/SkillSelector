@@ -13,7 +13,6 @@ struct SkillListView: View {
     let showFolderGroups: Bool
     let refreshState: RefreshState
     let agentNamesByID: [String: String]
-    let onRefresh: () -> Void
     let onClearFilters: () -> Void
     var onOperation: ((FileOperationKind, SkillSnapshot) -> Void)?
     var onRevealInFinder: ((SkillSnapshot) -> Void)?
@@ -146,13 +145,10 @@ struct SkillListView: View {
             ContentUnavailableView {
                 Label(L10n.string("No Skills Indexed"), systemImage: "tray")
             } description: {
-                Text(verbatim: L10n.string("Refresh the authorized folders or add another project."))
+                Text(verbatim: L10n.string("Add another project to scan for Skills."))
             } actions: {
-                VStack(spacing: 8) {
-                    Button(L10n.string("Refresh Skills"), action: onRefresh)
-                    AuthorizationViews(showsHeading: false)
-                        .frame(width: 230)
-                }
+                AuthorizationViews(showsHeading: false)
+                    .frame(width: 230)
             }
         } else if hasActiveFilters {
             ContentUnavailableView {

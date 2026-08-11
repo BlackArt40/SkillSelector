@@ -55,6 +55,7 @@
 "No authorized folder is associated with this Skill." = "No authorized folder is associated with this Skill.";
 "No Matching Skills" = "No Matching Skills";
 "No Skills Indexed" = "No Skills Indexed";
+"Add another project to scan for Skills." = "Add another project to scan for Skills.";
 "None" = "None";
 "Not available" = "Not available";
 "Open Settings" = "Open Settings";
@@ -63,7 +64,6 @@
 "Projects" = "Projects";
 "Refresh Failed" = "Refresh Failed";
 "Refresh the authorized folders to check again." = "Refresh the authorized folders to check again.";
-"Refresh Skills" = "Refresh Skills";
 "Remote" = "Remote";
 "Delete Custom Description" = "Delete Custom Description";
 "Reveal Skill Document in Finder" = "Reveal Skill Document in Finder";

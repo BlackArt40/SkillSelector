@@ -54,7 +54,6 @@ struct RootView: View {
                 showFolderGroups: currentDestination.showsFolderGroups,
                 refreshState: model.refreshState,
                 agentNamesByID: agentNamesByID,
-                onRefresh: refresh,
                 onClearFilters: clearFilters,
                 onOperation: { operation, skill in
                     if operation == .delete {
@@ -167,10 +166,6 @@ struct RootView: View {
     }
 
 
-
-    private func refresh() {
-        Task { await model.refresh() }
-    }
 
     private func chooseDestination(for operation: FileOperationKind, skill: SkillSnapshot) {
         let panel = NSOpenPanel()
