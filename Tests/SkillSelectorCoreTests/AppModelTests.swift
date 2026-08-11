@@ -36,6 +36,21 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.authorizedRoots.isEmpty)
     }
 
+    func testAuthorizingSecondHomeRootReusesExistingRoot() async throws {
+        let model = makeModel()
+
+        await model.authorize(FileManager.default.homeDirectoryForCurrentUser, as: .home)
+        XCTAssertEqual(model.authorizedRoots.filter { $0.kind == .home }.count, 1)
+
+        // A second .home import must not create another Home Directory entry.
+        await model.authorize(URL(fileURLWithPath: "/tmp/other-home"), as: .home)
+        XCTAssertEqual(model.authorizedRoots.filter { $0.kind == .home }.count, 1)
+        XCTAssertEqual(
+            model.authorizedRoots.first { $0.kind == .home }?.url.standardizedFileURL,
+            FileManager.default.homeDirectoryForCurrentUser.standardizedFileURL
+        )
+    }
+
     private func makeModel(defaults: UserDefaults? = nil) -> AppModel {
         let suite = "AppModelGeneralTests-\(UUID().uuidString)"
         let isolatedDefaults = defaults ?? UserDefaults(suiteName: suite)!

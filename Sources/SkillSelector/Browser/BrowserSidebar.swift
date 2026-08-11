@@ -99,6 +99,11 @@ struct BrowserSidebar: View {
         return Set(groups.compactMap { $0.value.count > 1 ? $0.key : nil })
     }
 
+    private var duplicateSystemNames: Set<String> {
+        let groups = Dictionary(grouping: systemRoots, by: { $0.url.lastPathComponent.lowercased() })
+        return Set(groups.compactMap { $0.value.count > 1 ? $0.key : nil })
+    }
+
     var body: some View {
         List(selection: $destination) {
             Section {
@@ -111,7 +116,7 @@ struct BrowserSidebar: View {
             if !systemRoots.isEmpty {
                 Section(L10n.string("System")) {
                     ForEach(systemRoots) { root in
-                        Label(L10n.string(root.kind.localizedName), systemImage: root.kind.systemImage)
+                        systemLabel(root)
                             .tag(BrowserDestination.system(rootID: root.id))
                             .dropDestination(for: SkillDragPayload.self) { items, _ in
                                 guard let item = items.first,
@@ -167,6 +172,25 @@ struct BrowserSidebar: View {
             }
         } else {
             Label(project.displayName, systemImage: "folder")
+        }
+    }
+
+    @ViewBuilder
+    private func systemLabel(_ root: AuthorizedRootSnapshot) -> some View {
+        if duplicateSystemNames.contains(root.url.lastPathComponent.lowercased()) {
+            HStack(spacing: 8) {
+                Image(systemName: root.kind.systemImage)
+                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(verbatim: L10n.string(root.kind.localizedName))
+                    Text(verbatim: root.url.path)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+        } else {
+            Label(L10n.string(root.kind.localizedName), systemImage: root.kind.systemImage)
         }
     }
 }

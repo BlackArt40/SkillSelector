@@ -6,6 +6,10 @@
 "Authorize" = "授权";
 "Authorize Skill Folders" = "授权 Skill 文件夹";
 "Authorize your home directory or add a project to find local Skills." = "授权主目录或添加项目，以查找本机 Skill。";
+"Home Directory" = "主目录";
+"Project Directory" = "项目目录";
+"System Skill Directory" = "系统 Skill 目录";
+"Custom Skill Directory" = "自定义 Skill 目录";
 "Change the search or filters to show more Skills." = "更改搜索条件或筛选器以显示更多 Skill。";
 "Choose a Skill from the list to inspect its local details." = "从列表中选择一个 Skill 以查看本机详情。";
 "Choose a project directory to scan for all Skills." = "选择要扫描所有 Skill 的项目目录。";

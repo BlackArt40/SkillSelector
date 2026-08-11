@@ -6,6 +6,10 @@
 "Authorize" = "Authorize";
 "Authorize Skill Folders" = "Authorize Skill Folders";
 "Authorize your home directory or add a project to find local Skills." = "Authorize your home directory or add a project to find local Skills.";
+"Home Directory" = "Home Directory";
+"Project Directory" = "Project Directory";
+"System Skill Directory" = "System Skill Directory";
+"Custom Skill Directory" = "Custom Skill Directory";
 "Change the search or filters to show more Skills." = "Change the search or filters to show more Skills.";
 "Choose a Skill from the list to inspect its local details." = "Choose a Skill from the list to inspect its local details.";
 "Choose a project directory to scan for all Skills." = "Choose a project directory to scan for all Skills.";

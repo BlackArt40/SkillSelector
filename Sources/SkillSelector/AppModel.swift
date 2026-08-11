@@ -149,6 +149,17 @@ struct SkillSelection: Hashable, Identifiable {
             return
         }
         do {
+            // The home root is unique: the auto-scan already authorizes the
+            // user's home directory, and scanning it covers every declared
+            // ~/.../skills folder. Importing another directory as .home would
+            // create a second, empty "Home Directory" entry.
+            if kind == .home,
+               let existingHome = try bookmarks.roots().first(where: { $0.kind == .home }) {
+                authorizedRoots = try bookmarks.roots()
+                rootsByID = Dictionary(uniqueKeysWithValues: authorizedRoots.map { ($0.id, $0) })
+                await refresh()
+                return
+            }
             _ = try bookmarks.save(url: url, kind: kind)
             authorizedRoots = try bookmarks.roots()
             rootsByID = Dictionary(uniqueKeysWithValues: authorizedRoots.map { ($0.id, $0) })
