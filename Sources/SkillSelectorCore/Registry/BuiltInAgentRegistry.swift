@@ -76,6 +76,30 @@ public enum BuiltInAgentRegistry {
                 globalRoots: ["~/.copilot/skills"],
                 projectPatterns: [".github/skills"]
             ),
+            AgentDefinition(
+                id: "amp",
+                displayName: "Amp",
+                globalRoots: ["~/.config/amp/skills"],
+                projectPatterns: []
+            ),
+            AgentDefinition(
+                id: "tabnine",
+                displayName: "Tabnine",
+                globalRoots: ["~/.tabnine/agent/skills"],
+                projectPatterns: []
+            ),
+            AgentDefinition(
+                id: "letta",
+                displayName: "Letta",
+                globalRoots: ["~/.letta/skills"],
+                projectPatterns: []
+            ),
+            AgentDefinition(
+                id: "openhands",
+                displayName: "OpenHands",
+                globalRoots: [],
+                projectPatterns: [".openhands/skills"]
+            ),
         ]
 
         return AgentRegistry(

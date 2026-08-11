@@ -8,7 +8,8 @@ final class AgentRegistryTests: XCTestCase {
         XCTAssertEqual(ids, Set([
             "claude-code", "codex", "qoder", "codebuddy", "opencode",
             "cursor", "kilo-code", "cline", "roo-code", "windsurf",
-            "gemini-cli", "github-copilot",
+            "gemini-cli", "github-copilot", "amp", "tabnine", "letta",
+            "openhands",
         ]))
     }
 
@@ -60,6 +61,10 @@ final class AgentRegistryTests: XCTestCase {
             "windsurf": (["~/.codeium/windsurf/skills", "/Library/Application Support/Windsurf/skills"], [".windsurf/skills"]),
             "gemini-cli": (["~/.gemini/skills"], [".gemini/skills"]),
             "github-copilot": (["~/.copilot/skills"], [".github/skills"]),
+            "amp": (["~/.config/amp/skills"], []),
+            "tabnine": (["~/.tabnine/agent/skills"], []),
+            "letta": (["~/.letta/skills"], []),
+            "openhands": ([], [".openhands/skills"]),
         ]
         let registry = BuiltInAgentRegistry.make()
         let definitions = Dictionary(uniqueKeysWithValues: registry.definitions.map { ($0.id, $0) })
@@ -134,7 +139,7 @@ final class AgentRegistryTests: XCTestCase {
             customDefinitions: [customCodex, customAgent]
         )
 
-        XCTAssertEqual(registry.definitions.count, 13)
+        XCTAssertEqual(registry.definitions.count, 17)
         XCTAssertEqual(try XCTUnwrap(registry.definition(id: "codex")).displayName, "Custom Codex")
         XCTAssertEqual(try XCTUnwrap(registry.definition(id: "local-agent")).displayName, "Local Agent")
     }

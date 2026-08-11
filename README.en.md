@@ -19,7 +19,7 @@ A native macOS app for managing Agent Skills on your local machine. Browse, copy
 
 ## Supported Agents
 
-Claude Code, Codex, Qoder, CodeBuddy, OpenCode, Cursor, Kilo Code, Cline, Roo Code, Windsurf, Gemini CLI, and GitHub Copilot. Roo Code works but only shows when detected or manually enabled. You can define custom Agents pointing to any local Skill directory.
+Claude Code, Codex, Qoder, CodeBuddy, OpenCode, Cursor, Kilo Code, Cline, Roo Code, Windsurf, Gemini CLI, GitHub Copilot, Amp, Tabnine, Letta, and OpenHands. Roo Code works but only shows when detected or manually enabled. You can define custom Agents pointing to any local Skill directory.
 
 ## Privacy
 

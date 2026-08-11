@@ -19,7 +19,7 @@ macOS 原生应用，管理本地 Agent Skill。浏览、复制、移动、删�
 
 ## 支持的 Agent
 
-Claude Code、Codex、Qoder、CodeBuddy、OpenCode、Cursor、Kilo Code、Cline、Roo Code、Windsurf、Gemini CLI、GitHub Copilot。Roo Code 仅在检测到或手动启用时显示。可自定义 Agent 指向任意本地 Skill 目录。
+Claude Code、Codex、Qoder、CodeBuddy、OpenCode、Cursor、Kilo Code、Cline、Roo Code、Windsurf、Gemini CLI、GitHub Copilot、Amp、Tabnine、Letta、OpenHands。Roo Code 仅在检测到或手动启用时显示。可自定义 Agent 指向任意本地 Skill 目录。
 
 ## 隐私
 

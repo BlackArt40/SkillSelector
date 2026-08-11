@@ -11,7 +11,8 @@ final class BuiltInAgentRegistryTests: XCTestCase {
             [
                 "claude-code", "codex", "qoder", "codebuddy", "opencode",
                 "cursor", "kilo-code", "cline", "roo-code", "windsurf",
-                "gemini-cli", "github-copilot",
+                "gemini-cli", "github-copilot", "amp", "tabnine", "letta",
+                "openhands",
             ]
         )
     }
@@ -21,11 +22,13 @@ final class BuiltInAgentRegistryTests: XCTestCase {
         XCTAssertEqual(Set(ids).count, ids.count)
     }
 
-    func testEveryDefinitionHasDisplayNameAndRoots() {
+    func testEveryDefinitionHasDisplayNameAndAtLeastOneRoot() {
         for definition in registry.definitions {
             XCTAssertFalse(definition.displayName.isEmpty, definition.id)
-            XCTAssertFalse(definition.globalRoots.isEmpty, definition.id)
-            XCTAssertFalse(definition.projectPatterns.isEmpty, definition.id)
+            XCTAssertFalse(
+                definition.globalRoots.isEmpty && definition.projectPatterns.isEmpty,
+                definition.id
+            )
         }
     }
 
