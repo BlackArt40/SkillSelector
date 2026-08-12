@@ -98,7 +98,6 @@ final class PersistenceRecordTests: XCTestCase {
             resolvedTarget: "/tmp/targets/demo",
             name: "demo",
             localDescription: "local",
-            customDescription: "custom",
             modificationDate: date,
             agentIDsByRootData: Data("{\"root-1\":[\"codex\"]}".utf8),
             entryFilename: "SKILL.md",
@@ -114,7 +113,6 @@ final class PersistenceRecordTests: XCTestCase {
         XCTAssertEqual(loaded.resolvedTarget, "/tmp/targets/demo")
         XCTAssertEqual(loaded.name, "demo")
         XCTAssertEqual(loaded.localDescription, "local")
-        XCTAssertEqual(loaded.customDescription, "custom")
         XCTAssertEqual(loaded.modificationDate, date)
         XCTAssertEqual(
             loaded.agentIDsByRootData,
@@ -129,7 +127,6 @@ final class PersistenceRecordTests: XCTestCase {
 
         XCTAssertNil(record.resolvedTarget)
         XCTAssertNil(record.localDescription)
-        XCTAssertNil(record.customDescription)
         XCTAssertNil(record.modificationDate)
         XCTAssertEqual(record.agentIDsByRootData, Data("{}".utf8))
         XCTAssertEqual(record.parseDiagnosticsData, Data())
@@ -158,7 +155,6 @@ final class PersistenceRecordTests: XCTestCase {
             resolvedTarget: nil,
             name: "demo",
             localDescription: nil,
-            customDescription: nil,
             modificationDate: nil,
             agentIDs: ["codex"],
             rootIDs: ["root-1"],

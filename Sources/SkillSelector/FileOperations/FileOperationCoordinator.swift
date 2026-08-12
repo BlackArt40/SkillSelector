@@ -53,7 +53,8 @@ final class FileOperationCoordinator {
         _ operation: FileOperationKind,
         for skill: SkillSnapshot,
         destinationRootURL: URL? = nil,
-        conflictPolicy: FileConflictPolicy = .keepBoth
+        conflictPolicy: FileConflictPolicy = .keepBoth,
+        destinationIsArbitrary: Bool = false
     ) async {
         guard pendingOperationPlan == nil,
               !isOperating else {
@@ -72,7 +73,8 @@ final class FileOperationCoordinator {
                 .resolveAccess(
                     for: skill,
                     destinationRootURL: destinationRootURL,
-                    authorizedRoots: owner.authorizedRoots
+                    authorizedRoots: owner.authorizedRoots,
+                    destinationIsArbitrary: destinationIsArbitrary
                 )
             let currentRoots = try bookmarks.roots()
             let currentAliases = owner.snapshots.map {
@@ -96,7 +98,7 @@ final class FileOperationCoordinator {
                 destinationRootURL: destinationRootURL,
                 proposedName: nil,
                 conflictPolicy: operation == .delete ? .fail : conflictPolicy,
-                metadata: SkillAppMetadata(customDescription: nil)
+                destinationIsArbitrary: destinationIsArbitrary
             )
             let plan = try fileOperator.plan(request)
             pendingContext = PendingOperationContext(
@@ -124,7 +126,7 @@ final class FileOperationCoordinator {
             destinationRootURL: context.request.destinationRootURL,
             proposedName: context.request.proposedName,
             conflictPolicy: policy,
-            metadata: context.request.metadata
+            destinationIsArbitrary: context.request.destinationIsArbitrary
         )
         do {
             pendingOperationPlan = try context.fileOperator.plan(request)
@@ -167,15 +169,9 @@ final class FileOperationCoordinator {
                 rootIDs: Set(result.refreshRootIDs)
             )
             try owner?.reloadSnapshot()
-            if let destinationPath = result.destinationURL?.path {
-                try index.applyOperationMetadataTransfer(
-                    result.metadataTransfer,
-                    to: destinationPath
-                )
-                try owner?.reloadSnapshot()
-                if result.metadataTransfer.isMove {
-                    owner?.updateSelection(to: destinationPath)
-                }
+            if let destinationPath = result.destinationURL?.path,
+               context.request.operation == .move {
+                owner?.updateSelection(to: destinationPath)
             }
             owner?.setRefreshState(.finished(summary))
             operationError = nil
@@ -250,9 +246,3 @@ final class FileOperationCoordinator {
     }
 }
 
-private extension FileOperationMetadataTransfer {
-    var isMove: Bool {
-        if case .move = self { return true }
-        return false
-    }
-}

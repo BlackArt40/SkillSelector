@@ -32,20 +32,6 @@ public struct ConfirmationToken: Codable, Hashable, Sendable {
     }
 }
 
-public struct SkillAppMetadata: Codable, Hashable, Sendable {
-    public let customDescription: String?
-
-    public init(customDescription: String?) {
-        self.customDescription = customDescription
-    }
-}
-
-public enum FileOperationMetadataTransfer: Codable, Hashable, Sendable {
-    case none
-    case copy(SkillAppMetadata)
-    case move(SkillAppMetadata)
-}
-
 public struct IndexedSkillAlias: Codable, Hashable, Sendable {
     public let path: String
     public let resolvedTarget: String?
@@ -68,7 +54,10 @@ public struct FileOperationRequest: Hashable, Sendable {
     public let destinationRootURL: URL?
     public let proposedName: String?
     public let conflictPolicy: FileConflictPolicy
-    public let metadata: SkillAppMetadata
+    /// True when the destination folder was picked from an open panel and is
+    /// not a registered Skill root — copy/move then target the folder as-is
+    /// instead of mapping it through the Agent registry.
+    public let destinationIsArbitrary: Bool
 
     public init(
         operation: FileOperationKind,
@@ -78,7 +67,7 @@ public struct FileOperationRequest: Hashable, Sendable {
         destinationRootURL: URL? = nil,
         proposedName: String? = nil,
         conflictPolicy: FileConflictPolicy = .fail,
-        metadata: SkillAppMetadata = SkillAppMetadata(customDescription: nil)
+        destinationIsArbitrary: Bool = false
     ) {
         self.operation = operation
         self.sourceURL = sourceURL.standardizedFileURL
@@ -87,7 +76,7 @@ public struct FileOperationRequest: Hashable, Sendable {
         self.destinationRootURL = destinationRootURL?.standardizedFileURL
         self.proposedName = proposedName
         self.conflictPolicy = conflictPolicy
-        self.metadata = metadata
+        self.destinationIsArbitrary = destinationIsArbitrary
     }
 }
 
@@ -111,7 +100,6 @@ public struct FileOperationPlan: Hashable, Identifiable, Sendable {
     public let linkTargetForm: LinkTargetForm?
     public let affectedIndexedAliases: [String]
     public let affectedIndexedRootIDs: [String]
-    public let metadataTransfer: FileOperationMetadataTransfer
     public let confirmationToken: ConfirmationToken
     public let replacementConfirmationToken: ConfirmationToken?
 
@@ -141,7 +129,6 @@ public struct FileOperationPlan: Hashable, Identifiable, Sendable {
         linkTargetForm: LinkTargetForm?,
         affectedIndexedAliases: [String],
         affectedIndexedRootIDs: [String],
-        metadataTransfer: FileOperationMetadataTransfer,
         confirmationToken: ConfirmationToken,
         replacementConfirmationToken: ConfirmationToken?,
         sourceSnapshot: FileOperationItemSnapshot,
@@ -168,7 +155,6 @@ public struct FileOperationPlan: Hashable, Identifiable, Sendable {
         self.linkTargetForm = linkTargetForm
         self.affectedIndexedAliases = affectedIndexedAliases
         self.affectedIndexedRootIDs = affectedIndexedRootIDs
-        self.metadataTransfer = metadataTransfer
         self.confirmationToken = confirmationToken
         self.replacementConfirmationToken = replacementConfirmationToken
         self.sourceSnapshot = sourceSnapshot
@@ -187,20 +173,17 @@ public struct FileOperationResult: Hashable, Sendable {
     public let sourceURL: URL
     public let destinationURL: URL?
     public let refreshRootIDs: [String]
-    public let metadataTransfer: FileOperationMetadataTransfer
 
     public init(
         outcome: FileOperationOutcome,
         sourceURL: URL,
         destinationURL: URL?,
-        refreshRootIDs: [String],
-        metadataTransfer: FileOperationMetadataTransfer
+        refreshRootIDs: [String]
     ) {
         self.outcome = outcome
         self.sourceURL = sourceURL
         self.destinationURL = destinationURL
         self.refreshRootIDs = refreshRootIDs
-        self.metadataTransfer = metadataTransfer
     }
 }
 

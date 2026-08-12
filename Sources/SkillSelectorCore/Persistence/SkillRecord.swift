@@ -7,7 +7,6 @@ public final class SkillRecord {
     public var resolvedTarget: String?
     public var name: String
     public var localDescription: String?
-    public var customDescription: String?
     public var modificationDate: Date?
     // Optional preserves compatibility with stores created before source discovery existed.
     public var agentIDsByRootData: Data
@@ -19,7 +18,6 @@ public final class SkillRecord {
         resolvedTarget: String? = nil,
         name: String,
         localDescription: String? = nil,
-        customDescription: String? = nil,
         modificationDate: Date? = nil,
         agentIDsByRootData: Data = Data("{}".utf8),
         entryFilename: String,
@@ -29,7 +27,6 @@ public final class SkillRecord {
         self.resolvedTarget = resolvedTarget
         self.name = name
         self.localDescription = localDescription
-        self.customDescription = customDescription
         self.modificationDate = modificationDate
         self.agentIDsByRootData = agentIDsByRootData
         self.entryFilename = entryFilename

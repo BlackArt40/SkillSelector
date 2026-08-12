@@ -91,32 +91,6 @@ public final class SkillIndex {
         return try context.fetch(descriptor).map { try snapshot($0) }
     }
 
-    @discardableResult
-    public func setCustomDescription(path: String, value: String?) throws -> SkillSnapshot {
-        let record = try requiredRecord(path: path)
-        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
-        record.customDescription = trimmed?.isEmpty == false ? trimmed : nil
-        try context.save()
-        return try snapshot(record)
-    }
-
-
-    public func applyOperationMetadataTransfer(
-        _ transfer: FileOperationMetadataTransfer,
-        to destinationPath: String
-    ) throws {
-        let metadata: SkillAppMetadata
-        switch transfer {
-        case .none:
-            return
-        case .copy(let value), .move(let value):
-            metadata = value
-        }
-        let record = try requiredRecord(path: destinationPath)
-        record.customDescription = metadata.customDescription
-        try context.save()
-    }
-
     private func requiredRecord(path: String) throws -> SkillRecord {
         let normalizedPath = URL(fileURLWithPath: path).standardizedFileURL.path
         guard let record = try context.fetch(FetchDescriptor<SkillRecord>())
@@ -160,7 +134,6 @@ public final class SkillIndex {
             resolvedTarget: record.resolvedTarget,
             name: record.name,
             localDescription: record.localDescription,
-            customDescription: record.customDescription,
             modificationDate: record.modificationDate,
             agentIDs: associations.values.reduce(into: Set<String>()) { result, agentIDs in
                 result.formUnion(agentIDs)

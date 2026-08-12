@@ -323,14 +323,16 @@ struct SkillSelection: Hashable, Identifiable {
         _ operation: FileOperationKind,
         for skill: SkillSnapshot,
         destinationRootURL: URL? = nil,
-        conflictPolicy: FileConflictPolicy = .keepBoth
+        conflictPolicy: FileConflictPolicy = .keepBoth,
+        destinationIsArbitrary: Bool = false
     ) async {
         await waitForActiveRefresh()
         await fileOperations.plan(
             operation,
             for: skill,
             destinationRootURL: destinationRootURL,
-            conflictPolicy: conflictPolicy
+            conflictPolicy: conflictPolicy,
+            destinationIsArbitrary: destinationIsArbitrary
         )
     }
 
@@ -356,15 +358,6 @@ struct SkillSelection: Hashable, Identifiable {
 
     func openDocumentInDefaultEditor(for skill: SkillSnapshot) throws {
         try documentManager.openDocumentInDefaultEditor(for: skill, authorizedRoots: authorizedRoots)
-    }
-
-    func saveCustomDescription(path: String, value: String?) throws {
-        _ = try index.setCustomDescription(path: path, value: value)
-        try reloadSnapshot()
-    }
-
-    func restoreDefaultDescription(path: String) throws {
-        try saveCustomDescription(path: path, value: nil)
     }
 
     private func performRefresh() async {

@@ -53,8 +53,7 @@ final class SkillFileOperatorTests: XCTestCase {
         XCTAssertEqual(plan.destinationURL, destinationRoot.appending(path: "demo").standardizedFileURL)
         XCTAssertEqual(plan.destinationAgentIDs, ["codex"])
         XCTAssertEqual(plan.entryFilename, "SKILL.md")
-        XCTAssertEqual(plan.metadataTransfer, .copy(SkillAppMetadata(customDescription: "Mine")))
-
+        
         let result = try await operatorUnderTest.execute(
             plan,
             confirmation: plan.confirmationToken,
@@ -87,8 +86,7 @@ final class SkillFileOperatorTests: XCTestCase {
         let operatorUnderTest = makeOperator()
         let plan = try operatorUnderTest.plan(request(.move, source: source, destination: destinationRoot))
 
-        XCTAssertEqual(plan.metadataTransfer, .move(SkillAppMetadata(customDescription: "Mine")))
-        XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
+                XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
 
         let result = try await operatorUnderTest.execute(plan, confirmation: plan.confirmationToken)
 
@@ -931,6 +929,64 @@ final class SkillFileOperatorTests: XCTestCase {
         })
     }
 
+    func testCopyToArbitraryFolderPlansAndExecutesWithoutRegisteredRoot() async throws {
+        let source = try makeSkill(in: sourceRoot, name: "demo")
+        // An arbitrary folder outside any authorized/registered root.
+        let arbitrary = fixture.appending(path: "Downloads")
+        try FileManager.default.createDirectory(at: arbitrary, withIntermediateDirectories: true)
+        let operatorUnderTest = makeOperator()
+
+        let plan = try operatorUnderTest.plan(
+            FileOperationRequest(
+                operation: .copy,
+                sourceURL: source,
+                sourceEntryFilename: "SKILL.md",
+                destinationRootURL: arbitrary,
+                conflictPolicy: .keepBoth,
+                destinationIsArbitrary: true
+            )
+        )
+
+        XCTAssertNil(plan.destinationRootID)
+        XCTAssertEqual(plan.destinationRootURL, arbitrary.standardizedFileURL)
+        XCTAssertEqual(
+            plan.destinationURL,
+            arbitrary.appending(path: "demo").standardizedFileURL
+        )
+
+        try await operatorUnderTest.execute(
+            plan,
+            confirmation: plan.confirmationToken,
+            replacementConfirmation: plan.replacementConfirmationToken
+        )
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: arbitrary.appending(path: "demo/SKILL.md").path)
+        )
+    }
+
+    func testCopyToArbitraryFolderKeepsBothOnNameConflict() throws {
+        let source = try makeSkill(in: sourceRoot, name: "demo")
+        let arbitrary = fixture.appending(path: "Downloads")
+        try FileManager.default.createDirectory(at: arbitrary, withIntermediateDirectories: true)
+        try makeSkill(in: arbitrary, name: "demo", contents: "existing")
+
+        let plan = try makeOperator().plan(
+            FileOperationRequest(
+                operation: .copy,
+                sourceURL: source,
+                sourceEntryFilename: "SKILL.md",
+                destinationRootURL: arbitrary,
+                conflictPolicy: .keepBoth,
+                destinationIsArbitrary: true
+            )
+        )
+
+        XCTAssertEqual(
+            plan.destinationURL,
+            arbitrary.appending(path: "demo copy").standardizedFileURL
+        )
+    }
+
     private func makeOperator(
         indexed: [IndexedSkillAlias] = [],
         fileSystem: FileOperationFileSystem = .live
@@ -959,8 +1015,7 @@ final class SkillFileOperatorTests: XCTestCase {
             sourceEntryFilename: "SKILL.md",
             destinationRootURL: destination,
             proposedName: name,
-            conflictPolicy: conflict,
-            metadata: SkillAppMetadata(customDescription: "Mine")
+            conflictPolicy: conflict
         )
     }
 

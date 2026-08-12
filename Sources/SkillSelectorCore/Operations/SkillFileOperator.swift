@@ -239,7 +239,8 @@ public final class SkillFileOperator: @unchecked Sendable {
                 sourceEntryFilename: request.sourceEntryFilename,
                 conflictPolicy: request.conflictPolicy,
                 roots: roots,
-                registry: registry
+                registry: registry,
+                arbitrary: request.destinationIsArbitrary
             )
         }
 
@@ -275,11 +276,6 @@ public final class SkillFileOperator: @unchecked Sendable {
             replacing: replacement,
             sourceIsLink: sourceSnapshot.kind == .symbolicLink
         )
-        let metadataTransfer: FileOperationMetadataTransfer = switch request.operation {
-        case .copy: .copy(request.metadata)
-        case .move: .move(request.metadata)
-        case .delete, .createSymbolicLink: .none
-        }
         let confirmation = ConfirmationToken()
         let replacementConfirmation = replacement ? ConfirmationToken() : nil
         let plan = FileOperationPlan(
@@ -290,7 +286,7 @@ public final class SkillFileOperator: @unchecked Sendable {
             resolvedSourceURL: resolvedSource,
             destinationRootURL: destination?.url.deletingLastPathComponent(),
             destinationURL: destination?.url,
-            destinationRootID: destination?.root.id,
+            destinationRootID: destination?.root?.id,
             destinationAgentIDs: destination?.agentIDs ?? [],
             entryFilename: destination?.entryFilename ?? request.sourceEntryFilename,
             authorizationSnapshotFingerprint: authorizationFingerprint(roots),
@@ -303,7 +299,6 @@ public final class SkillFileOperator: @unchecked Sendable {
             linkTargetForm: link.form,
             affectedIndexedAliases: aliases.map(\.path).sorted(),
             affectedIndexedRootIDs: Array(Set(aliases.flatMap(\.rootIDs))).sorted(),
-            metadataTransfer: metadataTransfer,
             confirmationToken: confirmation,
             replacementConfirmationToken: replacementConfirmation,
             sourceSnapshot: sourceSnapshot,
@@ -363,15 +358,19 @@ public final class SkillFileOperator: @unchecked Sendable {
             guard try fileSystem.snapshot(destinationRoot) == plan.destinationRootSnapshot else {
                 throw SkillFileOperatorError.destinationChanged
             }
-            let currentDestination = try validateRegisteredRoot(
-                destinationRoot,
-                entryFilename: plan.entryFilename,
-                roots: roots,
-                registry: registry
-            )
-            guard currentDestination.root.id == plan.destinationRootID,
-                  currentDestination.agentIDs == plan.destinationAgentIDs else {
-                throw SkillFileOperatorError.registryChanged
+            // Arbitrary (user-picked) destinations have no registered root
+            // identity; only registered destinations are re-validated.
+            if let destinationRootID = plan.destinationRootID {
+                let currentDestination = try validateRegisteredRoot(
+                    destinationRoot,
+                    entryFilename: plan.entryFilename,
+                    roots: roots,
+                    registry: registry
+                )
+                guard currentDestination.root.id == destinationRootID,
+                      currentDestination.agentIDs == plan.destinationAgentIDs else {
+                    throw SkillFileOperatorError.registryChanged
+                }
             }
         }
         if let destinationURL = plan.destinationURL {
@@ -430,7 +429,7 @@ public final class SkillFileOperator: @unchecked Sendable {
     }
 
     private struct DestinationPlan {
-        let root: AuthorizedRootSnapshot
+        let root: AuthorizedRootSnapshot?
         let url: URL
         let agentIDs: [String]
         let entryFilename: String
@@ -483,16 +482,25 @@ public final class SkillFileOperator: @unchecked Sendable {
         sourceEntryFilename: String,
         conflictPolicy: FileConflictPolicy,
         roots: [AuthorizedRootSnapshot],
-        registry: AgentRegistry
+        registry: AgentRegistry,
+        arbitrary: Bool
     ) throws -> DestinationPlan {
         try validateName(requestedName)
-        let match = try validateRegisteredRoot(
-            rootURL,
-            entryFilename: sourceEntryFilename,
-            roots: roots,
-            registry: registry
-        )
-        let siblings = try fileSystem.contents(match.url)
+        let match: RegisteredRootMatch?
+        if arbitrary {
+            // Any user-picked folder is a valid copy/move target; it does not
+            // need to map through the Agent registry or an authorized root.
+            match = nil
+        } else {
+            match = try validateRegisteredRoot(
+                rootURL,
+                entryFilename: sourceEntryFilename,
+                roots: roots,
+                registry: registry
+            )
+        }
+        let targetRoot = match?.url ?? rootURL.standardizedFileURL
+        let siblings = try fileSystem.contents(targetRoot)
         let normalized = Dictionary(grouping: siblings, by: { normalizedName($0.lastPathComponent) })
         var name = requestedName
         let conflict = normalized[normalizedName(name)]?.first
@@ -511,10 +519,10 @@ public final class SkillFileOperator: @unchecked Sendable {
             }
         }
         return DestinationPlan(
-            root: match.root,
-            url: match.url.appending(path: name).standardizedFileURL,
-            agentIDs: match.agentIDs,
-            entryFilename: match.entryFilename,
+            root: match?.root,
+            url: targetRoot.appending(path: name).standardizedFileURL,
+            agentIDs: match?.agentIDs ?? [],
+            entryFilename: match?.entryFilename ?? sourceEntryFilename,
             hadConflict: conflict != nil
         )
     }
@@ -716,8 +724,8 @@ public final class SkillFileOperator: @unchecked Sendable {
             return (nil, nil)
         }
         if sourceRoot?.kind == .project,
-           destination.root.kind == .project,
-           sourceRoot?.id == destination.root.id {
+           destination.root?.kind == .project,
+           sourceRoot?.id == destination.root?.id {
             return (relativePath(from: destination.url.deletingLastPathComponent(), to: resolvedSource), .relative)
         }
         return (resolvedSource.path, .absolute)
@@ -848,11 +856,17 @@ public final class SkillFileOperator: @unchecked Sendable {
     ) throws {
         let snapshot = try fileSystem.snapshot(stage)
         guard let snapshot else { throw SkillFileOperatorError.invalidStagedSkill }
+        // Arbitrary destinations are user-picked folders: the staged copy is
+        // validated against that folder instead of the authorized roots.
+        var authorizedRootURLs = roots.map(\.url)
+        if plan.destinationRootID == nil, let destinationRoot = plan.destinationRootURL {
+            authorizedRootURLs.append(destinationRoot)
+        }
         let request = SkillDocumentRequest(
             installationURL: stage,
             resolvedTargetURL: snapshot.kind == .symbolicLink ? snapshot.resolvedURL : nil,
             entryFilename: plan.entryFilename,
-            authorizedRootURLs: roots.map(\.url)
+            authorizedRootURLs: authorizedRootURLs
         )
         do {
             _ = try SkillDocumentReader().validatedEntryURL(request)
@@ -930,8 +944,7 @@ public final class SkillFileOperator: @unchecked Sendable {
             outcome: outcome,
             sourceURL: plan.logicalSourceURL,
             destinationURL: plan.destinationURL,
-            refreshRootIDs: rootIDs.sorted(),
-            metadataTransfer: plan.metadataTransfer
+            refreshRootIDs: rootIDs.sorted()
         )
     }
 }

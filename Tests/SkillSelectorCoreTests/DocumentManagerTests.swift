@@ -42,7 +42,6 @@ final class DocumentManagerTests: XCTestCase {
             resolvedTarget: resolvedTarget,
             name: "demo",
             localDescription: nil,
-            customDescription: nil,
             modificationDate: nil,
             agentIDs: [],
             rootIDs: rootIDs,

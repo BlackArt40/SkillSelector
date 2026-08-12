@@ -122,7 +122,7 @@ final class SkillQueryTests: XCTestCase {
     func testSearchIsCaseInsensitiveAcrossNameAndEffectiveDescription() {
         let snapshots = [
             snapshot(path: "/name", name: "Release Helper"),
-            snapshot(path: "/custom", name: "Custom", customDescription: "CUSTOM summary"),
+            snapshot(path: "/custom", name: "Custom", localDescription: "CUSTOM summary"),
             snapshot(path: "/local", name: "Local", localDescription: "Local Documentation"),
             snapshot(path: "/remote", name: "Remote"),
         ]
@@ -145,21 +145,20 @@ final class SkillQueryTests: XCTestCase {
         // Remote search test removed (enrichment removed)
     }
 
-    func testEffectiveDescriptionSearchHonorsPriority() {
+    func testEffectiveDescriptionSearchUsesLocalDescription() {
         let skill = snapshot(
             path: "/priority",
             name: "Priority",
-            customDescription: "Chosen text",
             localDescription: "Hidden local text"
         )
 
         XCTAssertEqual(
-            SkillQuery(searchText: "chosen")
+            SkillQuery(searchText: "hidden")
                 .apply(to: [skill], rootsByID: rootsByID).map(\.path),
             [skill.path]
         )
         XCTAssertTrue(
-            SkillQuery(searchText: "hidden")
+            SkillQuery(searchText: "chosen")
                 .apply(to: [skill], rootsByID: rootsByID).isEmpty
         )
     }
@@ -223,7 +222,6 @@ final class SkillQueryTests: XCTestCase {
     private func snapshot(
         path: String,
         name: String,
-        customDescription: String? = nil,
         localDescription: String? = nil,
         agentIDs: [String] = ["cursor"],
         rootIDs: [String] = ["home-root"]
@@ -233,7 +231,6 @@ final class SkillQueryTests: XCTestCase {
             resolvedTarget: nil,
             name: name,
             localDescription: localDescription,
-            customDescription: customDescription,
             modificationDate: nil,
             agentIDs: agentIDs,
             rootIDs: rootIDs,

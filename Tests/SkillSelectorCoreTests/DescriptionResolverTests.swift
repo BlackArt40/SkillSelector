@@ -2,50 +2,55 @@ import XCTest
 @testable import SkillSelectorCore
 
 final class DescriptionResolverTests: XCTestCase {
-    func testPriorityCustomLocalFallback() {
-        let all = DescriptionCandidates(
-            custom: " Custom ",
-            local: " Local ",
-            fallback: " Fallback "
-        )
+    func testPriorityLocalFallback() {
+        let all = DescriptionCandidates(local: " Local ", fallback: " Fallback ")
 
-        XCTAssertEqual(DescriptionResolver.resolve(all), "Custom")
+        XCTAssertEqual(DescriptionResolver.resolve(all), "Local")
         XCTAssertEqual(
-            DescriptionResolver.resolve(
-                DescriptionCandidates(custom: nil, local: all.local, fallback: all.fallback)
-            ),
-            "Local"
-        )
-        XCTAssertEqual(
-            DescriptionResolver.resolve(
-                DescriptionCandidates(custom: nil, local: nil, fallback: all.fallback)
-            ),
+            DescriptionResolver.resolve(DescriptionCandidates(local: nil, fallback: all.fallback)),
             "Fallback"
         )
     }
 
     func testWhitespaceCandidatesAreIgnoredAndFallbackMayBeEmpty() {
         XCTAssertEqual(
-            DescriptionResolver.resolve(
-                DescriptionCandidates(custom: " \n ", local: "\t", fallback: "")
-            ),
+            DescriptionResolver.resolve(DescriptionCandidates(local: " \t", fallback: "")),
             ""
         )
     }
 
-    func testRemovingCustomizationRestoresDeterministicLocalFallback() {
-        let candidates = DescriptionCandidates(
-            custom: "Personal summary",
-            local: nil,
-            fallback: "demo"
+    func testSnapshotCandidatesUseLocalDescriptionThenName() {
+        let snapshot = SkillSnapshot(
+            path: "/tmp/demo",
+            resolvedTarget: nil,
+            name: "demo",
+            localDescription: "From frontmatter",
+            modificationDate: nil,
+            agentIDs: [],
+            rootIDs: [],
+            entryFilename: "SKILL.md",
+            parseDiagnostics: []
         )
 
-        XCTAssertEqual(DescriptionResolver.resolve(candidates), "Personal summary")
         XCTAssertEqual(
-            DescriptionResolver.resolve(
-                DescriptionCandidates(custom: nil, local: nil, fallback: candidates.fallback)
-            ),
-            "demo"
+            DescriptionResolver.resolve(DescriptionCandidates(snapshot: snapshot)),
+            "From frontmatter"
+        )
+
+        let bare = SkillSnapshot(
+            path: "/tmp/bare",
+            resolvedTarget: nil,
+            name: "bare",
+            localDescription: nil,
+            modificationDate: nil,
+            agentIDs: [],
+            rootIDs: [],
+            entryFilename: "SKILL.md",
+            parseDiagnostics: []
+        )
+        XCTAssertEqual(
+            DescriptionResolver.resolve(DescriptionCandidates(snapshot: bare)),
+            "bare"
         )
     }
 }

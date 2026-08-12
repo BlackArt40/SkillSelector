@@ -6,7 +6,6 @@ public struct SkillSnapshot: Identifiable, Hashable, Sendable {
     public let resolvedTarget: String?
     public let name: String
     public let localDescription: String?
-    public let customDescription: String?
     public let modificationDate: Date?
     public let agentIDs: [String]
     public let rootIDs: [String]

@@ -23,7 +23,6 @@ final class DocumentLoadIdentityTests: XCTestCase {
         let baseline = snapshot(rootIDs: ["a", "b"])
         let reorderedAndDescribed = snapshot(
             rootIDs: ["b", "a"],
-            customDescription: "Custom",
             localDescription: "Local"
         )
 
@@ -39,7 +38,6 @@ final class DocumentLoadIdentityTests: XCTestCase {
         resolvedTarget: String? = "/resolved/skill",
         modificationDate: Date? = Date(timeIntervalSince1970: 1),
         rootIDs: [String] = ["root"],
-        customDescription: String? = nil,
         localDescription: String? = nil
     ) -> SkillSnapshot {
         SkillSnapshot(
@@ -47,7 +45,6 @@ final class DocumentLoadIdentityTests: XCTestCase {
             resolvedTarget: resolvedTarget,
             name: "demo",
             localDescription: localDescription,
-            customDescription: customDescription,
             modificationDate: modificationDate,
             agentIDs: ["cursor"],
             rootIDs: rootIDs,

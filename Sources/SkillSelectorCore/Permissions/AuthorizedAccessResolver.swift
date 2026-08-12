@@ -23,13 +23,14 @@ public struct AuthorizedAccessResolver: @unchecked Sendable {
     public func resolveAccess(
         for skill: SkillSnapshot,
         destinationRootURL: URL? = nil,
-        authorizedRoots: [AuthorizedRootSnapshot]
+        authorizedRoots: [AuthorizedRootSnapshot],
+        destinationIsArbitrary: Bool = false
     ) throws -> [AuthorizedRootAccess] {
         var requiredRootIDs = Set(skill.rootIDs)
         if let resolvedTarget = skill.resolvedTarget.map(URL.init(fileURLWithPath:)) {
             requiredRootIDs.formUnion(authorizedRoots.rootIDs(containingResolvedURL: resolvedTarget))
         }
-        if let destinationRootURL {
+        if let destinationRootURL, !destinationIsArbitrary {
             requiredRootIDs.formUnion(authorizedRoots.rootIDs(containingLogicalURL: destinationRootURL))
         }
 
@@ -45,7 +46,7 @@ public struct AuthorizedAccessResolver: @unchecked Sendable {
 
         guard isCovered(
             skill: skill,
-            destinationRootURL: destinationRootURL,
+            destinationRootURL: destinationIsArbitrary ? nil : destinationRootURL,
             accesses: accesses
         ) else {
             accesses.forEach { $0.lease.close() }

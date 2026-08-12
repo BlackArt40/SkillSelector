@@ -51,23 +51,6 @@ final class FileOperationPlanTests: XCTestCase {
         )
     }
 
-    func testMetadataTransferCodableRoundTrip() throws {
-        let cases: [FileOperationMetadataTransfer] = [
-            .none,
-            .copy(SkillAppMetadata(customDescription: "copied notes")),
-            .move(SkillAppMetadata(customDescription: nil)),
-        ]
-        let encoder = JSONEncoder()
-        let decoder = JSONDecoder()
-
-        for value in cases {
-            XCTAssertEqual(try decoder.decode(
-                FileOperationMetadataTransfer.self,
-                from: encoder.encode(value)
-            ), value)
-        }
-    }
-
     func testOperationKindCodableRoundTrip() throws {
         let kinds: [FileOperationKind] = [.copy, .move, .delete, .createSymbolicLink]
         let encoder = JSONEncoder()
@@ -86,23 +69,17 @@ final class FileOperationPlanTests: XCTestCase {
             outcome: .completed,
             sourceURL: URL(fileURLWithPath: "/tmp/source"),
             destinationURL: URL(fileURLWithPath: "/tmp/dest/source"),
-            refreshRootIDs: ["root-1"],
-            metadataTransfer: .copy(SkillAppMetadata(customDescription: "notes"))
+            refreshRootIDs: ["root-1"]
         )
 
         XCTAssertEqual(result.outcome, .completed)
         XCTAssertEqual(result.refreshRootIDs, ["root-1"])
-        XCTAssertEqual(
-            result.metadataTransfer,
-            .copy(SkillAppMetadata(customDescription: "notes"))
-        )
 
         let cancelled = FileOperationResult(
             outcome: .cancelled,
             sourceURL: URL(fileURLWithPath: "/tmp/source"),
             destinationURL: nil,
-            refreshRootIDs: [],
-            metadataTransfer: .none
+            refreshRootIDs: []
         )
         XCTAssertEqual(cancelled.outcome, .cancelled)
         XCTAssertNil(cancelled.destinationURL)
