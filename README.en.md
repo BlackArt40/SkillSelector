@@ -3,13 +3,17 @@
 
 # SkillSelector
 
-A native macOS app for managing Agent Skills on your local machine. Browse, copy, move, delete, and link Skills. Not a marketplace, not an installer, not an AI tool.
+A native macOS app for managing Agent Skills on your local machine. Browse, search, copy, move, delete, and link Skills. Not a marketplace, not an installer, not an AI tool.
 
-## Requirements
+## Features
 
-- macOS 14 Sonoma or later
-- Universal 2 build (Apple Silicon + Intel)
-- English and Simplified Chinese
+- **Three-column browser**: sidebar grouped by scope and Agent (All / Global / Directories / Agents), a searchable and sortable Skill list, and a detail pane with description, frontmatter, rendered Markdown, associated Agents, and locations
+- **Search & sort**: match by name, description, or path; sort by default order, name, or path
+- **File operations**: copy, move, create symbolic link, move to Trash. Copy and move can target **any folder you pick** (granted via the folder picker); link and delete stay within authorized Skill roots. Deletion always goes to Trash — never permanent
+- **Skill documents**: rendered with the system Markdown parser (headings, lists, code blocks, link whitelist); frontmatter parsed with Yams, so nested YAML no longer misreports
+- **Dark mode**: one-click light/dark toggle in the title bar, or follow the system
+- **Directory authorization**: authorize the home directory or add project folders via security-scoped bookmarks; scans only whitelisted fixed paths
+- **Custom Agents**: register any local Skill directory as a custom Agent
 
 ## Supported Agents
 
@@ -17,15 +21,19 @@ Claude Code, Codex, Qoder, CodeBuddy, OpenCode, Cursor, Kilo Code, Cline, Roo Co
 
 ## Privacy
 
-Runs offline. Stores index records and security-scoped bookmarks—never copies Skill content. No telemetry, no crash reporter, no bundled model.
-
-Copy and move can target any folder (granted via the folder picker); link and delete stay within authorized Skill roots. Deletion goes to Trash.
+Runs offline. Stores index metadata (path, owning Agents, scope, description, source) and security-scoped bookmarks — **never copies Skill content**. No telemetry, no crash reporter, no bundled model, no file watcher. SKILL.md stays read-only; it is only revealed in Finder or opened in your default editor.
 
 ## Screenshots
 
 ![Main window (English)](screenshots/main-en.png)
 
 ![Settings (English)](screenshots/settings-en.png)
+
+## Requirements
+
+- macOS 14 Sonoma or later
+- Universal 2 build (Apple Silicon + Intel)
+- English and Simplified Chinese
 
 ## Build
 
@@ -38,7 +46,7 @@ Produces `dist/SkillSelector.app`, `dist/SkillSelector.dmg`, `dist/SkillSelector
 
 ## Installation
 
-1. Download the `.dmg` and its `.sha256` from GitHub Releases
+1. Download the `.dmg` and its `.sha256` from [GitHub Releases](https://github.com/BlackArt40/SkillSelector/releases)
 2. Verify integrity (keep both files in the same directory):
 
    ```zsh
@@ -62,6 +70,10 @@ Releases are **ad-hoc signed** (`codesign --sign -`): **no Apple Developer certi
 - ❌ Not notarized, so Gatekeeper blocks the first launch and you must allow it manually per step 4
 
 If that's not acceptable, build from source (see **Build**) — releases go through the same packaging script.
+
+## Versioning
+
+Versions follow `MAJOR.MINOR.PATCH`. Non-major changes bump only PATCH (1.0.1 → 1.0.2); substantive feature changes bump MINOR (1.1.0); a major redesign bumps MAJOR (2.0.0).
 
 ## License
 
