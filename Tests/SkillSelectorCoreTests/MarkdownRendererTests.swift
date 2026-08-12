@@ -54,10 +54,8 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertNil(MarkdownRenderer.buildAttributedString(from: []))
     }
 
-    func testBuildRendersBlankLinesAsEmptyParagraphs() {
-        let rendered = MarkdownRenderer.buildAttributedString(from: ["", "   "])
-
-        XCTAssertEqual(plainText(rendered), "\n\n")
+    func testBuildReturnsNilForWhitespaceOnlyInput() {
+        XCTAssertNil(MarkdownRenderer.buildAttributedString(from: ["", "   "]))
     }
 
     func testPlainParagraphPassesThrough() {
@@ -79,6 +77,16 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertFalse(text.contains("#"))
     }
 
+    func testAdjacentHeadingsKeepTheirLineBreaks() {
+        // Regression guard: the parser marks each heading as a separate block
+        // but omits the newline between them, which would jam them on one line.
+        let rendered = MarkdownRenderer.buildAttributedString(from: [
+            "## Components", "### Spacing And Layout",
+        ])
+
+        XCTAssertTrue(plainText(rendered).contains("Components\nSpacing And Layout"))
+    }
+
     func testCodeBlockKeepsContentWithoutTogglingOnInnerText() {
         let rendered = MarkdownRenderer.buildAttributedString(from: [
             "```", "let x = 1", "```", "after",
@@ -93,18 +101,23 @@ final class MarkdownRendererTests: XCTestCase {
     func testUnclosedCodeBlockRendersRemainingLinesAsCode() {
         let rendered = MarkdownRenderer.buildAttributedString(from: ["```", "line one"])
 
-        XCTAssertEqual(plainText(rendered), "  line one\n")
+        XCTAssertEqual(plainText(rendered), "line one\n")
     }
 
-    func testUnorderedAndOrderedListsRenderBulletsAndNumbers() {
+    func testUnorderedAndOrderedListsRenderItemsWithoutMarkers() {
+        // The system parser consumes the bullet/number markers into
+        // presentation intent; the item text is what remains.
         let rendered = MarkdownRenderer.buildAttributedString(from: [
             "- first", "* second", "1. third", "12. fourth",
         ])
 
-        XCTAssertEqual(
-            plainText(rendered),
-            "  • first\n  • second\n  1.  third\n12. fourth\n"
-        )
+        let text = plainText(rendered)
+        XCTAssertTrue(text.contains("first"))
+        XCTAssertTrue(text.contains("second"))
+        XCTAssertTrue(text.contains("third"))
+        XCTAssertTrue(text.contains("fourth"))
+        XCTAssertFalse(text.contains("- first"))
+        XCTAssertFalse(text.contains("* second"))
     }
 
     func testTableRendersRowsAndSkipsSeparatorRow() {
@@ -241,9 +254,166 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertEqual(plainText(rendered), "a *b\n")
     }
 
-    func testUnterminatedBoldPairIsConsumedWithoutMarkers() {
+    func testUnterminatedBoldPairRendersLiterally() {
+        // The system parser keeps an unterminated emphasis marker as text.
         let rendered = MarkdownRenderer.buildAttributedString(from: ["a **bold"])
 
-        XCTAssertEqual(plainText(rendered), "a bold\n")
+        XCTAssertEqual(plainText(rendered), "a **bold\n")
+    }
+
+    // MARK: - Block separation
+
+    func testParagraphFollowedByCodeBlockKeepsLineBreak() {
+        // Regression guard: the parser drops the newline between a paragraph
+        // and a following code block, jamming "Example:firecrawl …" together.
+        let rendered = MarkdownRenderer.buildAttributedString(from: [
+            "Example:", "```bash", "firecrawl scrape --pretty &", "wait", "```",
+        ])
+
+        XCTAssertTrue(plainText(rendered).contains("Example:\nfirecrawl scrape --pretty"))
+    }
+
+    func testInlineCodeDoesNotSplitParagraph() {
+        // Regression guard: inline code spans share the paragraph's element
+        // identity, so the newline must land at the paragraph's end only.
+        let rendered = MarkdownRenderer.buildAttributedString(from: [
+            "Combining `branding` and `images` costs one credit.",
+            "",
+            "If the screenshot returns a remote URL, download it.",
+        ])
+
+        let text = plainText(rendered)
+        XCTAssertTrue(text.contains("Combining branding and images costs one credit.\n"))
+        XCTAssertTrue(text.contains("credit.\nIf the screenshot"))
+    }
+
+    func testListItemWithInlineCodeGetsSingleMarker() {
+        // Regression guard: marker must be inserted once per item, at the
+        // item's first run — not at every inline-code run inside it.
+        let rendered = MarkdownRenderer.buildAttributedString(from: [
+            "1. The `branding` and `images` formats.",
+        ])
+
+        XCTAssertEqual(plainText(rendered), "  1. The branding and images formats.\n")
+    }
+
+    func testListBulletsAreIndentedAndTinted() {
+        // Regression guard: the bullet must read as a list glyph — indented
+        // and muted — rather than body text.
+        let rendered = MarkdownRenderer.buildAttributedString(from: [
+            "- first", "- second",
+        ])
+
+        let text = plainText(rendered)
+        XCTAssertEqual(text, "  •  first\n  •  second\n")
+
+        let bullets = rendered?.runs.filter { $0.foregroundColor == AppTheme.muted } ?? []
+        XCTAssertFalse(bullets.isEmpty)
+    }
+}
+
+extension MarkdownRendererTests {
+    func testMarkdownFencedBlockStaysLiteralCode() {
+        // ```markdown templates render as code blocks like any other fence:
+        // their "#"/"##" stay literal text on the panel background.
+        let rendered = MarkdownRenderer.buildAttributedString(from: [
+            "```markdown", "# Literature Review: [Topic]", "",
+            "## Abstract", "[2-3 paragraph summary]", "```",
+        ])
+
+        let text = plainText(rendered)
+        XCTAssertTrue(text.contains("# Literature Review: [Topic]"))
+        XCTAssertTrue(text.contains("## Abstract"))
+        XCTAssertTrue(text.contains("[2-3 paragraph summary]"))
+        // Headings are not consumed: the literal "##" marker survives.
+        XCTAssertTrue(text.contains("## Abstract\n[2-3 paragraph summary]"))
+    }
+
+    func testBashFencedBlockStaysLiteralCode() {
+        let rendered = MarkdownRenderer.buildAttributedString(from: [
+            "```bash", "echo \"# not a heading\"", "```",
+        ])
+
+        let text = plainText(rendered)
+        XCTAssertTrue(text.contains("# not a heading"))
+    }
+}
+
+extension MarkdownRendererTests {
+    func testInlineCodeIsTintedAmber() {
+        let rendered = MarkdownRenderer.buildAttributedString(from: ["run `make test` now"])
+
+        let codeRun = rendered?.runs.first {
+            $0.inlinePresentationIntent?.contains(.code) == true
+        }
+        XCTAssertEqual(codeRun?.foregroundColor, AppTheme.codeInline)
+    }
+
+    func testBlockquoteIsTintedViolet() {
+        let rendered = MarkdownRenderer.buildAttributedString(from: ["> quoted guidance"])
+
+        let quoteRun = rendered?.runs.first { run in
+            run.presentationIntent?.components.contains { component in
+                if case .blockQuote = component.kind { return true }
+                return false
+            } == true
+        }
+        XCTAssertEqual(quoteRun?.foregroundColor, AppTheme.blockquote)
+    }
+
+    func testTopLevelHeadingUsesAccent() {
+        let rendered = MarkdownRenderer.buildAttributedString(from: ["# Main Title"])
+
+        let headingRun = rendered?.runs.first { run in
+            run.presentationIntent?.components.contains { component in
+                if case .header = component.kind { return true }
+                return false
+            } == true
+        }
+        XCTAssertEqual(headingRun?.foregroundColor, AppTheme.accent)
+    }
+}
+
+extension MarkdownRendererTests {
+    func testCodeBlockUsesContrastingPanelAndForegroundText() {
+        let rendered = MarkdownRenderer.buildAttributedString(from: [
+            "```bash", "echo hi", "```",
+        ])
+
+        let blockRun = rendered?.runs.first { run in
+            run.presentationIntent?.components.contains { component in
+                if case .codeBlock = component.kind { return true }
+                return false
+            } == true
+        }
+        XCTAssertEqual(blockRun?.backgroundColor, AppTheme.codeBlockBackground)
+        XCTAssertEqual(blockRun?.foregroundColor, AppTheme.foreground)
+    }
+}
+
+extension MarkdownRendererTests {
+    func testSoftLineBreaksWithinParagraphArePreserved() {
+        // Regression guard: "workflow:\ntopic:\ntarget_count:" must stay on
+        // separate lines instead of being folded into one jammed line.
+        let rendered = MarkdownRenderer.buildAttributedString(from: [
+            "workflow: firecrawl-research-papers",
+            "topic: [topic]",
+            "target_count: [number]",
+        ])
+
+        XCTAssertEqual(
+            plainText(rendered),
+            "workflow: firecrawl-research-papers\ntopic: [topic]\ntarget_count: [number]\n"
+        )
+    }
+
+    func testSoftBreakHardeningSkipsFencedCode() {
+        // Regression guard: hardening must not add trailing spaces to code
+        // lines inside fences.
+        let rendered = MarkdownRenderer.buildAttributedString(from: [
+            "```bash", "echo a", "echo b", "```",
+        ])
+
+        XCTAssertTrue(plainText(rendered).contains("echo a\necho b"))
     }
 }

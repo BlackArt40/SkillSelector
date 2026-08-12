@@ -139,3 +139,24 @@ final class LocalizationDiagnosticsTests: XCTestCase {
         )
     }
 }
+
+extension LocalizationDiagnosticsTests {
+    func testCopyMovePanelPromptsFollowUILanguage() {
+        let defaults = UserDefaults.standard
+        let original = defaults.string(forKey: "SkillSelector.preferredLanguage")
+
+        defaults.set("zh-Hans", forKey: "SkillSelector.preferredLanguage")
+        XCTAssertEqual(L10n.string("Copy To Current Folder"), "复制到当前文件夹")
+        XCTAssertEqual(L10n.string("Move To Current Folder"), "移动到当前文件夹")
+
+        defaults.set("en", forKey: "SkillSelector.preferredLanguage")
+        XCTAssertEqual(L10n.string("Copy To Current Folder"), "Copy to Current Folder")
+        XCTAssertEqual(L10n.string("Move To Current Folder"), "Move to Current Folder")
+
+        if let original {
+            defaults.set(original, forKey: "SkillSelector.preferredLanguage")
+        } else {
+            defaults.removeObject(forKey: "SkillSelector.preferredLanguage")
+        }
+    }
+}

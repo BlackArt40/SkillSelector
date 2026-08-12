@@ -9,8 +9,14 @@ let package = Package(
         .library(name: "SkillSelectorCore", targets: ["SkillSelectorCore"]),
         .executable(name: "SkillSelector", targets: ["SkillSelector"]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0"),
+    ],
     targets: [
-        .target(name: "SkillSelectorCore"),
+        .target(
+            name: "SkillSelectorCore",
+            dependencies: ["Yams"]
+        ),
         .executableTarget(
             name: "SkillSelector",
             dependencies: ["SkillSelectorCore"],

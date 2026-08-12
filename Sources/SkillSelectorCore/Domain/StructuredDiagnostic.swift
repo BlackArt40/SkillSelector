@@ -4,11 +4,6 @@ public enum DiagnosticCode: String, Codable, CaseIterable, Hashable, Sendable {
     case authorizedDirectoryMissing = "diagnostic.authorizedDirectoryMissing"
     case authorizedHomeMissing = "diagnostic.authorizedHomeMissing"
     case authorizedProjectMissing = "diagnostic.authorizedProjectMissing"
-    case blockValueHasNoContent = "diagnostic.blockValueHasNoContent"
-    case blockValueMustBeIndented = "diagnostic.blockValueMustBeIndented"
-    case collectionsNotSupported = "diagnostic.collectionsNotSupported"
-    case expectedKeyValuePair = "diagnostic.expectedKeyValuePair"
-    case invalidFrontmatterKey = "diagnostic.invalidFrontmatterKey"
     case missingClosingFrontmatterBoundary = "diagnostic.missingClosingFrontmatterBoundary"
     case missingFrontmatterBoundary = "diagnostic.missingFrontmatterBoundary"
     case missingRequiredFrontmatterField = "diagnostic.missingRequiredFrontmatterField"
@@ -18,10 +13,7 @@ public enum DiagnosticCode: String, Codable, CaseIterable, Hashable, Sendable {
     case unableToReadEntry = "diagnostic.unableToReadEntry"
     case unableToResolveAuthorizedDirectory = "diagnostic.unableToResolveAuthorizedDirectory"
     case unsafeEntryFile = "diagnostic.unsafeEntryFile"
-    case unsupportedEscapeSequence = "diagnostic.unsupportedEscapeSequence"
-    case unterminatedEscapeSequence = "diagnostic.unterminatedEscapeSequence"
-    case unterminatedQuotedString = "diagnostic.unterminatedQuotedString"
-    case yamlTagsAndAliasesNotSupported = "diagnostic.yamlTagsAndAliasesNotSupported"
+    case yamlParseFailed = "diagnostic.yamlParseFailed"
 
     public var localizationKey: String { rawValue }
 
@@ -35,16 +27,6 @@ public enum DiagnosticCode: String, Codable, CaseIterable, Hashable, Sendable {
             "Authorized home directory is missing"
         case .authorizedProjectMissing:
             "Authorized project directory is missing"
-        case .blockValueHasNoContent:
-            "Block value has no indented content"
-        case .blockValueMustBeIndented:
-            "Block value must be indented"
-        case .collectionsNotSupported:
-            "Collections are not supported in frontmatter"
-        case .expectedKeyValuePair:
-            "Expected a key-value pair"
-        case .invalidFrontmatterKey:
-            "Invalid frontmatter key"
         case .missingClosingFrontmatterBoundary:
             "Missing closing frontmatter boundary"
         case .missingFrontmatterBoundary:
@@ -63,14 +45,8 @@ public enum DiagnosticCode: String, Codable, CaseIterable, Hashable, Sendable {
             "Unable to resolve authorized directory: \(first)"
         case .unsafeEntryFile:
             "Entry file must remain readable within its authorized package and root"
-        case .unsupportedEscapeSequence:
-            "Unsupported escape sequence"
-        case .unterminatedEscapeSequence:
-            "Unterminated escape sequence"
-        case .unterminatedQuotedString:
-            "Unterminated quoted string"
-        case .yamlTagsAndAliasesNotSupported:
-            "YAML tags and aliases are not supported"
+        case .yamlParseFailed:
+            "YAML parse failed: \(first)"
         }
     }
 }

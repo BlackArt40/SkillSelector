@@ -1,6 +1,8 @@
 import SkillSelectorCore
 import SwiftUI
 
+/// The `.doc-card` from the design: warm surface card with a mono header
+/// row, the frontmatter block, and the rendered markdown body.
 struct MarkdownDocumentView: View {
     private enum LoadState {
         case loading
@@ -15,34 +17,56 @@ struct MarkdownDocumentView: View {
 
     @State private var state: LoadState = .loading
     @State private var actionErrorDetail: String?
+    @State private var loadedSource: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Spacer()
-                iconButton(
-                    systemName: "folder",
-                    label: L10n.string("Reveal Skill Document in Finder"),
-                    action: reveal
-                )
-                iconButton(
-                    systemName: "arrow.up.forward.app",
-                    label: L10n.string("Open Skill Document in Default Editor"),
-                    action: open
-                )
-            }
-
+        VStack(alignment: .leading, spacing: 0) {
+            cardHead
             if let actionErrorDetail {
                 errorShell(
                     title: L10n.string("Unable to Open Skill Document"),
                     detail: actionErrorDetail
                 )
+                .padding(20)
             }
-
             content
+        }
+        .background(AppTheme.surfaceWarm, in: RoundedRectangle(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(AppTheme.borderSoft, lineWidth: 1)
         }
         .task(id: DocumentLoadIdentity(snapshot: skill)) {
             await load()
+        }
+    }
+
+    private var cardHead: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "doc")
+                .font(.system(size: 12))
+            Text(verbatim: L10n.string("Doc Card Title", skill.entryFilename))
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            iconButton(
+                systemName: "folder",
+                label: L10n.string("Reveal Skill Document in Finder"),
+                action: reveal
+            )
+            iconButton(
+                systemName: "arrow.up.forward.app",
+                label: L10n.string("Open Skill Document in Default Editor"),
+                action: open
+            )
+        }
+        .font(AppTheme.mono(11.5))
+        .foregroundStyle(AppTheme.muted)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(AppTheme.borderSoft)
+                .frame(height: 1)
         }
     }
 
@@ -54,42 +78,92 @@ struct MarkdownDocumentView: View {
                 ProgressView()
                     .controlSize(.small)
                 Text(verbatim: L10n.string("Loading Skill document"))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppTheme.muted)
             }
+            .padding(20)
         case .rendered(let attributed):
             ScrollView {
-                Text(attributed)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .textSelection(.enabled)
-                    .padding(8)
+                VStack(alignment: .leading, spacing: 0) {
+                    if let frontmatter {
+                        frontmatterBlock(frontmatter)
+                    }
+                    Text(attributed)
+                        .lineSpacing(4)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                        .padding(20)
+                }
             }
             .markdownLinkPolicy()
         case .raw(let source):
             ScrollView {
-                Text(verbatim: source)
-                    .font(.system(.body, design: .monospaced))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .textSelection(.enabled)
-                    .padding(8)
+                VStack(alignment: .leading, spacing: 0) {
+                    if let frontmatter {
+                        frontmatterBlock(frontmatter)
+                    }
+                    Text(verbatim: source)
+                        .font(AppTheme.mono(12))
+                        .foregroundStyle(AppTheme.foregroundSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                        .padding(20)
+                }
             }
         case .tooLarge:
             messageShell(
                 title: L10n.string("Document Too Large to Render"),
                 detail: L10n.string("Documents larger than 1 MiB can be opened in the default editor.")
             )
+            .padding(20)
         case .failed(let detail):
             errorShell(title: L10n.string("Unable to Load Skill Document"), detail: detail)
+                .padding(20)
         }
+    }
+
+    /// `.fm` — the raw frontmatter block on a surface strip.
+    private func frontmatterBlock(_ text: String) -> some View {
+        Text(verbatim: text)
+            .font(AppTheme.mono(11.5))
+            .foregroundStyle(AppTheme.muted)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(AppTheme.surface)
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(AppTheme.borderSoft)
+                    .frame(height: 1)
+            }
+            .textSelection(.enabled)
+    }
+
+    /// The `---` delimited frontmatter block of the loaded source, or nil
+    /// when the document has none.
+    private var frontmatter: String? {
+        frontmatterSource
+    }
+
+    private var frontmatterSource: String? {
+        guard let loadedSource else { return nil }
+        let lines = loadedSource.components(separatedBy: "\n")
+        guard lines.first?.trimmingCharacters(in: .whitespaces) == "---" else { return nil }
+        guard let boundary = lines.dropFirst().firstIndex(where: {
+            $0.trimmingCharacters(in: .whitespaces) == "---"
+        }) else { return nil }
+        return (lines[0...boundary]).joined(separator: "\n")
     }
 
     @MainActor
     private func load() async {
         actionErrorDetail = nil
         state = .loading
+        loadedSource = nil
         do {
             let document = try await model.loadDocument(for: skill)
             try Task.checkCancellation()
             let source = document.source
+            loadedSource = source
             let body = MarkdownRenderer.extractBody(source)
             let attributed = MarkdownRenderer.buildAttributedString(from: body)
             try Task.checkCancellation()
@@ -133,7 +207,9 @@ struct MarkdownDocumentView: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
+                .font(.system(size: 12))
                 .frame(width: 18, height: 18)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.borderless)
         .help(label)
@@ -168,5 +244,4 @@ struct MarkdownDocumentView: View {
         }
         return (error as? LocalizedError)?.errorDescription ?? String(describing: error)
     }
-
 }
