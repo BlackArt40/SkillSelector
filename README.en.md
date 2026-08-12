@@ -30,7 +30,6 @@ Copy and move can target any folder (granted via the folder picker); link and de
 ## Build
 
 ```zsh
-swift test
 swift build
 zsh Scripts/package-dmg.sh 1.0.0
 zsh Tests/Packaging/package-smoke.sh 1.0.0

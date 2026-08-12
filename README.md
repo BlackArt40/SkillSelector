@@ -30,7 +30,6 @@ Claude Code、Codex、Qoder、CodeBuddy、OpenCode、Cursor、Kilo Code、Cline�
 ## 构建
 
 ```zsh
-swift test
 swift build
 zsh Scripts/package-dmg.sh 1.0.0
 zsh Tests/Packaging/package-smoke.sh 1.0.0
