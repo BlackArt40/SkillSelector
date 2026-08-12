@@ -34,6 +34,8 @@ CONTEXT.md
 .firecrawl/
 /design/
 /Tests/
+/.github/
+/Scripts/run-app.sh
 *.dmg
 skills-lock.json
 需求.md

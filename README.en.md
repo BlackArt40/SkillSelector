@@ -32,7 +32,6 @@ Copy and move can target any folder (granted via the folder picker); link and de
 ```zsh
 swift build
 zsh Scripts/package-dmg.sh 1.0.0
-zsh Tests/Packaging/package-smoke.sh 1.0.0
 ```
 
 Produces `dist/SkillSelector.app`, `dist/SkillSelector.dmg`, `dist/SkillSelector-1.0.0.dmg`, and a matching `.sha256` for GitHub Releases.

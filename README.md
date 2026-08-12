@@ -32,7 +32,6 @@ Claude Code、Codex、Qoder、CodeBuddy、OpenCode、Cursor、Kilo Code、Cline�
 ```zsh
 swift build
 zsh Scripts/package-dmg.sh 1.0.0
-zsh Tests/Packaging/package-smoke.sh 1.0.0
 ```
 
 输出 `dist/SkillSelector.app`、`dist/SkillSelector.dmg`、`dist/SkillSelector-1.0.0.dmg` 和对应的 `.sha256`。
