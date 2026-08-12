@@ -32,6 +32,7 @@ CONTEXT.md
 
 # Other
 .firecrawl/
+/design/
 *.dmg
 skills-lock.json
 需求.md
