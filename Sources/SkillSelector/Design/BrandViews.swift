@@ -75,12 +75,31 @@ struct LogoView: View {
     }
 }
 
+/// Bundle containing the app's images (AppIcon.png).
+///
+/// The SwiftPM-generated `Bundle.module` on release builds looks for
+/// `SkillSelector_SkillSelector.bundle` at the *app bundle root*, while the
+/// packaging script places it under Contents/Resources — so images resolve
+/// explicitly first, mirroring L10n's resource lookup, and fall back to
+/// `Bundle.module` for tests and `swift run`.
+extension Bundle {
+    static var appResources: Bundle {
+        if let url = Bundle.main.url(
+            forResource: "SkillSelector_SkillSelector",
+            withExtension: "bundle"
+        ), let bundle = Bundle(url: url) {
+            return bundle
+        }
+        return .module
+    }
+}
+
 /// The 1024px app icon from design/assets (rendered PNG resource).
 struct AppIconView: View {
     var size: CGFloat = 128
 
     var body: some View {
-        Image(Brand.appIconName, bundle: .module)
+        Image(Brand.appIconName, bundle: .appResources)
             .resizable()
             .interpolation(.high)
             .aspectRatio(contentMode: .fit)
