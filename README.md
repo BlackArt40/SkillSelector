@@ -3,13 +3,7 @@
 
 # SkillSelector
 
-macOS 原生应用，管理本地 Agent Skill。浏览、复制、移动、删除、链接、更新 Skill。不是市场，不是安装器，不是 AI 工具。
-
-## 截图
-
-| 主界面 | 设置界面 |
-|:---:|:---:|
-| ![主界面](screenshots/main-zh.png) | ![设置界面](screenshots/settings-zh.png) |
+macOS 原生应用，管理本地 Agent Skill。浏览、复制、移动、删除、链接 Skill。不是市场，不是安装器，不是 AI 工具。
 
 ## 系统要求
 

@@ -3,13 +3,7 @@
 
 # SkillSelector
 
-A native macOS app for managing Agent Skills on your local machine. Browse, copy, move, delete, link, and update Skills. Not a marketplace, not an installer, not an AI tool.
-
-## Screenshots
-
-| Main Window | Settings |
-|:---:|:---:|
-| ![Main Window](screenshots/main-en.png) | ![Settings](screenshots/settings-en.png) |
+A native macOS app for managing Agent Skills on your local machine. Browse, copy, move, delete, and link Skills. Not a marketplace, not an installer, not an AI tool.
 
 ## Requirements
 
