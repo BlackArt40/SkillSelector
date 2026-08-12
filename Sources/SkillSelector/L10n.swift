@@ -62,6 +62,11 @@ enum L10n {
         return english == missingValue ? key : english
     }
 
+    /// Localized format string with positional arguments ("来源：%@").
+    static func string(_ key: String, _ arguments: CVarArg...) -> String {
+        String(format: string(key), locale: Locale.current, arguments: arguments)
+    }
+
     static func diagnostic(_ diagnostic: StructuredDiagnostic) -> String {
         let format = string(diagnostic.code.localizationKey)
         guard !diagnostic.arguments.isEmpty else { return format }

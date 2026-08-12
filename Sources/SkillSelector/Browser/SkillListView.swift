@@ -1,169 +1,241 @@
 import SkillSelectorCore
 import SwiftUI
 
+/// The middle `.list-col` column: a 46 pt header with title and count, and
+/// the scrollable list of `.skill-row`s (400 pt wide in the design).
 struct SkillListView: View {
     @Binding var selection: SkillSelection?
     @Binding var searchText: String
     @Binding var sort: SkillQuery.Sort
 
+    let title: String
     let skills: [SkillSnapshot]
     let allSkillCount: Int
     let hasAuthorization: Bool
     let hasActiveFilters: Bool
-    let showFolderGroups: Bool
     let refreshState: RefreshState
     let agentNamesByID: [String: String]
     let onClearFilters: () -> Void
+    let onImportProject: () -> Void
+    let onImportHome: () -> Void
     var onOperation: ((FileOperationKind, SkillSnapshot) -> Void)?
     var onRevealInFinder: ((SkillSnapshot) -> Void)?
 
+    @State private var sortHovering = false
+
     var body: some View {
         VStack(spacing: 0) {
-            controls
-            Divider()
+            header
+            Rectangle()
+                .fill(AppTheme.borderSoft)
+                .frame(height: 1)
             content
         }
+        .background(AppTheme.background)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .navigationTitle(L10n.string("Skills"))
-        .searchable(
-            text: $searchText,
-            placement: .toolbar,
-            prompt: L10n.string("Search Skills")
-        )
+        .navigationTitle(title)
     }
 
-    private var controls: some View {
-        HStack(spacing: 8) {
-            Menu {
-                Picker(L10n.string("Sort"), selection: $sort) {
-                    Text(verbatim: L10n.string("Default Order")).tag(SkillQuery.Sort.default)
-                    Text(verbatim: L10n.string("Name")).tag(SkillQuery.Sort.name)
-                    Text(verbatim: L10n.string("Path")).tag(SkillQuery.Sort.path)
-                }
-            } label: {
-                Image(systemName: "arrow.up.arrow.down")
-                    .frame(width: 18, height: 18)
-            }
-            .menuStyle(.borderlessButton)
-            .help(L10n.string("Sort Skills"))
-            .accessibilityLabel(L10n.string("Sort Skills"))
+    private var header: some View {
+        HStack(alignment: .center, spacing: 8) {
+            Text(verbatim: title)
+                .font(AppTheme.display(17, weight: .semibold))
+                .foregroundStyle(AppTheme.foreground)
+                .lineLimit(1)
+            Text(verbatim: String.localizedStringWithFormat(
+                L10n.string("Skill List Count"), skills.count
+            ))
+            .font(AppTheme.body(12))
+            .foregroundStyle(AppTheme.muted)
+            Spacer(minLength: 8)
+            sortMenu
         }
-        .padding(.horizontal, 10)
-        .frame(height: 42)
+        .padding(.leading, 16)
+        .padding(.trailing, 8)
+        .frame(height: 46)
+        .background(AppTheme.background)
+    }
+
+    /// `.sortBtn` (design tool button): 30×30 with a border-soft hover
+    /// fill. The menu lists the three orders directly — no intermediate
+    /// submenu — with a checkmark on the active one.
+    private var sortMenu: some View {
+        Menu {
+            sortOption(L10n.string("Default Order"), value: .default)
+            sortOption(L10n.string("Name"), value: .name)
+            sortOption(L10n.string("Path"), value: .path)
+        } label: {
+            Image(systemName: "arrow.up.arrow.down")
+                .font(.system(size: 14))
+                .foregroundStyle(AppTheme.foregroundSecondary)
+                .frame(width: 30, height: 30)
+                .background {
+                    if sortHovering {
+                        RoundedRectangle(cornerRadius: 7)
+                            .fill(AppTheme.borderSoft)
+                    }
+                }
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton)
+        .onHover { hovering in
+            sortHovering = hovering
+        }
+        .help(L10n.string("Sort Skills"))
+        .accessibilityLabel(L10n.string("Sort Skills"))
+    }
+
+    private func sortOption(_ title: String, value: SkillQuery.Sort) -> some View {
+        Button {
+            sort = value
+        } label: {
+            HStack {
+                Text(verbatim: title)
+                Spacer(minLength: 12)
+                if sort == value {
+                    Image(systemName: "checkmark")
+                        .fontWeight(.semibold)
+                }
+            }
+        }
+        .accessibilityAddTraits(sort == value ? .isSelected : [])
     }
 
     @ViewBuilder
     private var content: some View {
-        if skills.isEmpty {
+        if case .failed(let message) = refreshState {
+            listEmpty(
+                title: L10n.string("Refresh Failed"),
+                message: message,
+                actionTitle: nil,
+                action: nil
+            )
+        } else if skills.isEmpty {
             emptyState
-        } else if showFolderGroups {
-            List(selection: $selection) {
-                ForEach(folderGroups) { group in
-                    DisclosureGroup {
-                        ForEach(group.skills) { skill in
-                            skillRow(skill)
-                        }
-                    } label: {
-                        HStack {
-                            Image(systemName: "folder")
-                            Text(verbatim: group.name)
-                            Spacer()
-                            Text(verbatim: String.localizedStringWithFormat(
-                                L10n.string("%d Skills"), group.skills.count
-                            ))
-                                .foregroundStyle(.secondary)
-                                .font(.caption)
-                        }
+        } else {
+            ScrollView {
+                LazyVStack(spacing: 2) {
+                    ForEach(skills) { skill in
+                        SkillRow(
+                            skill: skill,
+                            agentNamesByID: agentNamesByID,
+                            isActive: selection?.path == skill.path,
+                            onSelect: { selection = SkillSelection(path: skill.path) },
+                            onOperation: onOperation,
+                            onRevealInFinder: onRevealInFinder
+                        )
+                        .padding(.horizontal, 8)
                     }
                 }
-            }
-            .listStyle(.inset)
-        } else {
-            List(skills, selection: $selection) { skill in
-                skillRow(skill)
-            }
-            .listStyle(.inset)
-        }
-    }
-
-    private func skillRow(_ skill: SkillSnapshot) -> some View {
-        SkillRow(
-            skill: skill,
-            agentNamesByID: agentNamesByID,
-            onOperation: onOperation,
-            onRevealInFinder: onRevealInFinder
-        )
-        .tag(SkillSelection(path: skill.path))
-    }
-
-    // Recomputed on every SwiftUI body pass. Fine for typical skill counts;
-    // cache with @State or onChange if profiling shows a bottleneck.
-    private var folderGroups: [SkillFolderGroup] {
-        let grouped = Dictionary(grouping: skills) { skill in
-            Self.skillFolderName(for: skill.path)
-        }
-        return grouped.map { folderName, folderSkills in
-            SkillFolderGroup(
-                name: folderName,
-                skills: folderSkills.sorted {
-                    $0.name.localizedStandardCompare($1.name) == .orderedAscending
-                }
-            )
-        }.sorted { $0.name.lowercased() < $1.name.lowercased() }
-    }
-
-    private static let skillsDirName = "skills"
-
-    private static func skillFolderName(for skillPath: String) -> String {
-        let components = URL(fileURLWithPath: skillPath).pathComponents
-        for (index, component) in components.enumerated() {
-            if component == skillsDirName, index + 1 < components.count {
-                return components[index + 1]
+                .padding(.vertical, 8)
             }
         }
-        return URL(fileURLWithPath: skillPath).deletingLastPathComponent().lastPathComponent
     }
 
     @ViewBuilder
     private var emptyState: some View {
-        if case .failed(let message) = refreshState {
-            ContentUnavailableView {
-                Label(L10n.string("Refresh Failed"), systemImage: "exclamationmark.triangle")
-            } description: {
-                Text(verbatim: message)
-            }
+        if hasActiveFilters {
+            listEmpty(
+                title: L10n.string("No Matching Skills"),
+                message: L10n.string("No Matching Skills Description"),
+                actionTitle: L10n.string("Clear Search"),
+                action: onClearFilters
+            )
         } else if !hasAuthorization {
-            ContentUnavailableView {
-                Label(L10n.string("Authorize Skill Folders"), systemImage: "folder.badge.questionmark")
-            } description: {
-                Text(verbatim: L10n.string("Authorize your home directory or add a project to find local Skills."))
-            } actions: {
-                AuthorizationViews(showsHeading: false)
-                    .frame(width: 230)
+            listEmpty(
+                title: L10n.string("No Skills in Scope"),
+                message: L10n.string("No Skills in Scope Description"),
+                actionTitle: nil,
+                action: nil
+            )
+            .overlay(alignment: .bottom) {
+                importButtons
+                    .padding(.bottom, 32)
             }
         } else if allSkillCount == 0 {
-            ContentUnavailableView {
-                Label(L10n.string("No Skills Indexed"), systemImage: "tray")
-            } description: {
-                Text(verbatim: L10n.string("Add another project to scan for Skills."))
-            } actions: {
-                AuthorizationViews(showsHeading: false)
-                    .frame(width: 230)
+            listEmpty(
+                title: L10n.string("No Skills in Scope"),
+                message: L10n.string("No Skills in Scope Description"),
+                actionTitle: nil,
+                action: nil
+            )
+            .overlay(alignment: .bottom) {
+                importButtons
+                    .padding(.bottom, 32)
             }
-        } else if hasActiveFilters {
-            ContentUnavailableView {
-                Label(L10n.string("No Matching Skills"), systemImage: "line.3.horizontal.decrease.circle")
-            } description: {
-                Text(verbatim: L10n.string("Change the search or filters to show more Skills."))
-            } actions: {
-                Button(L10n.string("Clear Filters"), action: onClearFilters)
-            }
+        } else {
+            listEmpty(
+                title: L10n.string("No Skills in Scope"),
+                message: L10n.string("No Skills in Scope Description"),
+                actionTitle: L10n.string("Clear Search"),
+                action: onClearFilters
+            )
         }
+    }
+
+    private var importButtons: some View {
+        VStack(spacing: 10) {
+            textButton(L10n.string("Import Project Directory"), action: onImportProject)
+            textButton(L10n.string("Import System Directory"), action: onImportHome)
+        }
+    }
+
+    private func textButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(verbatim: title)
+                .font(AppTheme.body(13, weight: .medium))
+                .foregroundStyle(AppTheme.accent)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(HoverTextButtonStyle())
+        .accessibilityLabel(title)
+    }
+
+    /// `.list-empty` centered state with the design's typography.
+    private func listEmpty(
+        title: String,
+        message: String,
+        actionTitle: String?,
+        action: (() -> Void)?
+    ) -> some View {
+        VStack(spacing: 8) {
+            Spacer(minLength: 48)
+            Text(verbatim: title)
+                .font(AppTheme.display(17, weight: .semibold))
+                .foregroundStyle(AppTheme.foreground)
+                .lineLimit(1)
+            Text(verbatim: message)
+                .font(AppTheme.body(13))
+                .foregroundStyle(AppTheme.muted)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 24)
+            if let actionTitle, let action {
+                textButton(actionTitle, action: action)
+                    .padding(.top, 8)
+            }
+            Spacer(minLength: 48)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
-private struct SkillFolderGroup: Identifiable {
-    let name: String
-    let skills: [SkillSnapshot]
-    var id: String { name }
+/// `.text-btn:hover` — faint accent fill.
+private struct HoverTextButtonStyle: ButtonStyle {
+    @State private var isHovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background {
+                if isHovering && !configuration.isPressed {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(AppTheme.accentTintFaint)
+                }
+            }
+            .onHover { hovering in
+                isHovering = hovering
+            }
+    }
 }

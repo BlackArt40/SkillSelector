@@ -13,7 +13,6 @@ final class BrowserSidebarTests: XCTestCase {
             resolvedTarget: nil,
             name: "demo",
             localDescription: nil,
-            customDescription: nil,
             modificationDate: nil,
             agentIDs: agentIDs,
             rootIDs: ["root-1"],

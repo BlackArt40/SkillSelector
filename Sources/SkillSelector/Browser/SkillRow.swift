@@ -1,45 +1,80 @@
 import SkillSelectorCore
 import SwiftUI
 
+/// A `.skill-row` from the design: gradient tile, name line with badges,
+/// one-line description, and agent chips.
 struct SkillRow: View {
     let skill: SkillSnapshot
     let agentNamesByID: [String: String]
+    let isActive: Bool
+    var onSelect: () -> Void
     var onOperation: ((FileOperationKind, SkillSnapshot) -> Void)?
     var onRevealInFinder: ((SkillSnapshot) -> Void)?
 
-    private var agentNames: String {
-        skill.agentDisplayNames(by: agentNamesByID).joined(separator: " · ")
+    private var descriptionText: String {
+        skill.localDescription ?? skill.name
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 6) {
-                Text(verbatim: skill.name)
-                    .fontWeight(.medium)
-                    .lineLimit(1)
-                Spacer(minLength: 4)
-                if !skill.parseDiagnostics.isEmpty {
-                    Image(systemName: "exclamationmark.circle")
-                        .foregroundStyle(.secondary)
-                        .help(L10n.string("Has diagnostics"))
-                        .accessibilityLabel(L10n.string("Has diagnostics"))
+        Button(action: onSelect) {
+            HStack(alignment: .top, spacing: 10) {
+                SkillTileView(
+                    title: skillTileLetter(for: skill.name),
+                    size: 34,
+                    cornerRadius: 9,
+                    active: isActive
+                )
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 6) {
+                        Text(verbatim: skill.name)
+                            .font(AppTheme.display(13.5, weight: .semibold))
+                            .foregroundStyle(AppTheme.foreground)
+                            .lineLimit(1)
+                        if !skill.parseDiagnostics.isEmpty {
+                            BadgeDot(
+                                text: L10n.string("Diagnostics Badge"),
+                                color: AppTheme.badgeWarnText,
+                                dot: AnyView(Circle().fill(AppTheme.warn).frame(width: 6, height: 6))
+                            )
+                        }
+                        if skill.resolvedTarget != nil {
+                            BadgeDot(
+                                text: L10n.string("Link Badge"),
+                                color: AppTheme.muted,
+                                dot: AnyView(
+                                    RoundedRectangle(cornerRadius: 2)
+                                        .stroke(AppTheme.meta, lineWidth: 1.5)
+                                        .frame(width: 5, height: 5)
+                                )
+                            )
+                        }
+                    }
+                    Text(verbatim: descriptionText)
+                        .font(AppTheme.body(12))
+                        .foregroundStyle(AppTheme.muted)
+                        .lineLimit(1)
+                        .padding(.top, 1)
+                    if !agentNames.isEmpty {
+                        HStack(spacing: 6) {
+                            ForEach(agentNames, id: \.self) { name in
+                                AgentChip(text: name, onActiveRow: isActive)
+                            }
+                        }
+                        .padding(.top, 5)
+                    }
                 }
+                Spacer(minLength: 0)
             }
-
-            if !agentNames.isEmpty {
-                Text(verbatim: agentNames)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(isActive ? AppTheme.accentTint : Color.clear, in: RoundedRectangle(cornerRadius: 10))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(isActive ? AppTheme.accentTintBorder : Color.clear, lineWidth: 1)
             }
-
-            Text(verbatim: skill.path)
-                .font(.system(.caption2, design: .monospaced))
-                .foregroundStyle(.tertiary)
-                .lineLimit(1)
-                .truncationMode(.middle)
+            .contentShape(Rectangle())
         }
-        .padding(.vertical, 3)
+        .buttonStyle(RowHoverStyle())
         .accessibilityElement(children: .combine)
         .draggable(SkillDragPayload(path: skill.path, name: skill.name))
         .contextMenu {
@@ -71,5 +106,67 @@ struct SkillRow: View {
                 Label(L10n.string("Move to Trash"), systemImage: "trash")
             }
         }
+    }
+
+    private var agentNames: [String] {
+        skill.agentDisplayNames(by: agentNamesByID)
+    }
+}
+
+/// `.badge-dot`: 10.5 pt semibold label with a leading status dot.
+struct BadgeDot: View {
+    let text: String
+    let color: Color
+    let dot: AnyView
+
+    var body: some View {
+        HStack(spacing: 4) {
+            dot
+            Text(verbatim: text)
+        }
+        .font(AppTheme.body(10.5, weight: .semibold))
+        .foregroundStyle(color)
+        .lineLimit(1)
+        .accessibilityHidden(true)
+    }
+}
+
+/// `.agent-chip`: 10.5 pt pill on a surface background.
+struct AgentChip: View {
+    let text: String
+    var onActiveRow = false
+
+    var body: some View {
+        Text(verbatim: text)
+            .font(AppTheme.body(10.5, weight: .medium))
+            .foregroundStyle(AppTheme.foregroundSecondary)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 1)
+            .background(onActiveRow ? AppTheme.accentChip : AppTheme.surface, in: Capsule())
+            .overlay {
+                if !onActiveRow {
+                    Capsule().stroke(AppTheme.borderSoft, lineWidth: 1)
+                }
+            }
+            .lineLimit(1)
+            .accessibilityHidden(true)
+    }
+}
+
+/// `.skill-row:hover:not(.active)` — surface fill on hover.
+private struct RowHoverStyle: ButtonStyle {
+    @State private var isHovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background {
+                if isHovering && !configuration.isPressed {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(AppTheme.surface)
+                }
+            }
+            .onHover { hovering in
+                isHovering = hovering
+            }
     }
 }

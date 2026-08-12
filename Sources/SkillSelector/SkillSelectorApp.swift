@@ -61,7 +61,7 @@ struct SkillSelectorApp: App {
                 .environment(model)
                 .task { await model.checkEnvironmentOnLaunch() }
         }
-            .defaultSize(width: 1120, height: 720)
+            .defaultSize(width: 1440, height: 900)
         Settings {
             SettingsView()
                 .environment(model)

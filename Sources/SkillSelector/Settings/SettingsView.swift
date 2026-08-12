@@ -49,92 +49,59 @@ struct CustomAgentEditorState {
     }
 }
 
+enum SettingsTab: Hashable {
+    case general
+    case directories
+    case about
+}
+
+/// The settings window from design/screens/settings.html: a tab bar with
+/// 通用 / 目录授权 / 关于 panes built from `.group` cards.
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @AppStorage("SkillSelector.preferredLanguage") private var preferredLanguage: String?
+    @State private var activeTab: SettingsTab = .general
     @State private var customAgentEditor = CustomAgentEditorState()
     @State private var settingsError: String?
     @State private var exportStatus: String?
     @State private var editingRootID: String?
     @State private var editingRootName: String = ""
+    @State private var showCustomAgentSheet = false
+
+    init(initialTab: SettingsTab = .general) {
+        _activeTab = State(initialValue: initialTab)
+    }
 
     var body: some View {
         @Bindable var model = model
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                settingsSection(
-                    title: L10n.string("Scan"),
-                    systemImage: nil
-                ) {
-                    Toggle(L10n.string("Auto-scan Home Directory"), isOn: $model.autoScanHome)
-                    Text(L10n.string("Scan agent skill folders in the home directory when the app launches."))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Divider()
-
-                settingsSection(
-                    title: L10n.string("Interface Language"),
-                    systemImage: "globe"
-                ) {
-                    Text(L10n.string("Language description"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Picker("", selection: $preferredLanguage) {
-                        Text(verbatim: L10n.string("Follow System")).tag(String?.none)
-                        Text("简体中文").tag("zh-Hans" as String?)
-                        Text("English").tag("en" as String?)
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .onChange(of: preferredLanguage) { _, newValue in
-                        L10n.setLanguage(newValue)
+        VStack(spacing: 0) {
+            tabBar
+            Rectangle()
+                .fill(AppTheme.borderSoft)
+                .frame(height: 1)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    switch activeTab {
+                    case .general: generalPane
+                    case .directories: directoriesPane
+                    case .about: aboutPane
                     }
                 }
-
-                Divider()
-
-                settingsSection(
-                    title: L10n.string("Authorized Directories"),
-                    systemImage: "folder.badge.gearshape"
-                ) {
-                    authorizedRoots
-                    AuthorizationViews(showsHeading: false)
-                }
-
-                Divider()
-
-                settingsSection(
-                    title: L10n.string("Custom Agents"),
-                    systemImage: "person.crop.square.badge.plus"
-                ) {
-                    customAgents
-                }
-
-                Divider()
-
-                settingsSection(
-                    title: L10n.string("Diagnostics"),
-                    systemImage: "stethoscope"
-                ) {
-                    Button {
-                        exportDiagnostics()
-                    } label: {
-                        Label(L10n.string("Export Redacted Diagnostics"), systemImage: "square.and.arrow.up")
-                    }
-                    if let exportStatus {
-                        Text(verbatim: exportStatus)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+                .frame(maxWidth: 520)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 32)
+                .padding(.top, 24)
+                .padding(.bottom, 48)
             }
-            .padding(22)
         }
-        .frame(width: 660, height: 720)
-        .background(SettingsWindowTitle(title: L10n.string("SkillSelector Settings")))
+        .frame(width: 720, height: 780)
+        .background(AppTheme.background)
+        .background(SettingsWindowTitle(title: L10n.string("Settings")))
         .languageReloading()
+        .themedAppearance()
+        .sheet(isPresented: $showCustomAgentSheet) {
+            customAgentSheet
+        }
         .alert(
             L10n.string("Settings Error"),
             isPresented: Binding(
@@ -148,161 +115,412 @@ struct SettingsView: View {
         }
     }
 
-    private var authorizedRoots: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if model.authorizedRoots.isEmpty {
-                Text(verbatim: L10n.string("No directories authorized."))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.bottom, 8)
+    // MARK: Tab bar
+
+    private var tabBar: some View {
+        HStack(spacing: 2) {
+            tabButton(.general, title: L10n.string("General"), icon: "gearshape")
+            tabButton(.directories, title: L10n.string("Directory Authorization"), icon: "folder")
+            tabButton(.about, title: L10n.string("About"), icon: "info.circle")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+        .background(AppTheme.surfaceWarm)
+    }
+
+    private func tabButton(_ tab: SettingsTab, title: String, icon: String) -> some View {
+        Button {
+            activeTab = tab
+        } label: {
+            VStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 19))
+                Text(verbatim: title)
+                    .font(AppTheme.body(11))
+                    .lineLimit(1)
             }
-            ForEach(model.authorizedRoots) { root in
-                HStack(spacing: 10) {
-                    Image(systemName: root.kind.systemImage)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 18)
-                    if editingRootID == root.id {
-                        TextField(
-                            root.displayName,
-                            text: $editingRootName,
-                            onCommit: {
-                                model.renameRoot(id: root.id, to: editingRootName)
-                                editingRootID = nil
-                            }
-                        )
-                        .textFieldStyle(.roundedBorder)
-                        .frame(maxWidth: 200)
-                    } else {
-                        Text(verbatim: L10n.string(root.kind.localizedName))
-                            .fontWeight(.medium)
-                    }
-                    Text(verbatim: root.url.path)
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .textSelection(.enabled)
-                    Spacer(minLength: 8)
-                    Button {
-                        editingRootID = root.id
-                        editingRootName = root.customName ?? ""
-                    } label: {
-                        Image(systemName: "pencil")
-                    }
-                    .buttonStyle(.borderless)
-                    .help(L10n.string("Rename"))
-                    .accessibilityLabel(L10n.string("Rename"))
-                    Button {
-                        reauthorize(root)
-                    } label: {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                    }
-                    .buttonStyle(.borderless)
-                    .help(L10n.string("Re-authorize Directory"))
-                    .accessibilityLabel(L10n.string("Re-authorize Directory"))
-                    Button(role: .destructive) {
-                        Task { await model.revokeAuthorization(id: root.id) }
-                    } label: {
-                        Image(systemName: "xmark.circle")
-                    }
-                    .buttonStyle(.borderless)
-                    .help(L10n.string("Revoke Authorization"))
-                    .accessibilityLabel(L10n.string("Revoke Authorization"))
+            .foregroundStyle(activeTab == tab ? AppTheme.accentActive : AppTheme.foregroundSecondary)
+            .frame(width: 76)
+            .padding(.vertical, 7)
+            .background(activeTab == tab ? AppTheme.accentTint : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(SettingsTabHoverStyle(isActive: activeTab == tab))
+        .accessibilityAddTraits(activeTab == tab ? .isSelected : [])
+        .accessibilityLabel(title)
+    }
+
+    // MARK: 通用 pane
+
+    private var generalPane: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            groupTitle(L10n.string("Scan"))
+            SettingsGroup {
+                SettingsRow(
+                    label: L10n.string("Auto-scan Home Directory"),
+                    sub: L10n.string("Scan agent skill folders in the home directory when the app launches.")
+                ) {
+                    ThemeSwitch(
+                        isOn: Binding(
+                            get: { model.autoScanHome },
+                            set: { model.autoScanHome = $0 }
+                        ),
+                        accessibilityLabel: L10n.string("Auto-scan Home Directory")
+                    )
                 }
-                .padding(.vertical, 7)
-                Divider()
+            }
+
+            groupTitle(L10n.string("Display"))
+                .padding(.top, 4)
+            SettingsGroup {
+                languageSegment
+            }
+
+            groupTitle(L10n.string("Data"))
+                .padding(.top, 4)
+            SettingsGroup {
+                SettingsRow(
+                    label: L10n.string("Skill Index"),
+                    sub: L10n.string("Skill Index Sub")
+                )
+                SettingsRow(
+                    label: L10n.string("Export Diagnostics Report"),
+                    sub: L10n.string("Export Diagnostics Sub")
+                ) {
+                    Button(L10n.string("Export…"), action: exportDiagnostics)
+                        .buttonStyle(SettingsButtonStyle())
+                        .help(L10n.string("Export Redacted Diagnostics"))
+                }
+            }
+            if let exportStatus {
+                Text(verbatim: exportStatus)
+                    .font(AppTheme.body(12))
+                    .foregroundStyle(AppTheme.muted)
+                    .padding(.top, 8)
             }
         }
     }
 
-    private var customAgents: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ForEach(model.customAgentDefinitions) { agent in
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(verbatim: agent.displayName).fontWeight(.medium)
-                        Text(verbatim: agent.entryFilename)
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(.secondary)
+    /// `.seg` — the three-option language segment with radio dots.
+    private var languageSegment: some View {
+        HStack(spacing: 3) {
+            languageOption(L10n.string("Follow System"), value: nil)
+            languageOption("简体中文", value: "zh-Hans")
+            languageOption("English", value: "en")
+        }
+        .padding(6)
+    }
+
+    private func languageOption(_ title: String, value: String?) -> some View {
+        let isSelected = preferredLanguage == value
+        return Button {
+            preferredLanguage = value
+            L10n.setLanguage(value)
+        } label: {
+            HStack(spacing: 7) {
+                RadioDot(isOn: isSelected)
+                Text(verbatim: title)
+                    .font(AppTheme.body(12.5, weight: .medium))
+                    .foregroundStyle(AppTheme.foreground)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 7)
+            .background(isSelected ? AppTheme.accentTint : Color.clear, in: RoundedRectangle(cornerRadius: 7))
+            .overlay {
+                RoundedRectangle(cornerRadius: 7)
+                    .stroke(isSelected ? AppTheme.accentTintBorder : AppTheme.borderSoft, lineWidth: 1)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityLabel(title)
+    }
+
+    // MARK: 目录授权 pane
+
+    private var directoriesPane: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            groupTitle(L10n.string("Authorized Directories"))
+            if model.authorizedRoots.isEmpty {
+                SettingsGroup {
+                    SettingsRow(label: L10n.string("No directories authorized."))
+                }
+            } else {
+                SettingsGroup {
+                    ForEach(model.authorizedRoots) { root in
+                        authorizedRootRow(root)
                     }
-                    Spacer()
-                    Button {
-                        customAgentEditor.beginEditing(agent)
-                    } label: {
-                        Image(systemName: "pencil")
-                    }
-                    .buttonStyle(.borderless)
-                    .help(L10n.string("Edit Custom Agent"))
-                    .accessibilityLabel(L10n.string("Edit Custom Agent"))
-                    Button(role: .destructive) {
-                        do {
-                            try model.removeCustomAgent(id: agent.id)
-                            customAgentEditor.resetIfEditing(removedID: agent.id)
-                        }
-                        catch { settingsError = String(describing: error) }
-                    } label: {
-                        Image(systemName: "trash")
-                    }
-                    .buttonStyle(.borderless)
-                    .help(L10n.string("Remove Custom Agent"))
-                    .accessibilityLabel(L10n.string("Remove Custom Agent"))
                 }
             }
-            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
-                GridRow {
-                    Text(verbatim: L10n.string("Name"))
-                    TextField(L10n.string("Agent Name"), text: $customAgentEditor.agentName)
-                }
-                GridRow {
-                    Text(verbatim: L10n.string("Global Roots"))
-                    TextField(L10n.string("Comma-separated paths"), text: $customAgentEditor.globalRoots)
-                }
-                GridRow {
-                    Text(verbatim: L10n.string("Project Patterns"))
-                    TextField(L10n.string("Comma-separated paths"), text: $customAgentEditor.projectPatterns)
-                }
-                GridRow {
-                    Text(verbatim: L10n.string("Entry Filename"))
-                    TextField("SKILL.md", text: $customAgentEditor.entryFilename)
-                }
-            }
+
             HStack {
+                Spacer()
                 Button {
+                    importProject()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 12))
+                        Text(verbatim: L10n.string("Add Project Folder…"))
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(SettingsButtonStyle())
+                .help(L10n.string("Import Project Directory"))
+            }
+            .padding(.top, 12)
+
+            groupTitle(L10n.string("Custom Agent Directories"), spaced: true)
+            SettingsGroup {
+                ForEach(model.customAgentDefinitions) { agent in
+                    customAgentRow(agent)
+                }
+                SettingsRow(
+                    label: L10n.string("Custom Agent Hint"),
+                    hint: true
+                ) {
+                    Button(L10n.string("Add…")) {
+                        customAgentEditor.reset()
+                        showCustomAgentSheet = true
+                    }
+                    .buttonStyle(SettingsButtonStyle())
+                    .help(L10n.string("Add Custom Agent"))
+                }
+            }
+        }
+    }
+
+    private func authorizedRootRow(_ root: AuthorizedRootSnapshot) -> some View {
+        let isHome = root.kind == .home
+        return SettingsRow(
+            label: isHome ? L10n.string("User Home Directory") : root.displayName,
+            sub: isHome
+                ? L10n.string("Home Directory Sub")
+                : root.url.path,
+            subMonospaced: !isHome
+        ) {
+            HStack(spacing: 10) {
+                if isHome {
+                    Text(verbatim: "~")
+                        .font(AppTheme.mono(11.5))
+                        .foregroundStyle(AppTheme.muted)
+                } else {
+                    statusDot(L10n.string("Project"), color: AppTheme.meta)
+                }
+                if isHome {
+                    statusDot(L10n.string("Authorized"), color: AppTheme.success)
+                }
+                if !isHome {
+                    Button(L10n.string("Remove")) {
+                        Task { await model.revokeAuthorization(id: root.id) }
+                    }
+                    .buttonStyle(SettingsDangerButtonStyle())
+                    .accessibilityLabel(L10n.string("Revoke Authorization"))
+                }
+            }
+        }
+        .contextMenu {
+            if editingRootID != root.id {
+                Button(L10n.string("Rename")) {
+                    editingRootID = root.id
+                    editingRootName = root.customName ?? ""
+                }
+            }
+            Button(L10n.string("Re-authorize Directory")) {
+                reauthorize(root)
+            }
+            if isHome {
+                Divider()
+                Button(L10n.string("Revoke Authorization"), role: .destructive) {
+                    Task { await model.revokeAuthorization(id: root.id) }
+                }
+            }
+        }
+    }
+
+    private func customAgentRow(_ agent: AgentDefinition) -> some View {
+        SettingsRow(
+            label: agent.displayName,
+            sub: agent.entryFilename,
+            subMonospaced: true
+        ) {
+            HStack(spacing: 10) {
+                Button(L10n.string("Remove")) {
                     do {
-                        try customAgentEditor.save(using: model)
+                        try model.removeCustomAgent(id: agent.id)
+                        customAgentEditor.resetIfEditing(removedID: agent.id)
                     } catch {
                         settingsError = String(describing: error)
                     }
-                } label: {
-                    Label(
-                        L10n.string(customAgentEditor.selectedAgentID == nil
-                            ? "Add Custom Agent"
-                            : "Update Custom Agent"),
-                        systemImage: customAgentEditor.selectedAgentID == nil ? "plus" : "checkmark"
-                    )
                 }
-                .disabled(customAgentEditor.agentName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                if customAgentEditor.selectedAgentID != nil {
-                    Button(L10n.string("Cancel Editing")) {
-                        customAgentEditor.reset()
-                    }
-                }
+                .buttonStyle(SettingsDangerButtonStyle())
+                .accessibilityLabel(L10n.string("Remove Custom Agent"))
+            }
+        }
+        .contextMenu {
+            Button(L10n.string("Edit Custom Agent")) {
+                customAgentEditor.beginEditing(agent)
+                showCustomAgentSheet = true
             }
         }
     }
 
-    private func settingsSection<Content: View>(
-        title: String,
-        systemImage: String?,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if let systemImage {
-                Label(title, systemImage: systemImage).font(.headline)
-            } else {
-                Text(title).font(.headline)
+    // MARK: 关于 pane
+
+    private var aboutPane: some View {
+        VStack(alignment: .center, spacing: 0) {
+            AppIconView(size: 128)
+                .shadow(color: .black.opacity(0.18), radius: 24, y: 12)
+            LogoView(height: 40)
+                .padding(.top, 16)
+            Text(verbatim: L10n.string("Version Line", appVersion))
+                .font(AppTheme.body(12.5))
+                .foregroundStyle(AppTheme.muted)
+                .padding(.top, 8)
+            Text(verbatim: L10n.string("Tagline"))
+                .font(AppTheme.body(13))
+                .foregroundStyle(AppTheme.foregroundSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.top, 8)
+
+            HStack(spacing: 16) {
+                aboutLink(L10n.string("GitHub"), url: URL(string: "https://github.com/BlackArt40/SkillSelector"))
+                aboutLink(L10n.string("Release Notes"), url: URL(string: "https://github.com/BlackArt40/SkillSelector/releases"))
+                aboutLink(L10n.string("Apache License"), url: URL(string: "https://github.com/BlackArt40/SkillSelector/blob/main/LICENSE"))
             }
-            content()
+            .padding(.top, 16)
+
+            SettingsGroup {
+                SettingsRow(
+                    label: L10n.string("Privacy"),
+                    sub: L10n.string("Privacy Sub")
+                )
+                SettingsRow(
+                    label: L10n.string("Signature"),
+                    sub: L10n.string("Signature Sub")
+                )
+            }
+            .padding(.top, 24)
+
+            Text(verbatim: L10n.string("About Footer"))
+                .font(AppTheme.body(11))
+                .foregroundStyle(AppTheme.muted)
+                .multilineTextAlignment(.center)
+                .lineSpacing(3)
+                .padding(.top, 24)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func aboutLink(_ title: String, url: URL?) -> some View {
+        Button {
+            if let url {
+                NSWorkspace.shared.open(url)
+            }
+        } label: {
+            Text(verbatim: title)
+                .font(AppTheme.body(12.5))
+                .foregroundStyle(AppTheme.accentActive)
+                .underline()
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(title)
+        .accessibilityLabel(title)
+    }
+
+    // MARK: Custom agent form sheet
+
+    private var customAgentSheet: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(verbatim: L10n.string(customAgentEditor.selectedAgentID == nil
+                ? "Add Custom Agent"
+                : "Edit Custom Agent"))
+                .font(AppTheme.display(17, weight: .semibold))
+                .foregroundStyle(AppTheme.foreground)
+
+            VStack(spacing: 12) {
+                field(L10n.string("Agent Name"), text: $customAgentEditor.agentName, prompt: L10n.string("Agent Name"))
+                field(L10n.string("Global Roots"), text: $customAgentEditor.globalRoots, prompt: L10n.string("Comma-separated paths"))
+                field(L10n.string("Project Patterns"), text: $customAgentEditor.projectPatterns, prompt: L10n.string("Comma-separated paths"))
+                field(L10n.string("Entry Filename"), text: $customAgentEditor.entryFilename, prompt: "SKILL.md")
+            }
+
+            HStack(spacing: 8) {
+                Spacer()
+                Button(L10n.string("Cancel")) {
+                    customAgentEditor.reset()
+                    showCustomAgentSheet = false
+                }
+                .buttonStyle(ActionButtonStyle(role: .secondary))
+                .keyboardShortcut(.cancelAction)
+                Button(L10n.string(customAgentEditor.selectedAgentID == nil ? "Add" : "Save")) {
+                    do {
+                        try customAgentEditor.save(using: model)
+                        showCustomAgentSheet = false
+                    } catch {
+                        settingsError = String(describing: error)
+                    }
+                }
+                .buttonStyle(ActionButtonStyle(role: .primary))
+                .keyboardShortcut(.defaultAction)
+                .disabled(customAgentEditor.agentName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(24)
+        .frame(width: 460)
+        .background(AppTheme.background)
+    }
+
+    private func field(_ label: String, text: Binding<String>, prompt: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(verbatim: label)
+                .font(AppTheme.body(12.5, weight: .medium))
+                .foregroundStyle(AppTheme.foregroundSecondary)
+            TextField(prompt, text: text)
+                .textFieldStyle(.plain)
+                .font(AppTheme.body(13))
+                .padding(.horizontal, 10)
+                .frame(height: 32)
+                .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 8))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(AppTheme.border, lineWidth: 1)
+                }
+        }
+    }
+
+    // MARK: Shared
+
+    private var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+            ?? "0.0.0"
+    }
+
+    private func groupTitle(_ title: String, spaced: Bool = false) -> some View {
+        Text(verbatim: title)
+            .font(AppTheme.body(12, weight: .semibold))
+            .foregroundStyle(AppTheme.muted)
+            .kerning(0.1)
+            .padding(.horizontal, 4)
+            .padding(.top, spaced ? 24 : 0)
+            .padding(.bottom, 8)
+    }
+
+    private func statusDot(_ text: String, color: Color) -> some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(color)
+                .frame(width: 7, height: 7)
+            Text(verbatim: text)
+                .font(AppTheme.body(12))
+                .foregroundStyle(AppTheme.muted)
         }
     }
 
@@ -316,6 +534,19 @@ struct SettingsView: View {
         panel.directoryURL = root.url
         guard panel.runModal() == .OK, let url = panel.url else { return }
         Task { await model.authorize(url, as: root.kind) }
+    }
+
+    private func importProject() {
+        let panel = NSOpenPanel()
+        panel.title = L10n.string("Import Project Directory")
+        panel.message = L10n.string("Choose a project directory to scan for all Skills.")
+        panel.prompt = L10n.string("Import")
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task { await model.authorize(url, as: .project) }
     }
 
     private func exportDiagnostics() {
@@ -334,5 +565,164 @@ struct SettingsView: View {
             }
         }
     }
+}
 
+// MARK: - Group building blocks
+
+/// `.group` — a surface card whose rows are separated by hairline borders
+/// (the design removes the border under the last row).
+struct SettingsGroup<Content: View>: View {
+    private let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        _VariadicView.Tree(SettingsGroupLayout()) {
+            content
+        }
+        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(AppTheme.borderSoft, lineWidth: 1)
+        }
+    }
+}
+
+private struct SettingsGroupLayout: _VariadicView.MultiViewRoot {
+    func body(children: _VariadicView.Children) -> some View {
+        let views = Array(children)
+        VStack(spacing: 0) {
+            ForEach(Array(views.enumerated()), id: \.offset) { index, child in
+                child
+                if index < views.count - 1 {
+                    Rectangle()
+                        .fill(AppTheme.borderSoft)
+                        .frame(height: 1)
+                }
+            }
+        }
+    }
+}
+
+/// `.group-row` — 44 pt min-height row with label, optional sub, and a
+/// trailing control. Rows inside a group separate themselves with a
+/// hairline border above (the design removes it on the first row).
+struct SettingsRow<Content: View>: View {
+    let label: String
+    var sub: String? = nil
+    var subMonospaced = false
+    var hint = false
+    let trailing: Content
+
+    init(
+        label: String,
+        sub: String? = nil,
+        subMonospaced: Bool = false,
+        hint: Bool = false,
+        @ViewBuilder trailing: () -> Content = { EmptyView() }
+    ) {
+        self.label = label
+        self.sub = sub
+        self.subMonospaced = subMonospaced
+        self.hint = hint
+        self.trailing = trailing()
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(verbatim: label)
+                    .font(AppTheme.body(13))
+                    .foregroundStyle(hint ? AppTheme.muted : AppTheme.foreground)
+                if let sub {
+                    Text(verbatim: sub)
+                        .font(subMonospaced ? AppTheme.mono(11.5) : AppTheme.body(11.5))
+                        .foregroundStyle(AppTheme.muted)
+                        .lineLimit(2)
+                        .textSelection(.enabled)
+                }
+            }
+            Spacer(minLength: 8)
+            if !(trailing is EmptyView) {
+                trailing
+            }
+        }
+        .padding(.horizontal, 16)
+        .frame(minHeight: 44)
+        .padding(.vertical, 11)
+        .background(AppTheme.surface)
+    }
+}
+
+/// `.radio` — 17 pt circle; on state fills with the accent border.
+struct RadioDot: View {
+    let isOn: Bool
+
+    var body: some View {
+        Circle()
+            .strokeBorder(isOn ? AppTheme.accent : AppTheme.meta, lineWidth: isOn ? 5.5 : 1.5)
+            .frame(width: 17, height: 17)
+            .accessibilityHidden(true)
+    }
+}
+
+/// `.btn` — 30 pt settings button with an elevation ring.
+struct SettingsButtonStyle: ButtonStyle {
+    @State private var isHovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(AppTheme.body(12.5, weight: .medium))
+            .foregroundStyle(AppTheme.foreground)
+            .frame(height: 30)
+            .padding(.horizontal, 14)
+            .background(isHovering && !configuration.isPressed ? AppTheme.borderSoft : AppTheme.background, in: RoundedRectangle(cornerRadius: 8))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(AppTheme.border, lineWidth: 1)
+            }
+            .onHover { hovering in
+                isHovering = hovering
+            }
+            .contentShape(Rectangle())
+    }
+}
+
+/// `.btn.danger` — bordered-less destructive text button.
+struct SettingsDangerButtonStyle: ButtonStyle {
+    @State private var isHovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(AppTheme.body(12.5, weight: .semibold))
+            .foregroundStyle(AppTheme.danger)
+            .frame(height: 30)
+            .padding(.horizontal, 14)
+            .background(isHovering && !configuration.isPressed ? AppTheme.dangerTint : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+            .onHover { hovering in
+                isHovering = hovering
+            }
+            .contentShape(Rectangle())
+    }
+}
+
+/// `.tab:hover:not(.active)` — soft fill on hover.
+private struct SettingsTabHoverStyle: ButtonStyle {
+    let isActive: Bool
+    @State private var isHovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background {
+                if isHovering && !isActive && !configuration.isPressed {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(AppTheme.borderSoft)
+                }
+            }
+            .onHover { hovering in
+                isHovering = hovering
+            }
+    }
 }

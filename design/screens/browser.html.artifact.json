@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "kind": "html",
+  "title": "screens/browser.html",
+  "entry": "screens/browser.html",
+  "renderer": "html",
+  "status": "complete",
+  "exports": [
+    "html",
+    "pdf",
+    "zip"
+  ],
+  "createdAt": "2026-08-12T04:23:37.742Z",
+  "updatedAt": "2026-08-12T04:23:37.742Z",
+  "metadata": {
+    "inferred": true,
+    "reconciled": true
+  }
+}

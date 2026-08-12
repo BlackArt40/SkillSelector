@@ -25,22 +25,18 @@ enum BrowserDestination: Hashable {
         guard case .agent(let id) = self else { return nil }
         return id
     }
-
-    var showsFolderGroups: Bool {
-        switch self {
-        case .all, .system:
-            true
-        case .global, .project, .agent:
-            false
-        }
-    }
 }
 
+/// Sidebar mirroring the design's `.sidebar` column: 240 pt, surface
+/// background, section headings, icon rows with trailing counts, and a
+/// footer with 设置 / 添加项目 links.
 struct BrowserSidebar: View {
     @Binding var destination: BrowserDestination?
     let roots: [AuthorizedRootSnapshot]
     let definitions: [AgentDefinition]
     let detectedAgentIDs: Set<String>
+    let counts: [BrowserDestination: Int]
+    var onAddProject: () -> Void
     var onDrop: ((SkillDragPayload, URL) -> Void)?
 
     private var systemRoots: [AuthorizedRootSnapshot] {
@@ -110,98 +106,262 @@ struct BrowserSidebar: View {
     }
 
     var body: some View {
-        List(selection: $destination) {
-            Section {
-                Label(L10n.string("All Skills"), systemImage: "square.stack.3d.up")
-                    .tag(BrowserDestination.all)
-                Label(L10n.string("Global Skills"), systemImage: "globe")
-                    .tag(BrowserDestination.global)
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    mainSection
+                    directoriesSection
+                    agentsSection
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 12)
             }
+            footer
+        }
+        .background(AppTheme.surface)
+        .overlay(alignment: .trailing) {
+            Rectangle()
+                .fill(AppTheme.borderSoft)
+                .frame(width: 1)
+        }
+    }
 
-            if !systemRoots.isEmpty {
-                Section(L10n.string("System")) {
-                    ForEach(systemRoots) { root in
-                        systemLabel(root)
-                            .tag(BrowserDestination.system(rootID: root.id))
-                            .dropDestination(for: SkillDragPayload.self) { items, _ in
-                                guard let item = items.first,
-                                      let onDrop else { return false }
-                                onDrop(item, root.url)
-                                return true
-                            }
-                    }
+    // MARK: Sections
+
+    private var mainSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SidebarItem(
+                title: L10n.string("All Skills"),
+                glyph: Image(systemName: "square.stack.3d.up"),
+                count: counts[.all],
+                isActive: destination == .all
+            ) {
+                destination = .all
+            }
+            SidebarItem(
+                title: L10n.string("Global Skills"),
+                glyph: Image(systemName: "globe"),
+                count: counts[.global],
+                isActive: destination == .global
+            ) {
+                destination = .global
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var directoriesSection: some View {
+        if !systemRoots.isEmpty || !projects.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                sideHeading(L10n.string("Directories"))
+                ForEach(systemRoots) { root in
+                    systemRow(root)
+                }
+                ForEach(projects) { project in
+                    projectRow(project)
                 }
             }
+        }
+    }
 
-            if !projects.isEmpty {
-                Section(L10n.string("Projects")) {
-                    ForEach(projects) { project in
-                        projectLabel(project)
-                            .tag(BrowserDestination.project(rootID: project.id))
-                            .dropDestination(for: SkillDragPayload.self) { items, _ in
-                                guard let item = items.first,
-                                      let onDrop else { return false }
-                                onDrop(item, project.url)
-                                return true
-                            }
-                    }
-                }
-            }
-
-            if !agents.isEmpty {
-                Section(L10n.string("Agents")) {
-                    ForEach(agents) { agent in
-                        Label(agent.displayName, systemImage: "terminal")
-                            .tag(BrowserDestination.agent(id: agent.id))
+    @ViewBuilder
+    private var agentsSection: some View {
+        if !agents.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                sideHeading(L10n.string("Agents"))
+                ForEach(agents) { agent in
+                    SidebarItem(
+                        title: agent.displayName,
+                        glyph: AgentMonoView(name: agent.displayName),
+                        count: counts[.agent(id: agent.id)],
+                        isActive: destination == .agent(id: agent.id)
+                    ) {
+                        destination = .agent(id: agent.id)
                     }
                 }
             }
         }
-        .listStyle(.sidebar)
-        .navigationTitle(L10n.string("SkillSelector"))
     }
 
-    @ViewBuilder
-    private func projectLabel(_ project: AuthorizedRootSnapshot) -> some View {
-        labeledRoot(
-            project,
-            name: project.displayName,
-            icon: "folder",
-            showPath: duplicateProjectNames.contains(project.url.lastPathComponent.lowercased())
-        )
+    private func sideHeading(_ text: String) -> some View {
+        Text(verbatim: text)
+            .font(AppTheme.body(11, weight: .semibold))
+            .kerning(0.2)
+            .foregroundStyle(AppTheme.muted)
+            .padding(.horizontal, 10)
+            .padding(.bottom, 2)
     }
 
-    @ViewBuilder
-    private func systemLabel(_ root: AuthorizedRootSnapshot) -> some View {
-        labeledRoot(
-            root,
-            name: L10n.string(root.kind.localizedName),
-            icon: root.kind.systemImage,
-            showPath: duplicateSystemNames.contains(root.url.lastPathComponent.lowercased())
-        )
+    // MARK: Root rows
+
+    private func systemRow(_ root: AuthorizedRootSnapshot) -> some View {
+        let showsPath = duplicateSystemNames.contains(root.url.lastPathComponent.lowercased())
+        return SidebarItem(
+            title: L10n.string(root.kind.localizedName),
+            subtitle: showsPath ? root.url.path : nil,
+            glyph: Image(systemName: root.kind.systemImage),
+            count: counts[.system(rootID: root.id)],
+            isActive: destination == .system(rootID: root.id)
+        ) {
+            destination = .system(rootID: root.id)
+        }
+        .dropDestination(for: SkillDragPayload.self) { items, _ in
+            guard let item = items.first, let onDrop else { return false }
+            onDrop(item, root.url)
+            return true
+        }
     }
 
-    @ViewBuilder
-    private func labeledRoot(
-        _ root: AuthorizedRootSnapshot,
-        name: String,
-        icon: String,
-        showPath: Bool
-    ) -> some View {
-        if showPath {
+    private func projectRow(_ project: AuthorizedRootSnapshot) -> some View {
+        let showsPath = duplicateProjectNames.contains(project.url.lastPathComponent.lowercased())
+        return SidebarItem(
+            title: project.displayName,
+            subtitle: showsPath ? project.url.path : nil,
+            glyph: Image(systemName: "folder"),
+            count: counts[.project(rootID: project.id)],
+            isActive: destination == .project(rootID: project.id)
+        ) {
+            destination = .project(rootID: project.id)
+        }
+        .dropDestination(for: SkillDragPayload.self) { items, _ in
+            guard let item = items.first, let onDrop else { return false }
+            onDrop(item, project.url)
+            return true
+        }
+    }
+
+    // MARK: Footer
+
+    private var footer: some View {
+        HStack(spacing: 8) {
+            SettingsLink {
+                SidebarLinkLabel(
+                    title: L10n.string("Settings"),
+                    icon: Image(systemName: "gearshape")
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.string("Open Settings"))
+            Button(action: onAddProject) {
+                SidebarLinkLabel(
+                    title: L10n.string("Add Project"),
+                    icon: Image(systemName: "plus")
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.string("Add Project"))
+        }
+        .padding(12)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(AppTheme.borderSoft)
+                .frame(height: 1)
+        }
+        .background(AppTheme.surface)
+    }
+}
+
+/// A single `.side-item`: 32 pt tall, 13 pt label, 11 pt trailing count.
+struct SidebarItem: View {
+    let title: String
+    var subtitle: String? = nil
+    let glyph: AnyView
+    let count: Int?
+    let isActive: Bool
+    let action: () -> Void
+
+    init<G: View>(
+        title: String,
+        subtitle: String? = nil,
+        glyph: G,
+        count: Int?,
+        isActive: Bool,
+        action: @escaping () -> Void
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.glyph = AnyView(glyph)
+        self.count = count
+        self.isActive = isActive
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
             HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .foregroundStyle(.secondary)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(verbatim: name)
-                    Text(verbatim: root.url.path)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                glyph
+                    .font(.system(size: 13))
+                    .frame(width: 18)
+                    .foregroundStyle(isActive ? AppTheme.accentActive : AppTheme.muted)
+                if let subtitle {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(verbatim: title)
+                            .lineLimit(1)
+                        Text(verbatim: subtitle)
+                            .font(.system(size: 10))
+                            .foregroundStyle(AppTheme.muted)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                } else {
+                    Text(verbatim: title)
                         .lineLimit(1)
                 }
+                Spacer(minLength: 4)
+                if let count {
+                    Text(verbatim: "\(count)")
+                        .font(AppTheme.body(11))
+                        .foregroundStyle(AppTheme.muted)
+                        .fontDesign(.monospaced)
+                        .fontWeight(isActive ? .medium : .regular)
+                }
             }
-        } else {
-            Label(name, systemImage: icon)
+            .font(AppTheme.body(13))
+            .foregroundStyle(isActive ? AppTheme.accentActive : AppTheme.foreground)
+            .fontWeight(isActive ? .medium : .regular)
+            .frame(height: 32)
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(isActive ? AppTheme.accentTint : Color.clear, in: RoundedRectangle(cornerRadius: 7))
+            .contentShape(Rectangle())
         }
+        .buttonStyle(SidebarButtonStyle())
+    }
+}
+
+/// Hover background for `.side-item:hover` (border-soft fill).
+private struct SidebarButtonStyle: ButtonStyle {
+    @State private var isHovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background {
+                if isHovering && !configuration.isPressed {
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(AppTheme.borderSoft)
+                }
+            }
+            .onHover { hovering in
+                isHovering = hovering
+            }
+    }
+}
+
+/// Footer `.side-link`: 28 pt tall, 12 pt label with a 13 pt icon.
+private struct SidebarLinkLabel: View {
+    let title: String
+    let icon: Image
+
+    var body: some View {
+        HStack(spacing: 6) {
+            icon
+                .font(.system(size: 13))
+            Text(verbatim: title)
+                .font(AppTheme.body(12))
+        }
+        .foregroundStyle(AppTheme.foregroundSecondary)
+        .frame(maxWidth: .infinity)
+        .frame(height: 28)
+        .contentShape(Rectangle())
     }
 }

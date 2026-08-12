@@ -8,6 +8,8 @@
 	<string>SkillSelector</string>
 	<key>CFBundleExecutable</key>
 	<string>SkillSelector</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>io.github.skillselector.SkillSelector</string>
 	<key>CFBundleInfoDictionaryVersion</key>

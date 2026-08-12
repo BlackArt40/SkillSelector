@@ -1,6 +1,8 @@
 import SkillSelectorCore
 import SwiftUI
 
+/// The `.dialog` from the design: 460 pt card with a route block showing
+/// the source and destination paths in mono, and 取消 + confirm actions.
 struct OperationConfirmationView: View {
     let plan: FileOperationPlan
     let isOperating: Bool
@@ -27,36 +29,40 @@ struct OperationConfirmationView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Label(operationTitle, systemImage: operationIcon)
-                .font(.title3)
-                .fontWeight(.semibold)
+        VStack(alignment: .leading, spacing: 0) {
+            Text(verbatim: operationTitle)
+                .font(AppTheme.display(17, weight: .semibold))
+                .foregroundStyle(AppTheme.foreground)
+                .lineLimit(1)
 
-            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {
-                valueRow(L10n.string("Source"), plan.logicalSourceURL.path)
-                if plan.resolvedSourceURL != plan.logicalSourceURL {
-                    valueRow(L10n.string("Resolved Target"), plan.resolvedSourceURL.path)
-                }
-                if let destination = plan.destinationURL {
-                    valueRow(L10n.string("Destination"), destination.path)
-                }
-                if let linkTarget = plan.linkTarget {
-                    valueRow(L10n.string("Symbolic Link Target"), linkTarget)
-                }
-            }
+            Text(verbatim: operationDescription)
+                .font(AppTheme.body(13))
+                .foregroundStyle(AppTheme.muted)
+                .lineSpacing(3)
+                .padding(.top, 8)
+
+            routeBlock
+                .padding(.top, 16)
 
             if plan.operation != .delete, plan.hadDestinationConflict {
-                Picker(L10n.string("Name Conflict"), selection: $selectedConflict) {
-                    Text(verbatim: L10n.string("Keep Both")).tag(FileConflictPolicy.keepBoth)
-                    Text(verbatim: L10n.string("Replace")).tag(FileConflictPolicy.replace)
-                    Text(verbatim: L10n.string("Cancel")).tag(FileConflictPolicy.cancel)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(verbatim: L10n.string("Name Conflict"))
+                        .font(AppTheme.body(12, weight: .medium))
+                        .foregroundStyle(AppTheme.muted)
+                    Picker(L10n.string("Name Conflict"), selection: $selectedConflict) {
+                        Text(verbatim: L10n.string("Keep Both")).tag(FileConflictPolicy.keepBoth)
+                        Text(verbatim: L10n.string("Replace")).tag(FileConflictPolicy.replace)
+                        Text(verbatim: L10n.string("Cancel")).tag(FileConflictPolicy.cancel)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .disabled(isOperating)
+                    .onChange(of: selectedConflict) { _, newValue in
+                        replacementConfirmed = false
+                        onConflictChange(newValue)
+                    }
                 }
-                .pickerStyle(.segmented)
-                .disabled(isOperating)
-                .onChange(of: selectedConflict) { _, newValue in
-                    replacementConfirmed = false
-                    onConflictChange(newValue)
-                }
+                .padding(.top, 16)
             }
 
             if plan.operation == .delete {
@@ -64,33 +70,41 @@ struct OperationConfirmationView: View {
                     L10n.string("This Skill will be moved to Trash."),
                     icon: "trash"
                 )
+                .padding(.top, 16)
             }
             if plan.movesExistingDestinationToTrash {
                 disclosure(
                     L10n.string("The existing destination will be moved to Trash before replacement."),
                     icon: "exclamationmark.triangle"
                 )
+                .padding(.top, 16)
                 Toggle(
                     L10n.string("I confirm replacing the existing Skill."),
                     isOn: $replacementConfirmed
                 )
+                .font(AppTheme.body(13))
+                .toggleStyle(.checkbox)
+                .padding(.top, 8)
                 .accessibilityLabel(L10n.string("Confirm replacement"))
             }
             if !plan.affectedIndexedAliases.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(verbatim: L10n.string("Affected Installations"))
-                        .font(.headline)
+                        .font(AppTheme.body(13, weight: .semibold))
                     ForEach(plan.affectedIndexedAliases, id: \.self) { path in
                         Text(verbatim: path)
-                            .font(.system(.caption, design: .monospaced))
+                            .font(AppTheme.mono(11.5))
+                            .foregroundStyle(AppTheme.foregroundSecondary)
                             .textSelection(.enabled)
                     }
                 }
+                .padding(.top, 16)
             }
 
-            HStack {
+            HStack(spacing: 8) {
                 Spacer()
                 Button(L10n.string("Cancel"), role: .cancel, action: onCancel)
+                    .buttonStyle(ActionButtonStyle(role: .secondary))
                     .keyboardShortcut(.cancelAction)
                     .disabled(isOperating)
                 Button(action: { onConfirm(replacementConfirmed) }) {
@@ -101,6 +115,7 @@ struct OperationConfirmationView: View {
                         Text(verbatim: confirmTitle)
                     }
                 }
+                .buttonStyle(ActionButtonStyle(role: plan.operation == .delete ? .dangerSolid : .primary))
                 .keyboardShortcut(.defaultAction)
                 .disabled(
                     isOperating
@@ -110,27 +125,50 @@ struct OperationConfirmationView: View {
                 .help(L10n.string("Confirm file operation"))
                 .accessibilityLabel(confirmTitle)
             }
+            .padding(.top, 20)
         }
-        .padding(22)
-        .frame(minWidth: 560, idealWidth: 620, maxWidth: 720)
+        .padding(24)
+        .frame(width: 460)
+        .background(AppTheme.background)
         .interactiveDismissDisabled(isOperating)
     }
 
-    @ViewBuilder
-    private func valueRow(_ label: String, _ value: String) -> some View {
-        GridRow(alignment: .firstTextBaseline) {
+    /// `.op-route` — surface block with route labels and mono paths.
+    private var routeBlock: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            routeLine(L10n.string("Source"), plan.logicalSourceURL.path)
+            if plan.resolvedSourceURL != plan.logicalSourceURL {
+                routeLine(L10n.string("Resolved Target"), plan.resolvedSourceURL.path)
+            }
+            if let destination = plan.destinationURL {
+                routeLine(L10n.string("Destination"), destination.path)
+            }
+            if let linkTarget = plan.linkTarget {
+                routeLine(L10n.string("Symbolic Link Target"), linkTarget)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func routeLine(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
             Text(verbatim: label)
-                .foregroundStyle(.secondary)
+                .font(AppTheme.body(11, weight: .semibold))
+                .foregroundStyle(AppTheme.meta)
             Text(verbatim: value)
-                .font(.system(.body, design: .monospaced))
+                .font(AppTheme.mono(11.5))
+                .foregroundStyle(AppTheme.foregroundSecondary)
                 .textSelection(.enabled)
-                .lineLimit(3)
+                .lineLimit(4)
         }
     }
 
     private func disclosure(_ text: String, icon: String) -> some View {
         Label {
             Text(verbatim: text)
+                .font(AppTheme.body(13))
         } icon: {
             Image(systemName: icon)
                 .foregroundStyle(.orange)
@@ -146,21 +184,21 @@ struct OperationConfirmationView: View {
         }
     }
 
-    private var confirmTitle: String {
+    private var operationDescription: String {
         switch plan.operation {
-        case .copy: L10n.string("Copy")
-        case .move: L10n.string("Move")
-        case .delete: L10n.string("Move to Trash")
-        case .createSymbolicLink: L10n.string("Create Link")
+        case .copy: L10n.string("Copy Description")
+        case .move: L10n.string("Move Description")
+        case .delete: L10n.string("Delete Description")
+        case .createSymbolicLink: L10n.string("Link Description")
         }
     }
 
-    private var operationIcon: String {
+    private var confirmTitle: String {
         switch plan.operation {
-        case .copy: "document.on.document"
-        case .move: "folder"
-        case .delete: "trash"
-        case .createSymbolicLink: "link"
+        case .copy: L10n.string("Copy To Current Folder")
+        case .move: L10n.string("Move To Current Folder")
+        case .delete: L10n.string("Move to Trash")
+        case .createSymbolicLink: L10n.string("Create Link")
         }
     }
 }
