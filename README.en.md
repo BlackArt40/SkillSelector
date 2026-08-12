@@ -21,6 +21,12 @@ Runs offline. Stores index records and security-scoped bookmarks—never copies 
 
 Copy and move can target any folder (granted via the folder picker); link and delete stay within authorized Skill roots. Deletion goes to Trash.
 
+## Screenshots
+
+![Main window (English)](screenshots/main-en.png)
+
+![Settings (English)](screenshots/settings-en.png)
+
 ## Build
 
 ```zsh

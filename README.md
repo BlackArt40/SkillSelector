@@ -21,6 +21,12 @@ Claude Code、Codex、Qoder、CodeBuddy、OpenCode、Cursor、Kilo Code、Cline�
 
 复制与移动可指向任意目标文件夹（文件夹选择器授权）；创建链接与删除限于已授权的 Skill 根目录。删除走回收站。
 
+## 截图
+
+![主窗口（简体中文）](screenshots/main-zh.png)
+
+![设置（简体中文）](screenshots/settings-zh.png)
+
 ## 构建
 
 ```zsh
