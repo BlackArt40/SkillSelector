@@ -34,8 +34,6 @@ CONTEXT.md
 .firecrawl/
 .brooks-lint-history.json
 /design/
-/Tests/
-/.github/
 /Scripts/run-app.sh
 *.dmg
 skills-lock.json

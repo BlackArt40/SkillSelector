@@ -2,8 +2,8 @@
 import Foundation
 import PackageDescription
 
-// The test suite stays local-only (see .gitignore); a published checkout
-// without Tests/ must still build, so the test target is conditional.
+// The test target stays conditional so source-only exports without Tests/
+// still build; normal checkouts always carry the suite (Tests/ is tracked).
 let testTargets: [Target] = FileManager.default.fileExists(atPath: "Tests")
     ? [
         .testTarget(

@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # 03:00 Asia/Shanghai — nightly flake watch (five rounds below).
+    - cron: "0 19 * * *"
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: swift build
+      - name: Test
+        run: swift test
+
+  package:
+    name: Package DMG (clean checkout)
+    if: github.event_name == 'push'
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package
+        run: zsh Scripts/package-dmg.sh 0.0.0-ci
+      - name: Smoke test
+        run: zsh Tests/Packaging/package-smoke.sh 0.0.0-ci
+
+  flake-watch:
+    name: Flake watch (round ${{ matrix.round }})
+    if: github.event_name == 'schedule'
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        round: [1, 2, 3, 4, 5]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test
+        run: swift test
