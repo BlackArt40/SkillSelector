@@ -33,21 +33,54 @@ public struct SkillQuery: Hashable, Sendable {
 
     public func apply(
         to snapshots: [SkillSnapshot],
-        rootsByID: [String: AuthorizedRootSnapshot]
+        rootsByID: [String: AuthorizedRootSnapshot],
+        agentNamesByID: [String: String] = [:]
     ) -> [SkillSnapshot] {
         var snapshotsByPath: [String: SkillSnapshot] = [:]
         for snapshot in snapshots where snapshotsByPath[snapshot.path] == nil {
             snapshotsByPath[snapshot.path] = snapshot
         }
 
-        let searchTerm = Self.searchKey(
-            searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        )
+        let terms = Self.parseSearchTerms(searchText)
         return snapshotsByPath.values
             .filter { matchesScope($0, rootsByID: rootsByID) }
             .filter { matchesAgent($0) }
-            .filter { matchesSearch($0, term: searchTerm) }
+            .filter { matchesSearch($0, terms: terms, agentNamesByID: agentNamesByID) }
             .sorted(by: comesBefore)
+    }
+
+    /// One whitespace-separated search token. Free terms match name,
+    /// description or path; prefixed terms (`name:`, `desc:`, `path:`,
+    /// `agent:`) restrict the match to a single field.
+    struct SearchTerm: Hashable, Sendable {
+        enum Field: String {
+            case name
+            case description = "desc"
+            case path
+            case agent
+        }
+
+        let field: Field?
+        let term: String
+    }
+
+    /// Splits the raw text into terms; an unrecognized or empty prefix
+    /// degrades that token to a free term instead of being ignored.
+    static func parseSearchTerms(_ raw: String) -> [SearchTerm] {
+        raw.split(whereSeparator: { $0.isWhitespace })
+            .map { token in
+                let token = String(token)
+                guard let colon = token.firstIndex(of: ":"), colon != token.startIndex else {
+                    return SearchTerm(field: nil, term: token)
+                }
+                let prefix = String(token[..<colon]).lowercased()
+                let value = String(token[token.index(after: colon)...])
+                guard let field = SearchTerm.Field(rawValue: prefix), !value.isEmpty else {
+                    return SearchTerm(field: nil, term: token)
+                }
+                return SearchTerm(field: field, term: value)
+            }
+            .filter { !$0.term.isEmpty }
     }
 
     public static func effectiveDescription(for snapshot: SkillSnapshot) -> String {
@@ -78,10 +111,30 @@ public struct SkillQuery: Hashable, Sendable {
         return snapshot.agentIDs.contains(agentID)
     }
 
-    private func matchesSearch(_ snapshot: SkillSnapshot, term: String) -> Bool {
-        guard !term.isEmpty else { return true }
-        return Self.searchKey(snapshot.name).contains(term)
-            || Self.searchKey(Self.effectiveDescription(for: snapshot)).contains(term)
+    private func matchesSearch(
+        _ snapshot: SkillSnapshot,
+        terms: [SearchTerm],
+        agentNamesByID: [String: String]
+    ) -> Bool {
+        guard !terms.isEmpty else { return true }
+        return terms.allSatisfy { term in
+            let key = Self.searchKey(term.term)
+            switch term.field {
+            case nil:
+                return Self.searchKey(snapshot.name).contains(key)
+                    || Self.searchKey(Self.effectiveDescription(for: snapshot)).contains(key)
+                    || Self.searchKey(snapshot.path).contains(key)
+            case .name:
+                return Self.searchKey(snapshot.name).contains(key)
+            case .description:
+                return Self.searchKey(Self.effectiveDescription(for: snapshot)).contains(key)
+            case .path:
+                return Self.searchKey(snapshot.path).contains(key)
+            case .agent:
+                let names = snapshot.agentIDs.map { agentNamesByID[$0] ?? $0 }
+                return names.contains { Self.searchKey($0).contains(key) }
+            }
+        }
     }
 
     private func comesBefore(_ lhs: SkillSnapshot, _ rhs: SkillSnapshot) -> Bool {

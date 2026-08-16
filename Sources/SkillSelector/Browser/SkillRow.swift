@@ -76,6 +76,7 @@ struct SkillRow: View {
         }
         .buttonStyle(RowHoverStyle())
         .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(isActive ? .isSelected : [])
         .draggable(SkillDragPayload(path: skill.path, name: skill.name))
         .contextMenu {
             Button {

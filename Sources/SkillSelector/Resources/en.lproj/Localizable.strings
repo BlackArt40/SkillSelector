@@ -137,6 +137,7 @@
 "Skip for Now" = "Skip for Now";
 "Legacy Agents" = "Legacy Agents";
 "Legacy Agent Hint" = "Hidden until their Skills are detected or enabled here.";
+"Search Help" = "Free terms match name, description and path. Prefix a term with name:, desc:, path: or agent: to search a single field.";
 "Move to Trash" = "Move to Trash";
 "SkillSelector" = "SkillSelector";
 "Edit Custom Agent" = "Edit Custom Agent";

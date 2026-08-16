@@ -23,9 +23,13 @@ struct RootView: View {
             searchText: searchText,
             sort: sort
         )
-        let filteredSkills = query.apply(to: model.snapshots, rootsByID: model.rootsByID)
         let agentNamesByID = Dictionary(
             uniqueKeysWithValues: model.agentDefinitions.map { ($0.id, $0.displayName) }
+        )
+        let filteredSkills = query.apply(
+            to: model.snapshots,
+            rootsByID: model.rootsByID,
+            agentNamesByID: agentNamesByID
         )
         let detectedAgentIDs = BrowserSidebar.detectedAgentIDs(
             from: model.snapshots,
@@ -107,6 +111,16 @@ struct RootView: View {
         }
         .frame(minWidth: 1080, minHeight: 700)
         .navigationTitle(currentDestination.title(rootsByID: model.rootsByID, definitions: model.agentDefinitions))
+        .background {
+            // Hidden ⌘F trigger: focuses the search field from anywhere in
+            // the window without cross-scene focus plumbing.
+            Button(L10n.string("Search Skills")) {
+                searchFocused = true
+            }
+            .keyboardShortcut("f", modifiers: .command)
+            .opacity(0)
+            .accessibilityHidden(true)
+        }
         .languageReloading()
         .themedAppearance()
         .toolbar {
@@ -176,6 +190,7 @@ struct RootView: View {
                 .stroke(searchFocused ? AppTheme.accent : AppTheme.borderSoft, lineWidth: 1)
         }
         .accessibilityLabel(L10n.string("Search Skills"))
+        .help(L10n.string("Search Help"))
     }
 
     /// `.themeBtn`: moon in light mode, sun in dark mode; toggles between

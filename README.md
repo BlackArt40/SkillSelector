@@ -11,7 +11,7 @@ macOS 原生应用，管理本机的 Agent Skill：浏览、搜索、复制、�
 
 ## 它能做什么
 
-主界面是三栏浏览器：侧边栏按范围和 Agent 分组，中间是可搜索、可排序的 Skill 列表，右侧显示选中 Skill 的详情——简介、frontmatter、渲染后的 Markdown 文档、关联的 Agents 和安装位置。
+主界面是三栏浏览器：侧边栏按范围和 Agent 分组，中间是可搜索、可排序的 Skill 列表，右侧显示选中 Skill 的详情——简介、frontmatter、渲染后的 Markdown 文档、关联的 Agents 和安装位置。搜索时普通词同时匹配名称、描述和路径；给词加上 `name:`、`desc:`、`path:`、`agent:` 前缀就只搜对应字段，比如 `agent:cursor path:.agents`。
 
 文件操作就是日常那几样：复制、移动（目标可以是任意文件夹）、创建软链接、删除。删除只进回收站，整个应用里没有永久删除的路径。
 

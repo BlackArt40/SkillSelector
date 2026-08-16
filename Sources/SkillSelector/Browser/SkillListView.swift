@@ -129,7 +129,26 @@ struct SkillListView: View {
                 }
                 .padding(.vertical, 8)
             }
+            .onKeyPress(keys: [.downArrow]) { _ in moveSelection(1) }
+            .onKeyPress(keys: [.upArrow]) { _ in moveSelection(-1) }
         }
+    }
+
+    /// Moves the selection within the visible list; with nothing selected,
+    /// Arrow Down picks the first row and Arrow Up the last.
+    private func moveSelection(_ delta: Int) -> KeyPress.Result {
+        guard !skills.isEmpty else { return .ignored }
+        let current = selection.flatMap { selected in
+            skills.firstIndex { $0.path == selected.path }
+        }
+        let next: Int
+        if let current {
+            next = min(max(current + delta, 0), skills.count - 1)
+        } else {
+            next = delta > 0 ? 0 : skills.count - 1
+        }
+        selection = SkillSelection(path: skills[next].path)
+        return .handled
     }
 
     @ViewBuilder

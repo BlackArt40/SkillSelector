@@ -163,6 +163,79 @@ final class SkillQueryTests: XCTestCase {
         )
     }
 
+    func testSearchMatchesPathForFreeTerms() {
+        let snapshots = [
+            snapshot(path: "/Users/tester/.codex/skills/release", name: "Unrelated Name"),
+            snapshot(path: "/plain/folder", name: "codex elsewhere"),
+        ]
+
+        XCTAssertEqual(
+            SkillQuery(searchText: ".codex/skills")
+                .apply(to: snapshots, rootsByID: rootsByID).map(\.path),
+            ["/Users/tester/.codex/skills/release"]
+        )
+    }
+
+    func testFieldPrefixesRestrictSearchToASingleField() {
+        let snapshots = [
+            snapshot(path: "/one", name: "Deploy", localDescription: "ships releases"),
+            snapshot(path: "/two", name: "Other", localDescription: "Deploy tool"),
+        ]
+        let namesByID = ["cursor": "Cursor"]
+
+        XCTAssertEqual(
+            SkillQuery(searchText: "name:deploy")
+                .apply(to: snapshots, rootsByID: rootsByID).map(\.path),
+            ["/one"]
+        )
+        XCTAssertEqual(
+            SkillQuery(searchText: "desc:ships")
+                .apply(to: snapshots, rootsByID: rootsByID).map(\.path),
+            ["/one"]
+        )
+        XCTAssertEqual(
+            SkillQuery(searchText: "path:/two")
+                .apply(to: snapshots, rootsByID: rootsByID).map(\.path),
+            ["/two"]
+        )
+        XCTAssertEqual(
+            SkillQuery(searchText: "agent:cursor")
+                .apply(to: snapshots, rootsByID: rootsByID, agentNamesByID: namesByID).count,
+            2
+        )
+        // Agent terms fall back to the raw ID when no display name exists.
+        XCTAssertEqual(
+            SkillQuery(searchText: "agent:cursor")
+                .apply(to: snapshots, rootsByID: rootsByID).count,
+            2
+        )
+        // An unrecognized prefix stays a literal free term — searching what
+        // was typed rather than silently reinterpreting it.
+        XCTAssertTrue(
+            SkillQuery(searchText: "label:deploy")
+                .apply(to: snapshots, rootsByID: rootsByID).isEmpty
+        )
+    }
+
+    func testSearchTermsCombineWithAnd() {
+        let snapshots = [
+            snapshot(path: "/one", name: "Deploy Helper", localDescription: "ships things"),
+            snapshot(path: "/two", name: "Deploy Other", localDescription: "unrelated"),
+            snapshot(path: "/three", name: "Helper", localDescription: "for codex"),
+        ]
+
+        XCTAssertEqual(
+            SkillQuery(searchText: "deploy helper")
+                .apply(to: snapshots, rootsByID: rootsByID).map(\.path),
+            ["/one"]
+        )
+        XCTAssertEqual(
+            SkillQuery(searchText: "name:helper desc:codex")
+                .apply(to: snapshots, rootsByID: rootsByID).map(\.path),
+            ["/three"]
+        )
+    }
+
     func testProjectScopeFiltersToOwnSkillsOnly() {
         let snapshots = [
             snapshot(path: "/alpha/skill-a", name: "Skill A", rootIDs: ["project-alpha"]),
