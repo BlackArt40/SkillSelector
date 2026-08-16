@@ -12,11 +12,11 @@ public struct SkillSnapshot: Identifiable, Hashable, Sendable {
     public let entryFilename: String
     public let parseDiagnostics: [ParseIssue]
 
-    /// Display names of the agents associated with this Skill, excluding the
-    /// synthetic `system` and `custom` owners, sorted by name.
+    /// Display names of the agents associated with this Skill, excluding
+    /// the synthetic owners, sorted by name.
     public func agentDisplayNames(by namesByID: [String: String]) -> [String] {
         agentIDs
-            .filter { $0 != "system" && $0 != "custom" }
+            .filter { !SyntheticAgentID.all.contains($0) }
             .map { namesByID[$0] ?? $0 }
             .sorted()
     }

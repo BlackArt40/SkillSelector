@@ -29,18 +29,10 @@ public struct SkillScanner: Sendable {
             let result = scan(root, authorizedURLs: authorizedURLs)
             rootReports.append(result.root)
             for candidate in result.installations {
-                if var existing = installations[candidate.installation.id] {
-                    for (rootID, agentIDs) in candidate.agentIDsByRoot {
-                        existing.agentIDsByRoot[rootID, default: []].formUnion(agentIDs)
-                    }
-                    existing.installation.agentIDs = existing.agentIDs
-                    if existing.installation.resolvedTarget == nil {
-                        existing.installation.resolvedTarget = candidate.resolvedTarget
-                    }
-                    installations[candidate.installation.id] = existing
-                } else {
-                    installations[candidate.installation.id] = candidate
-                }
+                installations[candidate.installation.id] = merged(
+                    installations[candidate.installation.id],
+                    with: candidate
+                )
             }
         }
 
@@ -265,17 +257,23 @@ public struct SkillScanner: Sendable {
             ) else {
                 continue
             }
-            if var existing = result {
-                for (candidateRootID, agentIDs) in candidate.agentIDsByRoot {
-                    existing.agentIDsByRoot[candidateRootID, default: []].formUnion(agentIDs)
-                }
-                existing.installation.agentIDs = existing.agentIDs
-                result = existing
-            } else {
-                result = candidate
-            }
+            result = merged(result, with: candidate)
         }
         return result
+    }
+
+    /// Merges candidates for the same installation: agent associations union
+    /// per root and the first resolved target wins.
+    private func merged(_ existing: ScannedSkill?, with candidate: ScannedSkill) -> ScannedSkill {
+        guard var existing else { return candidate }
+        for (rootID, agentIDs) in candidate.agentIDsByRoot {
+            existing.agentIDsByRoot[rootID, default: []].formUnion(agentIDs)
+        }
+        existing.installation.agentIDs = existing.agentIDs
+        if existing.installation.resolvedTarget == nil {
+            existing.installation.resolvedTarget = candidate.resolvedTarget
+        }
+        return existing
     }
 
     private func makeCandidate(

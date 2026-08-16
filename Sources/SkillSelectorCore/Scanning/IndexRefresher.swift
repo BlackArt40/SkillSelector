@@ -254,7 +254,7 @@ public final class IndexRefresher {
                     .skillDirectory(
                         id: root.id,
                         url: root.url,
-                        agentIDs: [root.kind == .system ? "system" : "custom"]
+                        agentIDs: [root.kind == .system ? SyntheticAgentID.system : SyntheticAgentID.custom]
                     ),
                 ],
                 dispositions: []

@@ -1,3 +1,4 @@
+import CryptoKit
 import Darwin
 import Foundation
 
@@ -90,16 +91,16 @@ struct FileOperationFileSystem: @unchecked Sendable {
     }
 
     private static func treeFingerprint(_ url: URL, isSymbolicLink: Bool) throws -> String {
-        var hash = FNV1a64()
+        var hash = SHA256()
         try appendFingerprint(url, relativePath: ".", knownSymbolicLink: isSymbolicLink, hash: &hash)
-        return String(format: "%016llx", hash.value)
+        return hash.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
     private static func appendFingerprint(
         _ url: URL,
         relativePath: String,
         knownSymbolicLink: Bool? = nil,
-        hash: inout FNV1a64
+        hash: inout SHA256
     ) throws {
         let values = try url.resourceValues(forKeys: [
             .isDirectoryKey,
@@ -110,17 +111,17 @@ struct FileOperationFileSystem: @unchecked Sendable {
             .fileResourceIdentifierKey,
         ])
         let isLink = knownSymbolicLink ?? values.isSymbolicLink == true
-        hash.append(relativePath)
+        hash.update(data: Data(relativePath.utf8))
         if let identifier = values.fileResourceIdentifier {
-            hash.append(String(describing: identifier))
+            hash.update(data: Data(String(describing: identifier).utf8))
         }
         if isLink {
-            hash.append("link")
-            hash.append(try FileManager.default.destinationOfSymbolicLink(atPath: url.path))
+            hash.update(data: Data("link".utf8))
+            hash.update(data: Data(try FileManager.default.destinationOfSymbolicLink(atPath: url.path).utf8))
             return
         }
         if values.isDirectory == true {
-            hash.append("directory")
+            hash.update(data: Data("directory".utf8))
             let children = try FileManager.default.contentsOfDirectory(
                 at: url,
                 includingPropertiesForKeys: [.isSymbolicLinkKey],
@@ -135,30 +136,15 @@ struct FileOperationFileSystem: @unchecked Sendable {
             return
         }
         guard values.isRegularFile == true else {
-            hash.append("other")
+            hash.update(data: Data("other".utf8))
             return
         }
-        hash.append("file")
-        hash.append(String(values.fileSize ?? -1))
+        hash.update(data: Data("file".utf8))
+        hash.update(data: Data(String(values.fileSize ?? -1).utf8))
         let handle = try FileHandle(forReadingFrom: url)
         defer { try? handle.close() }
         while let data = try handle.read(upToCount: 64 * 1024), !data.isEmpty {
-            hash.append(data)
-        }
-    }
-}
-
-private struct FNV1a64 {
-    private(set) var value: UInt64 = 14_695_981_039_346_656_037
-
-    mutating func append(_ string: String) {
-        append(Data(string.utf8))
-    }
-
-    mutating func append(_ data: Data) {
-        for byte in data {
-            value ^= UInt64(byte)
-            value &*= 1_099_511_628_211
+            hash.update(data: data)
         }
     }
 }
@@ -570,7 +556,7 @@ public final class SkillFileOperator: @unchecked Sendable {
                     return RegisteredRootMatch(
                         root: authorized,
                         url: candidate,
-                        agentIDs: [authorized.kind == .system ? "system" : "custom"],
+                        agentIDs: [authorized.kind == .system ? SyntheticAgentID.system : SyntheticAgentID.custom],
                         entryFilename: entryFilename
                     )
                 }

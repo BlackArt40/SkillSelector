@@ -26,14 +26,8 @@ public final class SkillIndex {
             for root in report.roots {
                 guard case .unavailable = root.availability else { continue }
                 for record in Array(records.values) {
-                    var associations = try agentIDsByRoot(for: record)
-                    guard associations[root.id] != nil else { continue }
-                    associations[root.id] = nil
-                    if associations.isEmpty {
-                        context.delete(record)
+                    if try disassociate(record, rootID: root.id) == .deleted {
                         records[record.path] = nil
-                    } else {
-                        record.agentIDsByRootData = try encode(associations, path: record.path)
                     }
                 }
             }
@@ -45,17 +39,12 @@ public final class SkillIndex {
                         .map { $0.path.standardizedFileURL.path }
                 )
                 for record in Array(records.values) {
-                    var associations = try agentIDsByRoot(for: record)
-                    guard associations[root.id] != nil,
+                    guard try agentIDsByRoot(for: record)[root.id] != nil,
                           !reportedPaths.contains(record.path) else {
                         continue
                     }
-                    associations[root.id] = nil
-                    if associations.isEmpty {
-                        context.delete(record)
+                    if try disassociate(record, rootID: root.id) == .deleted {
                         records[record.path] = nil
-                    } else {
-                        record.agentIDsByRootData = try encode(associations, path: record.path)
                     }
                 }
             }
@@ -142,6 +131,26 @@ public final class SkillIndex {
             entryFilename: record.entryFilename,
             parseDiagnostics: (try? decoder.decode([ParseIssue].self, from: record.parseDiagnosticsData)) ?? []
         )
+    }
+
+    private enum DisassociationOutcome {
+        case untouched
+        case updated
+        case deleted
+    }
+
+    /// Drops the record's association with `rootID`; a record left with no
+    /// associations is deleted so the index only holds on-disk Skills.
+    private func disassociate(_ record: SkillRecord, rootID: String) throws -> DisassociationOutcome {
+        var associations = try agentIDsByRoot(for: record)
+        guard associations[rootID] != nil else { return .untouched }
+        associations[rootID] = nil
+        if associations.isEmpty {
+            context.delete(record)
+            return .deleted
+        }
+        record.agentIDsByRootData = try encode(associations, path: record.path)
+        return .updated
     }
 
     private func agentIDsByRoot(for record: SkillRecord) throws -> [String: Set<String>] {
