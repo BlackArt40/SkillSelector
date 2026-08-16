@@ -39,10 +39,10 @@ Claude Code、Codex、Qoder、CodeBuddy、OpenCode、Cursor、Kilo Code、Cline�
 
 ```zsh
 swift build
-zsh Scripts/package-dmg.sh 1.0.1
+zsh Scripts/package-dmg.sh 1.1.0
 ```
 
-输出 `dist/SkillSelector.app`、`dist/SkillSelector.dmg`、`dist/SkillSelector-1.0.1.dmg` 和对应的 `.sha256`。
+输出 `dist/SkillSelector.app`、`dist/SkillSelector.dmg`、`dist/SkillSelector-1.1.0.dmg` 和对应的 `.sha256`。
 
 ## 安装
 
@@ -50,10 +50,10 @@ zsh Scripts/package-dmg.sh 1.0.1
 2. 校验完整性（把两个文件放在同一目录）：
 
    ```zsh
-   shasum -a 256 -c SkillSelector-1.0.1.dmg.sha256
+   shasum -a 256 -c SkillSelector-1.1.0.dmg.sha256
    ```
 
-   输出必须是 `SkillSelector-1.0.1.dmg: OK`。不是就别装。
+   输出必须是 `SkillSelector-1.1.0.dmg: OK`。不是就别装。
 
 3. 挂载 `.dmg`，拖拽 `SkillSelector.app` 到 Applications
 4. 右键点击应用 → **打开** → 确认 **打开**

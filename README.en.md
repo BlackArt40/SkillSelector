@@ -39,10 +39,10 @@ Runs offline. Stores index metadata (path, owning Agents, scope, description, so
 
 ```zsh
 swift build
-zsh Scripts/package-dmg.sh 1.0.1
+zsh Scripts/package-dmg.sh 1.1.0
 ```
 
-Produces `dist/SkillSelector.app`, `dist/SkillSelector.dmg`, `dist/SkillSelector-1.0.1.dmg`, and a matching `.sha256` for GitHub Releases.
+Produces `dist/SkillSelector.app`, `dist/SkillSelector.dmg`, `dist/SkillSelector-1.1.0.dmg`, and a matching `.sha256` for GitHub Releases.
 
 ## Installation
 
@@ -50,10 +50,10 @@ Produces `dist/SkillSelector.app`, `dist/SkillSelector.dmg`, `dist/SkillSelector
 2. Verify integrity (keep both files in the same directory):
 
    ```zsh
-   shasum -a 256 -c SkillSelector-1.0.1.dmg.sha256
+   shasum -a 256 -c SkillSelector-1.1.0.dmg.sha256
    ```
 
-   It must print `SkillSelector-1.0.1.dmg: OK`. If it doesn't, don't install it.
+   It must print `SkillSelector-1.1.0.dmg: OK`. If it doesn't, don't install it.
 
 3. Mount the `.dmg` and drag `SkillSelector.app` to Applications
 4. Right-click the app → **Open** → confirm **Open**
