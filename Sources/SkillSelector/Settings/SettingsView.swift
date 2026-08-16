@@ -177,6 +177,26 @@ struct SettingsView: View {
                 languageSegment
             }
 
+            groupTitle(L10n.string("Legacy Agents"))
+                .padding(.top, 4)
+            SettingsGroup {
+                ForEach(model.legacyAgentDefinitions) { agent in
+                    SettingsRow(label: agent.displayName) {
+                        ThemeSwitch(
+                            isOn: Binding(
+                                get: { model.manuallyEnabledAgentIDs.contains(agent.id) },
+                                set: { model.setLegacyAgent(agent.id, enabled: $0) }
+                            ),
+                            accessibilityLabel: agent.displayName
+                        )
+                    }
+                }
+                SettingsRow(
+                    label: L10n.string("Legacy Agent Hint"),
+                    hint: true
+                )
+            }
+
             groupTitle(L10n.string("Data"))
                 .padding(.top, 4)
             SettingsGroup {

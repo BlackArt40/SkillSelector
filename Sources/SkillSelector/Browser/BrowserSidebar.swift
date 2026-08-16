@@ -35,6 +35,7 @@ struct BrowserSidebar: View {
     let roots: [AuthorizedRootSnapshot]
     let definitions: [AgentDefinition]
     let detectedAgentIDs: Set<String>
+    var manuallyEnabledAgentIDs: Set<String> = []
     let counts: [BrowserDestination: Int]
     var onAddProject: () -> Void
     var onDrop: ((SkillDragPayload, URL) -> Void)?
@@ -62,7 +63,8 @@ struct BrowserSidebar: View {
     private var agents: [AgentDefinition] {
         Self.visibleAgentDefinitions(
             definitions: definitions,
-            detectedAgentIDs: detectedAgentIDs
+            detectedAgentIDs: detectedAgentIDs,
+            manuallyEnabledAgentIDs: manuallyEnabledAgentIDs
         )
     }
 
@@ -77,12 +79,19 @@ struct BrowserSidebar: View {
         return Set(snapshots.flatMap(\.agentIDs))
     }
 
+    /// Legacy agents stay hidden until detected or manually enabled; the
+    /// synthetic owners never appear as sidebar agents.
     static func visibleAgentDefinitions(
         definitions: [AgentDefinition],
-        detectedAgentIDs: Set<String>
+        detectedAgentIDs: Set<String>,
+        manuallyEnabledAgentIDs: Set<String> = []
     ) -> [AgentDefinition] {
         definitions
-            .filter { detectedAgentIDs.contains($0.id) && $0.id != "system" && $0.id != "custom" }
+            .filter {
+                detectedAgentIDs.contains($0.id)
+                    || ($0.isLegacy && manuallyEnabledAgentIDs.contains($0.id))
+            }
+            .filter { !SyntheticAgentID.all.contains($0.id) }
             .sorted {
                 let lhsName = $0.displayName.lowercased()
                 let rhsName = $1.displayName.lowercased()

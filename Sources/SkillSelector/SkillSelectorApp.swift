@@ -59,7 +59,10 @@ struct SkillSelectorApp: App {
         WindowGroup {
             RootView()
                 .environment(model)
-                .task { await model.checkEnvironmentOnLaunch() }
+                .task {
+                    await model.checkEnvironmentOnLaunch()
+                    model.presentOnboardingIfNeeded()
+                }
         }
             .defaultSize(width: 1440, height: 900)
         Settings {

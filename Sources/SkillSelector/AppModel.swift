@@ -47,6 +47,7 @@ struct SkillSelection: Hashable, Identifiable {
 
     var refreshState: RefreshState = .idle
     var selection: SkillSelection?
+    private(set) var showsOnboarding = false
     private(set) var snapshots: [SkillSnapshot] = []
     private(set) var authorizedRoots: [AuthorizedRootSnapshot] = []
     private(set) var rootsByID: [String: AuthorizedRootSnapshot] = [:]
@@ -54,6 +55,9 @@ struct SkillSelection: Hashable, Identifiable {
     private(set) var customAgentDefinitions: [AgentDefinition]
     var autoScanHome: Bool {
         didSet { defaults.set(autoScanHome, forKey: Self.autoScanHomeDefaultsKey) }
+    }
+    private(set) var manuallyEnabledAgentIDs: Set<String> {
+        didSet { defaults.set(manuallyEnabledAgentIDs.sorted(), forKey: Self.manuallyEnabledAgentsDefaultsKey) }
     }
 
     var pendingOperationPlan: FileOperationPlan? { fileOperations.pendingOperationPlan }
@@ -91,6 +95,7 @@ struct SkillSelection: Hashable, Identifiable {
         autoScanHome = defaults.object(forKey: Self.autoScanHomeDefaultsKey) == nil
             ? true
             : defaults.bool(forKey: Self.autoScanHomeDefaultsKey)
+        manuallyEnabledAgentIDs = Set(defaults.stringArray(forKey: Self.manuallyEnabledAgentsDefaultsKey) ?? [])
         agentDefinitions = effectiveRegistry.definitions
         refresher.updateRegistry(effectiveRegistry)
         fileOperations = FileOperationCoordinator(
@@ -119,6 +124,45 @@ struct SkillSelection: Hashable, Identifiable {
             await checkEnvironment()
         } catch {
             refreshState = .failed(String(describing: error))
+        }
+    }
+
+    /// Whether the first-launch guide is eligible: it has not been shown
+    /// yet and no folder is authorized. Upgrades that already carry roots
+    /// never see it, and non-sandboxed dev builds authorize the home
+    /// directory during the launch check before this is consulted.
+    var shouldShowOnboarding: Bool {
+        !defaults.bool(forKey: Self.onboardingShownDefaultsKey) && !hasAuthorization
+    }
+
+    /// Presents the onboarding sheet if eligible. Called after the launch
+    /// check so the sheet cannot flash in builds that authorize silently.
+    func presentOnboardingIfNeeded() {
+        showsOnboarding = shouldShowOnboarding
+    }
+
+    /// Closes the onboarding sheet and records it as shown, so both
+    /// completing and skipping the guide stop it from returning.
+    func dismissOnboarding() {
+        showsOnboarding = false
+        defaults.set(true, forKey: Self.onboardingShownDefaultsKey)
+    }
+
+    /// Agents flagged legacy in the registry (currently Roo Code). They stay
+    /// out of the sidebar until their Skills are detected on disk or the
+    /// user enables them manually.
+    var legacyAgentDefinitions: [AgentDefinition] {
+        agentDefinitions.filter(\.isLegacy)
+    }
+
+    /// Manual enable is the legacy agents' escape hatch; only they can be
+    /// surfaced this way, so non-legacy agents never gain an empty row.
+    func setLegacyAgent(_ agentID: String, enabled: Bool) {
+        guard agentDefinitions.contains(where: { $0.id == agentID && $0.isLegacy }) else { return }
+        if enabled {
+            manuallyEnabledAgentIDs.insert(agentID)
+        } else {
+            manuallyEnabledAgentIDs.remove(agentID)
         }
     }
 
@@ -385,6 +429,8 @@ struct SkillSelection: Hashable, Identifiable {
     }
 
     private static let autoScanHomeDefaultsKey = "SkillSelector.autoScanHome"
+    private static let manuallyEnabledAgentsDefaultsKey = "SkillSelector.manuallyEnabledAgents"
+    private static let onboardingShownDefaultsKey = "SkillSelector.onboardingShown"
     private static let rootNameDefaultsKeyPrefix = "SkillSelector.rootName."
 
     private func reloadAgentDefinitions() throws {

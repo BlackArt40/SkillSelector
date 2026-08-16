@@ -41,6 +41,7 @@ struct RootView: View {
                 roots: model.authorizedRoots,
                 definitions: model.agentDefinitions,
                 detectedAgentIDs: detectedAgentIDs,
+                manuallyEnabledAgentIDs: model.manuallyEnabledAgentIDs,
                 counts: sidebarCounts,
                 onAddProject: { chooseDestinationRoot() },
                 onDrop: { payload, rootURL in
@@ -114,6 +115,10 @@ struct RootView: View {
                 themeToggle
             }
         }
+        .sheet(isPresented: onboardingBinding) {
+            OnboardingView()
+        }
+
         .sheet(item: pendingOperationBinding) { plan in
             OperationConfirmationView(
                 plan: plan,
@@ -232,6 +237,15 @@ struct RootView: View {
     }
 
     // MARK: Bindings
+
+    private var onboardingBinding: Binding<Bool> {
+        Binding(
+            get: { model.showsOnboarding },
+            set: { presented in
+                if !presented { model.dismissOnboarding() }
+            }
+        )
+    }
 
     private var pendingOperationBinding: Binding<FileOperationPlan?> {
         Binding(
