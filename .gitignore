@@ -32,6 +32,7 @@ CONTEXT.md
 
 # Other
 .firecrawl/
+.brooks-lint-history.json
 /design/
 /Tests/
 /.github/
