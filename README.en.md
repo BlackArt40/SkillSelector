@@ -3,48 +3,38 @@
 
 # SkillSelector
 
-A native macOS app for managing Agent Skills on your local machine. Browse, search, copy, move, delete, and link Skills. Not a marketplace, not an installer, not an AI tool.
-
-## Features
-
-- **Three-column browser**: sidebar grouped by scope and Agent (All / Global / Directories / Agents), a searchable and sortable Skill list, and a detail pane with description, frontmatter, rendered Markdown, associated Agents, and locations
-- **Search & sort**: match by name, description, or path; sort by default order, name, or path
-- **File operations**: copy, move, create symbolic link, move to Trash. Copy and move can target **any folder you pick** (granted via the folder picker); link and delete stay within authorized Skill roots. Deletion always goes to Trash — never permanent
-- **Skill documents**: rendered with the system Markdown parser (headings, lists, code blocks, link whitelist); frontmatter parsed with Yams, so nested YAML no longer misreports
-- **Dark mode**: one-click light/dark toggle in the title bar, or follow the system
-- **Directory authorization**: authorize the home directory or add project folders via security-scoped bookmarks; scans only whitelisted fixed paths
-- **Custom Agents**: register any local Skill directory as a custom Agent
-
-## Supported Agents
-
-Claude Code, Codex, Qoder, CodeBuddy, OpenCode, Cursor, Kilo Code, Cline, Roo Code, Windsurf, Gemini CLI, GitHub Copilot, Amp, Tabnine, Letta, and OpenHands. Roo Code works but only shows when detected or manually enabled. You can define custom Agents pointing to any local Skill directory.
-
-## Privacy
-
-Runs offline. Stores index metadata (path, owning Agents, scope, description, source) and security-scoped bookmarks — **never copies Skill content**. No telemetry, no crash reporter, no bundled model, no file watcher. SKILL.md stays read-only; it is only revealed in Finder or opened in your default editor.
-
-## Screenshots
+A native macOS app for managing Agent Skills on your machine: browse, search, copy, move, delete, link. That's all it does — it is not a marketplace, not an installer, and there is no AI in it.
 
 ![Main window (English)](screenshots/main-en.png)
 
 ![Settings (English)](screenshots/settings-en.png)
 
-## Requirements
+## What it does
 
-- macOS 14 Sonoma or later
-- Universal 2 build (Apple Silicon + Intel)
-- English and Simplified Chinese
+The main window is a three-column browser: a sidebar grouped by scope and Agent, a searchable, sortable list of Skills, and a detail pane showing the selected Skill's description, frontmatter, rendered Markdown document, associated Agents, and install locations.
 
-## Build
+The file operations are the everyday ones: copy, move (to any folder you pick), symbolic links, and delete. Deletion only ever moves things to the Trash — there is no permanent-delete path anywhere in the app.
 
-```zsh
-swift build
-zsh Scripts/package-dmg.sh 1.1.0
-```
+Also:
 
-Produces `dist/SkillSelector.app`, `dist/SkillSelector.dmg`, `dist/SkillSelector-1.1.0.dmg`, and a matching `.sha256` for GitHub Releases.
+- On first launch the app walks you through granting home-directory access (a sandboxed app can't get it silently), then scans automatically on later launches; you can add just project folders instead
+- SKILL.md files stay read-only — reveal in Finder or open in your default editor
+- Light/dark toggle in the title bar, or follow the system
+- English and Simplified Chinese, following the system language
 
-## Installation
+## Supported Agents
+
+Sixteen built in: Claude Code, Codex, Qoder, CodeBuddy, OpenCode, Cursor, Kilo Code, Cline, Roo Code, Windsurf, Gemini CLI, GitHub Copilot, Amp, Tabnine, Letta, OpenHands.
+
+Roo Code is legacy compatibility and only appears once detected or enabled in Settings. Any local Skill directory can be registered as a custom Agent.
+
+## Privacy
+
+Runs offline. No telemetry, no crash reporter, no file watcher, no bundled model. The index stores metadata only (paths, owning Agents, descriptions) and never copies Skill content; folder access goes through security-scoped bookmarks, and scans stick to the fixed paths declared in the registry.
+
+## Install
+
+Requires macOS 14 Sonoma or later; Universal 2 (Apple Silicon and Intel).
 
 1. Download the `.dmg` and its `.sha256` from [GitHub Releases](https://github.com/BlackArt40/SkillSelector/releases)
 2. Verify integrity (keep both files in the same directory):
@@ -56,24 +46,35 @@ Produces `dist/SkillSelector.app`, `dist/SkillSelector.dmg`, `dist/SkillSelector
    It must print `SkillSelector-1.1.0.dmg: OK`. If it doesn't, don't install it.
 
 3. Mount the `.dmg` and drag `SkillSelector.app` to Applications
-4. Right-click the app → **Open** → confirm **Open**
+4. Right-click the app → Open → confirm Open
 
-macOS Gatekeeper blocks un-notarized apps by default. If the right-click menu doesn't show **Open**, go to System Settings → Privacy & Security → click **Open Anyway** next to the SkillSelector entry.
+Gatekeeper blocks un-notarized apps on first launch; that's expected. If the right-click menu has no Open entry, go to System Settings → Privacy & Security and click Open Anyway next to SkillSelector.
 
-## Code signing
+## About the signature
 
-Releases are **ad-hoc signed** (`codesign --sign -`): **no Apple Developer certificate, no notarization**. Be clear on what that does and does not buy you:
+Releases are ad-hoc signed (`codesign --sign -`): no Apple Developer certificate, no notarization. What that means in practice:
 
-- ✅ App Sandbox is enabled; the requested entitlements are in [`Packaging/SkillSelector.entitlements`](Packaging/SkillSelector.entitlements)
-- ✅ The signature detects tampering with the app bundle after signing
-- ❌ **It proves nothing about who published it** — anyone can produce an ad-hoc signature. Download only from this repository's GitHub Releases and check the `.sha256`
-- ❌ Not notarized, so Gatekeeper blocks the first launch and you must allow it manually per step 4
+- App Sandbox is on; the requested entitlements are listed in [`Packaging/SkillSelector.entitlements`](Packaging/SkillSelector.entitlements)
+- The signature detects tampering with the app bundle after signing
+- It proves nothing about the publisher — anyone can produce an ad-hoc signature. Download only from this repository's Releases and check the `.sha256`
+- Gatekeeper will block the first launch; allow it manually as described above
 
-If that's not acceptable, build from source (see **Build**) — releases go through the same packaging script.
+If that's not acceptable, build from source — it goes through the same packaging script.
+
+## Building from source
+
+```zsh
+swift build
+zsh Scripts/package-dmg.sh 1.1.0
+```
+
+Produces `dist/SkillSelector.app`, `dist/SkillSelector.dmg`, `dist/SkillSelector-1.1.0.dmg`, and a matching `.sha256`.
+
+The only third-party dependency is Yams (frontmatter parsing). Run the tests with `swift test`; CI runs them on every PR and push.
 
 ## Versioning
 
-Versions follow `MAJOR.MINOR.PATCH`. Non-major changes bump only PATCH (1.0.1 → 1.0.2); substantive feature changes bump MINOR (1.1.0); a major redesign bumps MAJOR (2.0.0).
+`MAJOR.MINOR.PATCH`: small changes bump PATCH (1.0.1 → 1.0.2), substantive features bump MINOR (1.1.0), a redesign bumps MAJOR (2.0.0).
 
 ## License
 
