@@ -81,14 +81,50 @@ public struct FileOperationRequest: Hashable, Sendable {
 }
 
 public struct FileOperationPlan: Hashable, Identifiable, Sendable {
+    /// What the plan pinned down about the source at planning time.
+    public struct Source: Hashable, Sendable {
+        public let logicalURL: URL
+        public let resolvedURL: URL
+        let snapshot: FileOperationItemSnapshot
+
+        init(logicalURL: URL, resolvedURL: URL, snapshot: FileOperationItemSnapshot) {
+            self.logicalURL = logicalURL
+            self.resolvedURL = resolvedURL
+            self.snapshot = snapshot
+        }
+    }
+
+    /// Where the operation lands, plus its registry identity when the
+    /// destination maps to a declared Skill root.
+    public struct Destination: Hashable, Sendable {
+        public let rootURL: URL?
+        public let url: URL?
+        public let rootID: String?
+        public let agentIDs: [String]
+        let rootSnapshot: FileOperationItemSnapshot?
+        let snapshot: FileOperationItemSnapshot?
+
+        init(
+            rootURL: URL?,
+            url: URL?,
+            rootID: String?,
+            agentIDs: [String],
+            rootSnapshot: FileOperationItemSnapshot?,
+            snapshot: FileOperationItemSnapshot?
+        ) {
+            self.rootURL = rootURL
+            self.url = url
+            self.rootID = rootID
+            self.agentIDs = agentIDs
+            self.rootSnapshot = rootSnapshot
+            self.snapshot = snapshot
+        }
+    }
+
     public let id: UUID
     public let operation: FileOperationKind
-    public let logicalSourceURL: URL
-    public let resolvedSourceURL: URL
-    public let destinationRootURL: URL?
-    public let destinationURL: URL?
-    public let destinationRootID: String?
-    public let destinationAgentIDs: [String]
+    public let source: Source
+    public let destination: Destination
     public let entryFilename: String
     public let authorizationSnapshotFingerprint: String
     public let registrySnapshotFingerprint: String
@@ -104,20 +140,13 @@ public struct FileOperationPlan: Hashable, Identifiable, Sendable {
     public let replacementConfirmationToken: ConfirmationToken?
 
     let issuerID: UUID
-    let sourceSnapshot: FileOperationItemSnapshot
-    let destinationRootSnapshot: FileOperationItemSnapshot?
-    let destinationSnapshot: FileOperationItemSnapshot?
 
     init(
         id: UUID,
         issuerID: UUID,
         operation: FileOperationKind,
-        logicalSourceURL: URL,
-        resolvedSourceURL: URL,
-        destinationRootURL: URL?,
-        destinationURL: URL?,
-        destinationRootID: String?,
-        destinationAgentIDs: [String],
+        source: Source,
+        destination: Destination,
         entryFilename: String,
         authorizationSnapshotFingerprint: String,
         registrySnapshotFingerprint: String,
@@ -130,20 +159,13 @@ public struct FileOperationPlan: Hashable, Identifiable, Sendable {
         affectedIndexedAliases: [String],
         affectedIndexedRootIDs: [String],
         confirmationToken: ConfirmationToken,
-        replacementConfirmationToken: ConfirmationToken?,
-        sourceSnapshot: FileOperationItemSnapshot,
-        destinationRootSnapshot: FileOperationItemSnapshot?,
-        destinationSnapshot: FileOperationItemSnapshot?
+        replacementConfirmationToken: ConfirmationToken?
     ) {
         self.id = id
         self.issuerID = issuerID
         self.operation = operation
-        self.logicalSourceURL = logicalSourceURL
-        self.resolvedSourceURL = resolvedSourceURL
-        self.destinationRootURL = destinationRootURL
-        self.destinationURL = destinationURL
-        self.destinationRootID = destinationRootID
-        self.destinationAgentIDs = destinationAgentIDs
+        self.source = source
+        self.destination = destination
         self.entryFilename = entryFilename
         self.authorizationSnapshotFingerprint = authorizationSnapshotFingerprint
         self.registrySnapshotFingerprint = registrySnapshotFingerprint
@@ -157,10 +179,20 @@ public struct FileOperationPlan: Hashable, Identifiable, Sendable {
         self.affectedIndexedRootIDs = affectedIndexedRootIDs
         self.confirmationToken = confirmationToken
         self.replacementConfirmationToken = replacementConfirmationToken
-        self.sourceSnapshot = sourceSnapshot
-        self.destinationRootSnapshot = destinationRootSnapshot
-        self.destinationSnapshot = destinationSnapshot
     }
+
+    // Flat read accessors — the confirmation UI, coordinator and tests read
+    // the plan as a flat set of fields, source-compatible with the layout
+    // before Source/Destination grouping.
+    public var logicalSourceURL: URL { source.logicalURL }
+    public var resolvedSourceURL: URL { source.resolvedURL }
+    public var destinationRootURL: URL? { destination.rootURL }
+    public var destinationURL: URL? { destination.url }
+    public var destinationRootID: String? { destination.rootID }
+    public var destinationAgentIDs: [String] { destination.agentIDs }
+    var sourceSnapshot: FileOperationItemSnapshot { source.snapshot }
+    var destinationRootSnapshot: FileOperationItemSnapshot? { destination.rootSnapshot }
+    var destinationSnapshot: FileOperationItemSnapshot? { destination.snapshot }
 }
 
 public enum FileOperationOutcome: String, Codable, Hashable, Sendable {

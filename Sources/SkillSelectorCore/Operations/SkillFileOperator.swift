@@ -268,12 +268,19 @@ public final class SkillFileOperator: @unchecked Sendable {
             id: UUID(),
             issuerID: issuerID,
             operation: request.operation,
-            logicalSourceURL: source,
-            resolvedSourceURL: resolvedSource,
-            destinationRootURL: destination?.url.deletingLastPathComponent(),
-            destinationURL: destination?.url,
-            destinationRootID: destination?.root?.id,
-            destinationAgentIDs: destination?.agentIDs ?? [],
+            source: FileOperationPlan.Source(
+                logicalURL: source,
+                resolvedURL: resolvedSource,
+                snapshot: sourceSnapshot
+            ),
+            destination: FileOperationPlan.Destination(
+                rootURL: destination?.url.deletingLastPathComponent(),
+                url: destination?.url,
+                rootID: destination?.root?.id,
+                agentIDs: destination?.agentIDs ?? [],
+                rootSnapshot: destinationRootSnapshot,
+                snapshot: destinationSnapshot
+            ),
             entryFilename: destination?.entryFilename ?? request.sourceEntryFilename,
             authorizationSnapshotFingerprint: authorizationFingerprint(roots),
             registrySnapshotFingerprint: registryFingerprint(registry),
@@ -286,10 +293,7 @@ public final class SkillFileOperator: @unchecked Sendable {
             affectedIndexedAliases: aliases.map(\.path).sorted(),
             affectedIndexedRootIDs: Array(Set(aliases.flatMap(\.rootIDs))).sorted(),
             confirmationToken: confirmation,
-            replacementConfirmationToken: replacementConfirmation,
-            sourceSnapshot: sourceSnapshot,
-            destinationRootSnapshot: destinationRootSnapshot,
-            destinationSnapshot: destinationSnapshot
+            replacementConfirmationToken: replacementConfirmation
         )
         lock.lock()
         issuedPlanIDs.insert(plan.id)
