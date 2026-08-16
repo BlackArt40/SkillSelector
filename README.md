@@ -24,7 +24,7 @@ macOS 原生应用，管理本机的 Agent Skill：浏览、搜索、复制、�
 
 ## 支持的 Agent
 
-内置 16 个：Claude Code、Codex、Qoder、CodeBuddy、OpenCode、Cursor、Kilo Code、Cline、Roo Code、Windsurf、Gemini CLI、GitHub Copilot、Amp、Tabnine、Letta、OpenHands。
+内置 19 个：Claude Code、Codex、Qoder、CodeBuddy、OpenCode、Cursor、Kilo Code、Cline、Roo Code、Windsurf、Gemini CLI、GitHub Copilot、Amp、Tabnine、Letta、OpenHands、Goose、Kiro、Factory Droid。
 
 Roo Code 属于旧版兼容，只在检测到已有 Skill 或在设置里手动启用时才显示。任何本地 Skill 目录都可以登记为自定义 Agent。
 

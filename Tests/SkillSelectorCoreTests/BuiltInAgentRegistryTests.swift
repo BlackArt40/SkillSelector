@@ -12,7 +12,7 @@ final class BuiltInAgentRegistryTests: XCTestCase {
                 "claude-code", "codex", "qoder", "codebuddy", "opencode",
                 "cursor", "kilo-code", "cline", "roo-code", "windsurf",
                 "gemini-cli", "github-copilot", "amp", "tabnine", "letta",
-                "openhands",
+                "openhands", "goose", "kiro", "factory-droid",
             ]
         )
     }
@@ -42,7 +42,7 @@ final class BuiltInAgentRegistryTests: XCTestCase {
     func testSharedRootsCoverAgentsDirectory() {
         XCTAssertEqual(
             registry.sharedGlobalRoots,
-            ["~/.agents/skills", "~/.agents/skills-{modeSlug}"]
+            ["~/.agents/skills", "~/.agents/skills-{modeSlug}", "~/.config/agents/skills"]
         )
         XCTAssertEqual(
             registry.sharedProjectPatterns,

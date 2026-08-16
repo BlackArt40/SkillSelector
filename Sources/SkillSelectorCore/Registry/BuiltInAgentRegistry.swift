@@ -100,11 +100,33 @@ public enum BuiltInAgentRegistry {
                 globalRoots: [],
                 projectPatterns: [".openhands/skills"]
             ),
+            AgentDefinition(
+                id: "goose",
+                displayName: "Goose",
+                globalRoots: ["~/.config/goose/skills"],
+                projectPatterns: [".goose/skills"]
+            ),
+            AgentDefinition(
+                id: "kiro",
+                displayName: "Kiro",
+                globalRoots: ["~/.kiro/skills"],
+                projectPatterns: [".kiro/skills"]
+            ),
+            AgentDefinition(
+                id: "factory-droid",
+                displayName: "Factory Droid",
+                globalRoots: ["~/.factory/skills"],
+                projectPatterns: [".factory/skills"]
+            ),
         ]
 
         return AgentRegistry(
             definitions: definitions,
-            sharedGlobalRoots: ["~/.agents/skills", "~/.agents/skills-{modeSlug}"],
+            sharedGlobalRoots: [
+                "~/.agents/skills",
+                "~/.agents/skills-{modeSlug}",
+                "~/.config/agents/skills",
+            ],
             sharedProjectPatterns: [".agents/skills", ".agents/skills-{modeSlug}"]
         )
     }
