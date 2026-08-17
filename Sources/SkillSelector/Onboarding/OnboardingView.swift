@@ -9,9 +9,9 @@ struct OnboardingView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 20) {
             AppIconView(size: 88)
-            VStack(spacing: 10) {
+            VStack(spacing: 8) {
                 Text(verbatim: L10n.string("Welcome to SkillSelector"))
                     .font(AppTheme.display(22, weight: .semibold))
                     .foregroundStyle(AppTheme.foreground)
@@ -37,8 +37,13 @@ struct OnboardingView: View {
                 )
             }
         }
-        .padding(32)
-        .frame(width: 460)
+        .padding(.horizontal, 32)
+        .padding(.top, 24)
+        .padding(.bottom, 26)
+        // macOS sheets grow to a default height when the content only fixes
+        // its width, leaving a large band of empty space above the icon. An
+        // explicit height keeps the panel snug against its content.
+        .frame(width: 460, height: 320, alignment: .top)
         .background(AppTheme.background)
     }
 
