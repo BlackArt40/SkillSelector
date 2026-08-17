@@ -4,13 +4,14 @@ import SwiftUI
 enum BrowserDestination: Hashable {
     case all
     case global
+    case duplicates
     case system(rootID: String)
     case project(rootID: String)
     case agent(id: String)
 
     var queryScope: SkillQuery.Scope {
         switch self {
-        case .all, .agent:
+        case .all, .agent, .duplicates:
             .all
         case .global:
             .global
@@ -36,9 +37,11 @@ struct BrowserSidebar: View {
     let definitions: [AgentDefinition]
     let detectedAgentIDs: Set<String>
     var manuallyEnabledAgentIDs: Set<String> = []
+    var unhealthyRootIDs: Set<String> = []
     let counts: [BrowserDestination: Int]
     var onAddProject: () -> Void
     var onDrop: ((SkillDragPayload, URL) -> Void)?
+    var onReauthorize: ((AuthorizedRootSnapshot) -> Void)?
 
     private var systemRoots: [AuthorizedRootSnapshot] {
         roots
@@ -119,6 +122,7 @@ struct BrowserSidebar: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     mainSection
+                    unhealthySection
                     directoriesSection
                     agentsSection
                 }
@@ -154,6 +158,39 @@ struct BrowserSidebar: View {
                 isActive: destination == .global
             ) {
                 destination = .global
+            }
+            SidebarItem(
+                title: L10n.string("Duplicate Skills"),
+                glyph: Image(systemName: "doc.on.doc"),
+                count: counts[.duplicates],
+                isActive: destination == .duplicates
+            ) {
+                destination = .duplicates
+            }
+        }
+    }
+
+    /// Roots whose bookmark no longer resolves: moved directory, restored
+    /// backup, reinstalled system. Shown with a warning glyph and a direct
+    /// re-authorization action — the scan cannot heal these on its own.
+    @ViewBuilder
+    private var unhealthySection: some View {
+        let unhealthy = roots.filter { unhealthyRootIDs.contains($0.id) }
+        if !unhealthy.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                sideHeading(L10n.string("Needs Re-authorization"))
+                ForEach(unhealthy) { root in
+                    SidebarItem(
+                        title: root.displayName,
+                        subtitle: root.url.path,
+                        glyph: Image(systemName: "exclamationmark.triangle.fill"),
+                        count: nil,
+                        isActive: false
+                    ) {
+                        onReauthorize?(root)
+                    }
+                    .help(L10n.string("Re-authorize Directory"))
+                }
             }
         }
     }

@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import Foundation
 import Observation
 import SkillSelectorCore
@@ -43,10 +44,17 @@ struct SkillSelection: Hashable, Identifiable {
     private let diagnosticStore: DiagnosticStore
     private let homeDirectory: URL
     let fileOperations: FileOperationCoordinator
+    /// Test seam: pins the sandbox verdict that `isSandboxed` reads from the
+    /// process environment, so unit tests can exercise the sandboxed path.
+    var environmentIsSandboxed: Bool?
     @ObservationIgnored private var activeRefresh: (id: UUID, task: Task<Void, Never>)?
 
     var refreshState: RefreshState = .idle
     var selection: SkillSelection?
+    /// Multi-select set for batch operations. Always contains the primary
+    /// selection's path when one exists.
+    private(set) var selectedPaths: Set<String> = []
+    private var selectionAnchor: String?
     private(set) var showsOnboarding = false
     private(set) var snapshots: [SkillSnapshot] = []
     private(set) var authorizedRoots: [AuthorizedRootSnapshot] = []
@@ -61,6 +69,7 @@ struct SkillSelection: Hashable, Identifiable {
     }
 
     var pendingOperationPlan: FileOperationPlan? { fileOperations.pendingOperationPlan }
+    var pendingBatchOperation: PendingBatchOperation? { fileOperations.pendingBatch }
     var operationError: String? {
         get { fileOperations.operationError }
         set { fileOperations.operationError = newValue }
@@ -75,7 +84,7 @@ struct SkillSelection: Hashable, Identifiable {
         defaults: UserDefaults = .standard,
         customAgentStore: (any AgentDefinitionStoring)? = nil,
         diagnosticStore: DiagnosticStore = .shared,
-        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+        homeDirectory: URL = AppModel.realUserHomeDirectory()
     ) {
         self.refresher = refresher
         self.index = index
@@ -117,6 +126,13 @@ struct SkillSelection: Hashable, Identifiable {
     }
 
     func checkEnvironmentOnLaunch() async {
+        if isSandboxed {
+            // A pre-fix build could have persisted the sandbox container
+            // path as the .home root (FileManager.homeDirectoryForCurrentUser
+            // resolves to the container under sandbox). Remove it so it
+            // stops shadowing the real home and blocking the first-run guide.
+            await purgeSandboxContainerHomeRoot()
+        }
         guard autoScanHome else { return }
         await ensureHomeAuthorized()
         do {
@@ -172,6 +188,11 @@ struct SkillSelection: Hashable, Identifiable {
     /// ignored — the user can import it through the panel instead.
     private func ensureHomeAuthorized() async {
         guard let bookmarks else { return }
+        // Under App Sandbox the app has no silent access to the real home,
+        // and FileManager.homeDirectoryForCurrentUser only resolves to the
+        // container — so the auto-scan defers to the first-run guide and the
+        // directory panel instead of recording a bogus root.
+        guard !isSandboxed else { return }
         guard persistedHomeRoot == nil else { return }
         do {
             _ = try bookmarks.save(url: homeDirectory, kind: .home)
@@ -179,6 +200,42 @@ struct SkillSelection: Hashable, Identifiable {
         } catch {
             // Non-fatal: auto-scan is best-effort.
         }
+    }
+
+    /// True when the process runs inside an App Sandbox container.
+    private var isSandboxed: Bool {
+        environmentIsSandboxed ?? (ProcessInfo.processInfo.environment["APP_SANDBOX_CONTAINER_ID"] != nil)
+    }
+
+    /// Removes a `.home` root recorded against the sandbox container
+    /// directory by an earlier, pre-fix build. Such a root can never be a
+    /// real home — the container holds app data, not Agent Skills — and it
+    /// would permanently shadow the authorizer while scanning nothing.
+    private func purgeSandboxContainerHomeRoot() async {
+        guard let bookmarks else { return }
+        let containerHome = FileManager.default.homeDirectoryForCurrentUser.standardizedFileURL
+        guard let stale = try? bookmarks.roots().first(where: {
+            $0.kind == .home && $0.url.standardizedFileURL.path == containerHome.path
+        }) else { return }
+        do {
+            try bookmarks.revoke(id: stale.id)
+            try reloadAuthorizedRoots()
+        } catch {
+            // Best-effort cleanup; a manual re-import heals the state anyway.
+        }
+    }
+
+    /// The user's real home directory. `FileManager.default.homeDirectoryForCurrentUser`
+    /// is misleading under App Sandbox — it resolves to the app container
+    /// (`~/Library/Containers/<bundle>/Data`), not the user's home. The
+    /// system user record still carries the real path and is readable
+    /// without extra entitlements, so the auto-scan and the directory panel
+    /// agree on the same directory.
+    nonisolated static func realUserHomeDirectory() -> URL {
+        guard let record = getpwuid(getuid()), let directory = record.pointee.pw_dir else {
+            return FileManager.default.homeDirectoryForCurrentUser.standardizedFileURL
+        }
+        return URL(fileURLWithPath: String(cString: directory)).standardizedFileURL
     }
 
     /// The persisted home root, if any. Both the auto-scan and the import
@@ -201,6 +258,7 @@ struct SkillSelection: Hashable, Identifiable {
         }
         await waitForActiveRefresh()
         guard fileOperations.pendingOperationPlan == nil,
+              fileOperations.pendingBatch == nil,
               !fileOperations.isOperating else {
             operationError = L10n.string("Finish the current file operation first.")
             return
@@ -318,8 +376,41 @@ struct SkillSelection: Hashable, Identifiable {
         try reloadAgentDefinitions()
     }
 
+    /// Writes the custom Agent definitions to a local JSON file so they can
+    /// move to another machine (UserDefaults stays behind otherwise).
+    func exportCustomAgents(to url: URL) throws {
+        try CustomAgentTransfer().archive(customAgentDefinitions).write(to: url, options: .atomic)
+    }
+
+    /// Imports definitions from a transfer file. Definitions whose id
+    /// already exists are skipped untouched; new ones are appended.
+    func importCustomAgents(from url: URL) throws -> (imported: Int, skipped: Int) {
+        let candidates = try CustomAgentTransfer().parse(Data(contentsOf: url))
+        let existing = Set(customAgentDefinitions.map(\.id))
+        var imported = 0
+        for candidate in candidates where !existing.contains(candidate.id) {
+            try customAgentStore.insert(candidate)
+            imported += 1
+        }
+        if imported > 0 {
+            try reloadAgentDefinitions()
+        }
+        return (imported, candidates.count - imported)
+    }
+
     func exportDiagnostics(to url: URL) async throws {
-        let input = DiagnosticExportInput(
+        try DiagnosticExporter(redactor: currentRedactor()).write(diagnosticExportInput(), to: url)
+    }
+
+    /// The redacted export payload for the in-app read-only viewer — the
+    /// same sanitizer the JSON export runs, so the screen never shows more
+    /// than the file would.
+    func redactedDiagnostics() -> DiagnosticExportInput {
+        DiagnosticExporter(redactor: currentRedactor()).sanitized(diagnosticExportInput())
+    }
+
+    private func diagnosticExportInput() -> DiagnosticExportInput {
+        DiagnosticExportInput(
             appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
                 ?? "development",
             macOSVersion: ProcessInfo.processInfo.operatingSystemVersionString,
@@ -327,11 +418,11 @@ struct SkillSelection: Hashable, Identifiable {
             roots: diagnosticRootSummaries(),
             diagnostics: diagnosticStore.recent()
         )
-        try DiagnosticExporter(redactor: currentRedactor()).write(input, to: url)
     }
 
     func refresh() async {
         guard fileOperations.pendingOperationPlan == nil,
+              fileOperations.pendingBatch == nil,
               !fileOperations.isOperating else {
             return
         }
@@ -355,9 +446,38 @@ struct SkillSelection: Hashable, Identifiable {
         !authorizedRoots.isEmpty
     }
 
+    /// View-level duplicate grouping: skills whose content fingerprint
+    /// matches, grouped for tidying. Every member keeps its own record.
+    var duplicateGroups: [DuplicateSkillGroup] {
+        DuplicateSkillGrouper.groups(snapshots)
+    }
+
+    /// Roots whose security-scoped bookmark can no longer be resolved (moved
+    /// directory, restored backup, reinstalled system). They need explicit
+    /// re-authorization — a sandboxed app cannot heal these silently.
+    private(set) var unhealthyRootIDs: Set<String> = []
+
+    private func reloadBookmarkHealth() {
+        guard let bookmarks else {
+            unhealthyRootIDs = []
+            return
+        }
+        var unhealthy: Set<String> = []
+        for root in authorizedRoots {
+            do {
+                let access = try bookmarks.resolve(id: root.id)
+                access.lease.close()
+            } catch {
+                unhealthy.insert(root.id)
+            }
+        }
+        unhealthyRootIDs = unhealthy
+    }
+
     var fileOperationCommandsDisabled: Bool {
         fileOperations.isOperating
             || fileOperations.pendingOperationPlan != nil
+            || fileOperations.pendingBatch != nil
             || activeRefresh != nil
     }
 
@@ -390,6 +510,29 @@ struct SkillSelection: Hashable, Identifiable {
 
     func executePendingFileOperation(replacementConfirmed: Bool) async {
         await fileOperations.execute(replacementConfirmed: replacementConfirmed)
+    }
+
+    func planBatchFileOperation(
+        _ operation: FileOperationKind,
+        for skills: [SkillSnapshot],
+        destinationRootURL: URL? = nil,
+        destinationIsArbitrary: Bool = false
+    ) async {
+        await waitForActiveRefresh()
+        await fileOperations.planBatch(
+            operation,
+            for: skills,
+            destinationRootURL: destinationRootURL,
+            destinationIsArbitrary: destinationIsArbitrary
+        )
+    }
+
+    func cancelPendingBatchOperation() {
+        fileOperations.cancelPendingBatch()
+    }
+
+    func executePendingBatchOperation() async {
+        await fileOperations.executePendingBatch()
     }
 
     func loadDocument(for skill: SkillSnapshot) async throws -> SkillDocument {
@@ -452,7 +595,7 @@ struct SkillSelection: Hashable, Identifiable {
     ) -> Redactor {
         let roots = authorizedRoots + additionalRoots
         let home = roots.first(where: { $0.kind == .home })?.url
-            ?? FileManager.default.homeDirectoryForCurrentUser
+            ?? homeDirectory
         return Redactor(
             homeDirectory: home,
             projectDirectories: roots.filter { $0.kind == .project }.map(\.url)
@@ -512,16 +655,24 @@ struct SkillSelection: Hashable, Identifiable {
         snapshots = updatedSnapshots
         authorizedRoots = updatedRoots
         rootsByID = Dictionary(uniqueKeysWithValues: updatedRoots.map { ($0.id, $0) })
+        reloadBookmarkHealth()
+        selectedPaths = selectedPaths.filter { path in
+            updatedSnapshots.contains { $0.path == path }
+        }
         if let selection,
            !updatedSnapshots.contains(where: { $0.path == selection.path }) {
-            self.selection = nil
+            self.selection = selectedPaths.sorted().first.map(SkillSelection.init(path:))
+        }
+        if let selectionAnchor,
+           !updatedSnapshots.contains(where: { $0.path == selectionAnchor }) {
+            self.selectionAnchor = nil
         }
     }
 }
 
 extension AppModel: FileOperationCoordinatorOwner {
     func updateSelection(to path: String?) {
-        selection = path.map(SkillSelection.init(path:))
+        selectOnly(path)
     }
 
     func setRefreshState(_ state: RefreshState) {
@@ -530,5 +681,58 @@ extension AppModel: FileOperationCoordinatorOwner {
 
     func makeRedactor() -> Redactor {
         currentRedactor()
+    }
+}
+
+// MARK: - Selection
+
+extension AppModel {
+    /// Plain click / keyboard navigation: single selection.
+    func selectOnly(_ path: String?) {
+        guard let path else {
+            selection = nil
+            selectedPaths = []
+            selectionAnchor = nil
+            return
+        }
+        selection = SkillSelection(path: path)
+        selectedPaths = [path]
+        selectionAnchor = path
+    }
+
+    /// ⌘-click: toggle membership; the primary selection follows the last
+    /// touched row (or the first remaining member when it was removed).
+    func toggleSelection(_ path: String) {
+        if selectedPaths.contains(path) {
+            selectedPaths.remove(path)
+            if selection?.path == path {
+                selection = selectedPaths.sorted().first.map(SkillSelection.init(path:))
+            }
+        } else {
+            selectedPaths.insert(path)
+            selection = SkillSelection(path: path)
+        }
+        selectionAnchor = path
+    }
+
+    /// Shift-click: range from the anchor to the tapped row, in the visible
+    /// list order the caller provides.
+    func selectRange(to path: String, in orderedPaths: [String]) {
+        guard let anchor = selectionAnchor ?? selection?.path,
+              let anchorIndex = orderedPaths.firstIndex(of: anchor),
+              let targetIndex = orderedPaths.firstIndex(of: path) else {
+            selectOnly(path)
+            return
+        }
+        selectedPaths = Set(orderedPaths[min(anchorIndex, targetIndex)...max(anchorIndex, targetIndex)])
+        selection = SkillSelection(path: path)
+    }
+
+    var hasMultiSelection: Bool {
+        selectedPaths.count > 1
+    }
+
+    var multiSelectedSkills: [SkillSnapshot] {
+        snapshots.filter { selectedPaths.contains($0.path) }
     }
 }

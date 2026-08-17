@@ -4,7 +4,10 @@ import SwiftUI
 /// The middle `.list-col` column: a 46 pt header with title and count, and
 /// the scrollable list of `.skill-row`s (400 pt wide in the design).
 struct SkillListView: View {
-    @Binding var selection: SkillSelection?
+    /// Primary selection (last clicked row); drives the detail pane.
+    let selection: SkillSelection?
+    /// Full multi-selection set; rows in it get the batch tint.
+    let selectedPaths: Set<String>
     @Binding var searchText: String
     @Binding var sort: SkillQuery.Sort
 
@@ -20,6 +23,14 @@ struct SkillListView: View {
     let onImportHome: () -> Void
     var onOperation: ((FileOperationKind, SkillSnapshot) -> Void)?
     var onRevealInFinder: ((SkillSnapshot) -> Void)?
+    /// Plain click and keyboard navigation: single selection.
+    var onPrimarySelect: ((String) -> Void)?
+    /// ⌘-click: toggle row membership in the multi-selection.
+    var onToggleSelect: ((String) -> Void)?
+    /// Shift-click: select the range from the anchor to this row.
+    var onRangeSelect: ((String) -> Void)?
+    /// Clears the multi-selection (chip button in the header).
+    var onClearSelection: (() -> Void)?
 
     @State private var sortHovering = false
 
@@ -42,11 +53,29 @@ struct SkillListView: View {
                 .font(AppTheme.display(17, weight: .semibold))
                 .foregroundStyle(AppTheme.foreground)
                 .lineLimit(1)
-            Text(verbatim: String.localizedStringWithFormat(
-                L10n.string("Skill List Count"), skills.count
-            ))
-            .font(AppTheme.body(12))
-            .foregroundStyle(AppTheme.muted)
+            if selectedPaths.count > 1 {
+                Button {
+                    onClearSelection?()
+                } label: {
+                    Text(verbatim: String.localizedStringWithFormat(
+                        L10n.string("Selected Count"), selectedPaths.count
+                    ))
+                }
+                .font(AppTheme.body(12))
+                .foregroundStyle(AppTheme.accent)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 2)
+                .background(AppTheme.accentTint, in: Capsule())
+                .buttonStyle(.plain)
+                .help(L10n.string("Clear Selection"))
+                .accessibilityLabel(L10n.string("Clear Selection"))
+            } else {
+                Text(verbatim: String.localizedStringWithFormat(
+                    L10n.string("Skill List Count"), skills.count
+                ))
+                .font(AppTheme.body(12))
+                .foregroundStyle(AppTheme.muted)
+            }
             Spacer(minLength: 8)
             sortMenu
         }
@@ -120,7 +149,9 @@ struct SkillListView: View {
                             skill: skill,
                             agentNamesByID: agentNamesByID,
                             isActive: selection?.path == skill.path,
-                            onSelect: { selection = SkillSelection(path: skill.path) },
+                            isMultiSelected: selectedPaths.count > 1
+                                && selectedPaths.contains(skill.path),
+                            onSelect: { handleRowTap(skill.path) },
                             onOperation: onOperation,
                             onRevealInFinder: onRevealInFinder
                         )
@@ -131,6 +162,19 @@ struct SkillListView: View {
             }
             .onKeyPress(keys: [.downArrow]) { _ in moveSelection(1) }
             .onKeyPress(keys: [.upArrow]) { _ in moveSelection(-1) }
+        }
+    }
+
+    /// Plain clicks select; ⌘-click toggles multi-selection membership;
+    /// Shift-click selects a range from the last touched row.
+    private func handleRowTap(_ path: String) {
+        let modifiers = NSEvent.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if modifiers.contains(.command) {
+            onToggleSelect?(path)
+        } else if modifiers.contains(.shift) {
+            onRangeSelect?(path)
+        } else {
+            onPrimarySelect?(path)
         }
     }
 
@@ -147,7 +191,7 @@ struct SkillListView: View {
         } else {
             next = delta > 0 ? 0 : skills.count - 1
         }
-        selection = SkillSelection(path: skills[next].path)
+        onPrimarySelect?(skills[next].path)
         return .handled
     }
 

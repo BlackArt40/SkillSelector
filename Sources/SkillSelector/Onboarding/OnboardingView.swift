@@ -1,5 +1,4 @@
 import AppKit
-import Darwin
 import SkillSelectorCore
 import SwiftUI
 
@@ -52,20 +51,13 @@ struct OnboardingView: View {
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.canCreateDirectories = false
-        panel.directoryURL = Self.userHomeDirectory
+        // `homeDirectoryForCurrentUser` points at the sandbox container in
+        // packaged builds; the panel should open at the real home instead.
+        panel.directoryURL = AppModel.realUserHomeDirectory()
         guard panel.runModal() == .OK, let url = panel.url?.standardizedFileURL else { return }
         Task {
             await model.authorize(url, as: .home)
             model.dismissOnboarding()
         }
-    }
-
-    /// `homeDirectoryForCurrentUser` points at the sandbox container in
-    /// packaged builds; the panel should open at the real home instead.
-    private static var userHomeDirectory: URL? {
-        guard let record = getpwuid(getuid()), let directory = record.pointee.pw_dir else {
-            return nil
-        }
-        return URL(fileURLWithPath: String(cString: directory))
     }
 }

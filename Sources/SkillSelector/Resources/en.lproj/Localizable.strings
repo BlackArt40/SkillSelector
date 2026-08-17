@@ -230,3 +230,47 @@
 "Copy To Current Folder" = "Copy to Current Folder";
 "Move To Current Folder" = "Move to Current Folder";
 "Choose a destination folder" = "Choose a destination folder";
+
+/* Batch operations */
+"Batch operations support copy, move, and delete." = "Batch operations support copy, move, and delete.";
+"Confirm Batch Copy" = "Copy %d Skills";
+"Confirm Batch Move" = "Move %d Skills";
+"Confirm Batch Move to Trash" = "Move %d Skills to Trash";
+"Batch Copy Description" = "Copy %d selected Skills to one destination folder. Pick the folder next.";
+"Batch Move Description" = "Move %d selected Skills to one destination folder. Pick the folder next.";
+"Batch Delete Description" = "Move %d selected Skills to the Trash. Each one can be restored individually from the Trash.";
+"Copy %d Items" = "Copy %d Items";
+"Move %d Items" = "Move %d Items";
+"Move %d Items to Trash" = "Move %d Items to Trash";
+"These Skills will be moved to Trash." = "These Skills will be moved to Trash.";
+"Name conflicts keep both Skills; replacements need a single-Skill operation." = "Name conflicts keep both Skills; replacements need a single-Skill operation.";
+"Selected Count" = "%d selected";
+"Clear Selection" = "Clear selection";
+
+/* Duplicate skills */
+"Duplicate Skills" = "Duplicate Skills";
+"Duplicate Groups Count" = "%d groups";
+"No Duplicates" = "No Duplicates";
+"No Duplicates Description" = "No content-identical Skills were found across your Agents.";
+"Duplicate Members Count" = "%d copies";
+
+/* Bookmark health */
+"Needs Re-authorization" = "Needs re-authorization";
+"Re-authorize…" = "Re-authorize…";
+
+/* Custom agent transfer */
+"Export Custom Agents" = "Export Custom Agents";
+"Import Custom Agents" = "Import Custom Agents";
+"Custom Agents Exported" = "Custom Agents exported.";
+"Custom Agents Imported" = "Imported %d custom Agents (%d skipped as duplicates).";
+
+/* Diagnostics viewer */
+"View…" = "View…";
+"View Redacted Diagnostics" = "View redacted diagnostics";
+"Diagnostics Viewer Title" = "Diagnostics";
+"Diagnostics Viewer Sub" = "A read-only, redacted view of what the JSON export contains.";
+"Diagnostics Roots Count" = "%d of %d authorized directories available";
+"Diagnostics Unavailable Roots" = "Some authorized directories are unavailable.";
+"Diagnostics Events" = "Recent Events";
+"Diagnostics Empty" = "No diagnostics recorded yet.";
+"Close" = "Close";

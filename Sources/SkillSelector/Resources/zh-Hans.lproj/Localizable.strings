@@ -230,3 +230,47 @@
 "Copy To Current Folder" = "复制到当前文件夹";
 "Move To Current Folder" = "移动到当前文件夹";
 "Choose a destination folder" = "选择目标文件夹";
+
+/* Batch operations */
+"Batch operations support copy, move, and delete." = "批量操作支持复制、移动和删除。";
+"Confirm Batch Copy" = "复制 %d 个 Skill";
+"Confirm Batch Move" = "移动 %d 个 Skill";
+"Confirm Batch Move to Trash" = "将 %d 个 Skill 移入废纸篓";
+"Batch Copy Description" = "把选中的 %d 个 Skill 复制到同一个目标文件夹，接下来请选择文件夹。";
+"Batch Move Description" = "把选中的 %d 个 Skill 移动到同一个目标文件夹，接下来请选择文件夹。";
+"Batch Delete Description" = "把选中的 %d 个 Skill 移入废纸篓，每个都可以单独从废纸篓恢复。";
+"Copy %d Items" = "复制 %d 项";
+"Move %d Items" = "移动 %d 项";
+"Move %d Items to Trash" = "移入废纸篓 %d 项";
+"These Skills will be moved to Trash." = "这些 Skill 将被移入废纸篓。";
+"Name conflicts keep both Skills; replacements need a single-Skill operation." = "同名冲突会保留两个 Skill；如需替换请对单个 Skill 操作。";
+"Selected Count" = "已选 %d 项";
+"Clear Selection" = "清除选择";
+
+/* Duplicate skills */
+"Duplicate Skills" = "重复 Skill";
+"Duplicate Groups Count" = "%d 组";
+"No Duplicates" = "没有重复";
+"No Duplicates Description" = "没有在各 Agent 之间找到内容完全相同的 Skill。";
+"Duplicate Members Count" = "%d 份副本";
+
+/* Bookmark health */
+"Needs Re-authorization" = "需要重新授权";
+"Re-authorize…" = "重新授权…";
+
+/* Custom agent transfer */
+"Export Custom Agents" = "导出自定义 Agent";
+"Import Custom Agents" = "导入自定义 Agent";
+"Custom Agents Exported" = "自定义 Agent 已导出。";
+"Custom Agents Imported" = "已导入 %d 个自定义 Agent（跳过 %d 个重复）。";
+
+/* Diagnostics viewer */
+"View…" = "查看…";
+"View Redacted Diagnostics" = "查看脱敏诊断";
+"Diagnostics Viewer Title" = "诊断";
+"Diagnostics Viewer Sub" = "只读展示 JSON 导出包含的脱敏内容。";
+"Diagnostics Roots Count" = "%d / %d 个授权目录可用";
+"Diagnostics Unavailable Roots" = "部分授权目录当前不可用。";
+"Diagnostics Events" = "最近事件";
+"Diagnostics Empty" = "暂无诊断记录。";
+"Close" = "关闭";

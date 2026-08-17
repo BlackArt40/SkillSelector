@@ -284,6 +284,24 @@ final class SkillScannerTests: XCTestCase {
         XCTAssertFalse(reason.isEmpty)
         XCTAssertEqual(report.roots[0].unavailableDiagnostic?.code, .rootUnreadable)
     }
+    func testScannedSkillsCarryAContentFingerprintStableAcrossCopies() async throws {
+        let fixture = try ScanFixture()
+        try fixture.writeSkill(at: ".codex/skills/demo", name: "demo")
+        try fixture.writeSkill(at: ".claude/skills/demo-copy", name: "demo-copy")
+        // Identical trees under different names and paths.
+        let source = fixture.url.appending(path: ".codex/skills/demo/SKILL.md")
+        try String(contentsOf: source, encoding: .utf8).write(
+            to: fixture.url.appending(path: ".claude/skills/demo-copy/SKILL.md"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let report = await SkillScanner().scan([fixture.projectRoot])
+        let fingerprints = report.installations.compactMap(\.contentFingerprint)
+
+        XCTAssertEqual(fingerprints.count, report.installations.count)
+        XCTAssertEqual(Set(fingerprints).count, 1)
+    }
 }
 
 private final class ScanFixture: @unchecked Sendable {

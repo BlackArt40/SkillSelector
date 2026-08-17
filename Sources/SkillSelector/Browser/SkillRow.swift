@@ -7,6 +7,7 @@ struct SkillRow: View {
     let skill: SkillSnapshot
     let agentNamesByID: [String: String]
     let isActive: Bool
+    var isMultiSelected = false
     var onSelect: () -> Void
     var onOperation: ((FileOperationKind, SkillSnapshot) -> Void)?
     var onRevealInFinder: ((SkillSnapshot) -> Void)?
@@ -67,16 +68,19 @@ struct SkillRow: View {
             }
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(isActive ? AppTheme.accentTint : Color.clear, in: RoundedRectangle(cornerRadius: 10))
+            .background(rowBackground, in: RoundedRectangle(cornerRadius: 10))
             .overlay {
                 RoundedRectangle(cornerRadius: 10)
-                    .stroke(isActive ? AppTheme.accentTintBorder : Color.clear, lineWidth: 1)
+                    .stroke(
+                        isActive || isMultiSelected ? AppTheme.accentTintBorder : Color.clear,
+                        lineWidth: 1
+                    )
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(RowHoverStyle())
         .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(isActive ? .isSelected : [])
+        .accessibilityAddTraits(isActive || isMultiSelected ? .isSelected : [])
         .draggable(SkillDragPayload(path: skill.path, name: skill.name))
         .contextMenu {
             Button {
@@ -111,6 +115,14 @@ struct SkillRow: View {
 
     private var agentNames: [String] {
         skill.agentDisplayNames(by: agentNamesByID)
+    }
+
+    /// Primary selection gets the full tint; other multi-selected rows a
+    /// calmer variant of the same accent family.
+    private var rowBackground: Color {
+        if isActive { return AppTheme.accentTint }
+        if isMultiSelected { return AppTheme.accentTint.opacity(0.55) }
+        return .clear
     }
 }
 

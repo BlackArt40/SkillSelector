@@ -46,57 +46,80 @@ struct RootView: View {
                 definitions: model.agentDefinitions,
                 detectedAgentIDs: detectedAgentIDs,
                 manuallyEnabledAgentIDs: model.manuallyEnabledAgentIDs,
+                unhealthyRootIDs: model.unhealthyRootIDs,
                 counts: sidebarCounts,
                 onAddProject: { chooseDestinationRoot() },
                 onDrop: { payload, rootURL in
                     guard let skill = model.snapshots.first(where: { $0.path == payload.path }) else { return }
                     Task { await model.planFileOperation(.move, for: skill, destinationRootURL: rootURL) }
-                }
+                },
+                onReauthorize: { root in reauthorize(root) }
             )
             .frame(width: 240)
 
-            SkillListView(
-                selection: $model.selection,
-                searchText: $searchText,
-                sort: $sort,
-                title: currentDestination.title(rootsByID: model.rootsByID, definitions: model.agentDefinitions),
-                skills: filteredSkills,
-                allSkillCount: model.snapshots.count,
-                hasAuthorization: model.hasAuthorization,
-                hasActiveFilters: hasActiveFilters,
-                refreshState: model.refreshState,
-                agentNamesByID: agentNamesByID,
-                onClearFilters: clearFilters,
-                onImportProject: { chooseDestinationRoot() },
-                onImportHome: { chooseSystemRoot() },
-                onOperation: { operation, skill in
-                    if operation == .delete {
-                        Task { await model.planFileOperation(operation, for: skill) }
-                    } else {
-                        chooseDestination(for: operation, skill: skill)
-                    }
-                },
-                onRevealInFinder: { skill in
-                    do {
-                        try model.revealDocumentInFinder(for: skill)
-                    } catch {
-                        revealError = (error as? LocalizedError)?.errorDescription
-                            ?? String(describing: error)
-                    }
-                }
-            )
-            .frame(width: 400)
+            if currentDestination == .duplicates {
+                DuplicateGroupsView(
+                    groups: model.duplicateGroups,
+                    selection: model.selection,
+                    agentNamesByID: agentNamesByID,
+                    hasAuthorization: model.hasAuthorization,
+                    onOperation: { operation, skill in
+                        startOperation(operation, skill: skill)
+                    },
+                    onRevealInFinder: { skill in
+                        do {
+                            try model.revealDocumentInFinder(for: skill)
+                        } catch {
+                            revealError = (error as? LocalizedError)?.errorDescription
+                                ?? String(describing: error)
+                        }
+                    },
+                    onSelect: { path in model.selectOnly(path) }
+                )
+                .frame(width: 400)
+            } else {
+                SkillListView(
+                    selection: model.selection,
+                    selectedPaths: model.selectedPaths,
+                    searchText: $searchText,
+                    sort: $sort,
+                    title: currentDestination.title(rootsByID: model.rootsByID, definitions: model.agentDefinitions),
+                    skills: filteredSkills,
+                    allSkillCount: model.snapshots.count,
+                    hasAuthorization: model.hasAuthorization,
+                    hasActiveFilters: hasActiveFilters,
+                    refreshState: model.refreshState,
+                    agentNamesByID: agentNamesByID,
+                    onClearFilters: clearFilters,
+                    onImportProject: { chooseDestinationRoot() },
+                    onImportHome: { chooseSystemRoot() },
+                    onOperation: { operation, skill in
+                        startOperation(operation, skill: skill)
+                    },
+                    onRevealInFinder: { skill in
+                        do {
+                            try model.revealDocumentInFinder(for: skill)
+                        } catch {
+                            revealError = (error as? LocalizedError)?.errorDescription
+                                ?? String(describing: error)
+                        }
+                    },
+                    onPrimarySelect: { path in model.selectOnly(path) },
+                    onToggleSelect: { path in model.toggleSelection(path) },
+                    onRangeSelect: { path in
+                        model.selectRange(to: path, in: filteredSkills.map(\.path))
+                    },
+                    onClearSelection: { model.selectOnly(model.selection?.path) }
+                )
+                .frame(width: 400)
+            }
 
             SkillDetailView(
                 skill: selectedSkill,
                 rootsByID: model.rootsByID,
                 agentNamesByID: agentNamesByID,
                 onOperation: { operation, skill in
-                    if operation == .delete {
-                        Task { await model.planFileOperation(operation, for: skill) }
-                    } else {
-                        chooseDestination(for: operation, skill: skill)
-                    }
+                    startOperation(operation, skill: skill)
                 },
                 onRevealInFinder: { skill in
                     do {
@@ -148,6 +171,21 @@ struct RootView: View {
                 }
             )
             .id(plan.id)
+        }
+
+        .sheet(item: pendingBatchBinding) { batch in
+            BatchOperationConfirmationView(
+                batch: batch,
+                isOperating: model.isOperating,
+                onCancel: model.cancelPendingBatchOperation,
+                onConfirm: {
+                    Task {
+                        await model.executePendingBatchOperation()
+                        model.selectOnly(nil)
+                    }
+                }
+            )
+            .id(batch.id)
         }
 
         .alert(
@@ -229,6 +267,7 @@ struct RootView: View {
         var counts: [BrowserDestination: Int] = [:]
         counts[.all] = model.snapshots.count
         counts[.global] = SkillQuery(scope: .global).apply(to: model.snapshots, rootsByID: model.rootsByID).count
+        counts[.duplicates] = DuplicateSkillGrouper.memberCount(in: model.duplicateGroups)
         for root in model.authorizedRoots {
             switch root.kind {
             case .home, .system:
@@ -271,6 +310,15 @@ struct RootView: View {
         )
     }
 
+    private var pendingBatchBinding: Binding<PendingBatchOperation?> {
+        Binding(
+            get: { model.pendingBatchOperation },
+            set: { value in
+                if value == nil { model.cancelPendingBatchOperation() }
+            }
+        )
+    }
+
     private var operationErrorBinding: Binding<Bool> {
         Binding(
             get: { model.operationError != nil },
@@ -290,6 +338,50 @@ struct RootView: View {
     }
 
     // MARK: Import / operations
+
+    /// Routes a context-menu operation: when the tapped row belongs to a
+    /// multi-selection, the operation runs as a batch over every selected
+    /// Skill; otherwise it is the ordinary single-Skill flow.
+    private func startOperation(_ operation: FileOperationKind, skill: SkillSnapshot) {
+        let skills = batchTargets(containing: skill, operation: operation)
+        if skills.count > 1 {
+            if operation == .delete {
+                Task { await model.planBatchFileOperation(operation, for: skills) }
+            } else {
+                chooseBatchDestination(for: operation, skills: skills)
+            }
+            return
+        }
+        if operation == .delete {
+            Task { await model.planFileOperation(operation, for: skill) }
+        } else {
+            chooseDestination(for: operation, skill: skill)
+        }
+    }
+
+    private func batchTargets(
+        containing skill: SkillSnapshot,
+        operation: FileOperationKind
+    ) -> [SkillSnapshot] {
+        guard operation == .copy || operation == .move || operation == .delete,
+              model.hasMultiSelection,
+              model.selectedPaths.contains(skill.path) else {
+            return [skill]
+        }
+        return model.multiSelectedSkills
+    }
+
+    private func reauthorize(_ root: AuthorizedRootSnapshot) {
+        let panel = NSOpenPanel()
+        panel.title = L10n.string("Re-authorize Directory")
+        panel.prompt = L10n.string("Authorize")
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = root.url
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task { await model.authorize(url, as: root.kind) }
+    }
 
     private func chooseDestinationRoot() {
         guard let url = chooseDirectory(
@@ -317,6 +409,30 @@ struct RootView: View {
         panel.allowsMultipleSelection = false
         panel.canCreateDirectories = false
         return panel.runModal() == .OK ? panel.url?.standardizedFileURL : nil
+    }
+
+    private func chooseBatchDestination(for operation: FileOperationKind, skills: [SkillSnapshot]) {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = false
+        // Any user-picked folder is a valid batch copy/move target — no
+        // registered Skill root required.
+        panel.title = L10n.string("Choose a destination folder")
+        panel.prompt = operation == .copy
+            ? L10n.string("Copy To Current Folder")
+            : L10n.string("Move To Current Folder")
+        panel.message = L10n.string("Choose a destination folder")
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task {
+            await model.planBatchFileOperation(
+                operation,
+                for: skills,
+                destinationRootURL: url,
+                destinationIsArbitrary: true
+            )
+        }
     }
 
     private func chooseDestination(for operation: FileOperationKind, skill: SkillSnapshot) {
@@ -358,6 +474,7 @@ extension BrowserDestination {
         switch self {
         case .all: L10n.string("All Skills")
         case .global: L10n.string("Global Skills")
+        case .duplicates: L10n.string("Duplicate Skills")
         case .system(let rootID), .project(let rootID):
             rootsByID[rootID]?.displayName ?? rootID
         case .agent(let id):

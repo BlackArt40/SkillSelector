@@ -41,8 +41,11 @@ public struct DiagnosticExporter: Sendable {
         self.redactor = redactor
     }
 
-    public func archive(_ input: DiagnosticExportInput) throws -> Data {
-        let sanitized = DiagnosticExportInput(
+    /// The export payload with every string passed through the redactor.
+    /// Also the source for the in-app read-only viewer, so what the user
+    /// sees on screen can never be less redacted than what leaves the disk.
+    public func sanitized(_ input: DiagnosticExportInput) -> DiagnosticExportInput {
+        DiagnosticExportInput(
             appVersion: redactor.redact(input.appVersion),
             macOSVersion: redactor.redact(input.macOSVersion),
             registryIDs: input.registryIDs.map(redactor.redact).sorted(),
@@ -62,10 +65,14 @@ public struct DiagnosticExporter: Sendable {
                 )
             }
         )
+    }
+
+    public func archive(_ input: DiagnosticExportInput) throws -> Data {
+        let sanitizedInput = sanitized(input)
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        return try encoder.encode(sanitized)
+        return try encoder.encode(sanitizedInput)
     }
 
     public func write(_ input: DiagnosticExportInput, to url: URL) throws {

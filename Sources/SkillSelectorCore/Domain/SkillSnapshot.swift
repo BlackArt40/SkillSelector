@@ -11,6 +11,7 @@ public struct SkillSnapshot: Identifiable, Hashable, Sendable {
     public let rootIDs: [String]
     public let entryFilename: String
     public let parseDiagnostics: [ParseIssue]
+    public var contentFingerprint: String? = nil
 
     /// Display names of the agents associated with this Skill, excluding
     /// the synthetic owners, sorted by name.

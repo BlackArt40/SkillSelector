@@ -144,7 +144,10 @@ public final class IndexRefresher {
             }
         }
 
-        var report = await scanner.scan(roots)
+        var report = await scanner.scan(
+            roots,
+            cache: SkillScanCache(entriesByPath: (try? index.cachedScanEntries()) ?? [:])
+        )
         report.roots = coalescedRoots(
             report.roots + dispositions + unresolvedRoots
         )

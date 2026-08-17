@@ -21,12 +21,20 @@ public struct SkillScanner: Sendable {
     public init() {}
 
     public func scan(_ roots: [ScanRoot]) async -> ScanReport {
+        await scan(roots, cache: .empty)
+    }
+
+    /// Incremental entry point: unchanged installations (stat tree equal to
+    /// the cached state) reuse their cached document, fingerprint, and
+    /// modification date — file reads, YAML parsing, and content hashing are
+    /// skipped for them. Still stat-only observation; no file watching.
+    public func scan(_ roots: [ScanRoot], cache: SkillScanCache) async -> ScanReport {
         let authorizedURLs = roots.map(\.url)
         var installations: [String: ScannedSkill] = [:]
         var rootReports: [ScannedRoot] = []
 
         for root in roots {
-            let result = scan(root, authorizedURLs: authorizedURLs)
+            let result = scan(root, authorizedURLs: authorizedURLs, cache: cache)
             rootReports.append(result.root)
             for candidate in result.installations {
                 installations[candidate.installation.id] = merged(
@@ -44,7 +52,8 @@ public struct SkillScanner: Sendable {
 
     private func scan(
         _ root: ScanRoot,
-        authorizedURLs: [URL]
+        authorizedURLs: [URL],
+        cache: SkillScanCache
     ) -> (root: ScannedRoot, installations: [ScannedSkill]) {
         guard isAccessibleRoot(root.url, authorizedURLs: authorizedURLs) else {
             return (
@@ -68,7 +77,8 @@ public struct SkillScanner: Sendable {
                         root,
                         agentIDs: agentIDs,
                         entryFilename: entryFilename,
-                        authorizedURLs: authorizedURLs
+                        authorizedURLs: authorizedURLs,
+                        cache: cache
                     )
                     issues = []
                 } else {
@@ -80,7 +90,8 @@ public struct SkillScanner: Sendable {
                 installations = try scanProject(
                     root,
                     declarations: validation.declarations,
-                    authorizedURLs: authorizedURLs
+                    authorizedURLs: authorizedURLs,
+                    cache: cache
                 )
                 issues = validation.issues
             }
@@ -114,7 +125,8 @@ public struct SkillScanner: Sendable {
         _ root: ScanRoot,
         agentIDs: Set<String>,
         entryFilename: String,
-        authorizedURLs: [URL]
+        authorizedURLs: [URL],
+        cache: SkillScanCache
     ) throws -> [ScannedSkill] {
         if let rootSkill = makeCandidate(
             installationURL: root.url,
@@ -122,7 +134,8 @@ public struct SkillScanner: Sendable {
             entryFilename: entryFilename,
             rootID: root.id,
             authorizedURLs: authorizedURLs,
-            sourceDiscoveryRootURL: root.url
+            sourceDiscoveryRootURL: root.url,
+            cache: cache
         ) {
             return [rootSkill]
         }
@@ -138,7 +151,8 @@ public struct SkillScanner: Sendable {
                 entryFilename: entryFilename,
                 rootID: root.id,
                 authorizedURLs: authorizedURLs,
-                sourceDiscoveryRootURL: root.url
+                sourceDiscoveryRootURL: root.url,
+                cache: cache
             )
         }
     }
@@ -146,7 +160,8 @@ public struct SkillScanner: Sendable {
     private func scanProject(
         _ root: ScanRoot,
         declarations: [SkillRootDeclaration],
-        authorizedURLs: [URL]
+        authorizedURLs: [URL],
+        cache: SkillScanCache
     ) throws -> [ScannedSkill] {
         var installations: [ScannedSkill] = []
         try walkProjectDirectory(
@@ -155,6 +170,7 @@ public struct SkillScanner: Sendable {
             root: root,
             declarations: declarations,
             authorizedURLs: authorizedURLs,
+            cache: cache,
             installations: &installations
         )
         return installations
@@ -166,6 +182,7 @@ public struct SkillScanner: Sendable {
         root: ScanRoot,
         declarations: [SkillRootDeclaration],
         authorizedURLs: [URL],
+        cache: SkillScanCache,
         installations: inout [ScannedSkill]
     ) throws {
         if !relativeComponents.isEmpty,
@@ -177,7 +194,8 @@ public struct SkillScanner: Sendable {
                ),
                rootID: root.id,
                authorizedURLs: authorizedURLs,
-               sourceDiscoveryRootURL: root.url
+               sourceDiscoveryRootURL: root.url,
+               cache: cache
            ) {
             installations.append(candidate)
             return
@@ -200,7 +218,8 @@ public struct SkillScanner: Sendable {
                     ),
                     rootID: root.id,
                     authorizedURLs: authorizedURLs,
-                    sourceDiscoveryRootURL: root.url
+                    sourceDiscoveryRootURL: root.url,
+                    cache: cache
                 ) else {
                     continue
                 }
@@ -212,6 +231,7 @@ public struct SkillScanner: Sendable {
                     root: root,
                     declarations: declarations,
                     authorizedURLs: authorizedURLs,
+                    cache: cache,
                     installations: &installations
                 )
             }
@@ -243,7 +263,8 @@ public struct SkillScanner: Sendable {
         entries: [(agentIDs: Set<String>, entryFilename: String)],
         rootID: String,
         authorizedURLs: [URL],
-        sourceDiscoveryRootURL: URL
+        sourceDiscoveryRootURL: URL,
+        cache: SkillScanCache
     ) -> ScannedSkill? {
         var result: ScannedSkill?
         for match in entries {
@@ -253,7 +274,8 @@ public struct SkillScanner: Sendable {
                 entryFilename: match.entryFilename,
                 rootID: rootID,
                 authorizedURLs: authorizedURLs,
-                sourceDiscoveryRootURL: sourceDiscoveryRootURL
+                sourceDiscoveryRootURL: sourceDiscoveryRootURL,
+                cache: cache
             ) else {
                 continue
             }
@@ -282,7 +304,8 @@ public struct SkillScanner: Sendable {
         entryFilename: String,
         rootID: String,
         authorizedURLs: [URL],
-        sourceDiscoveryRootURL: URL
+        sourceDiscoveryRootURL: URL,
+        cache: SkillScanCache
     ) -> ScannedSkill? {
         guard EntryFilename.isValid(entryFilename) else { return nil }
 
@@ -295,9 +318,9 @@ public struct SkillScanner: Sendable {
             let target = installationURL.resolvingSymlinksInPath().standardizedFileURL
             guard target != installationURL,
                   isWithinAuthorizedRoots(
-                      standardizedURL: installationURL,
-                      resolvedURL: target,
-                      authorizedURLs: authorizedURLs
+                    standardizedURL: installationURL,
+                    resolvedURL: target,
+                    authorizedURLs: authorizedURLs
                   ),
                   isDirectory(target) else {
                 return nil
@@ -308,6 +331,33 @@ public struct SkillScanner: Sendable {
             guard isDirectory(installationURL) else { return nil }
             contentDirectory = installationURL
             resolvedTarget = nil
+        }
+
+        // Incremental fast path: with an identical stat tree the parse and
+        // the content fingerprint from the previous scan are still valid.
+        // The containment and directory guards above re-ran this scan, so
+        // an unchanged entry stat keeps its earlier safe-and-contained
+        // verdict (an entry becoming a symlink is a stat change → miss).
+        let state = ScanStateBuilder.build(
+            contentDirectory: contentDirectory,
+            entryFilename: entryFilename,
+            resolvedTarget: resolvedTarget
+        )
+        if let cached = cache.entriesByPath[installationURL.path],
+           cached.state == state {
+            return ScannedSkill(
+                installation: SkillInstallation(
+                    path: installationURL,
+                    resolvedTarget: resolvedTarget,
+                    agentIDs: agentIDs
+                ),
+                document: cached.document,
+                agentIDsByRoot: [rootID: agentIDs],
+                entryFilename: entryFilename,
+                entryModificationDate: cached.entryModificationDate,
+                contentFingerprint: cached.contentFingerprint,
+                reusedCachedScan: true
+            )
         }
 
         let resolvedEntryURL: URL
@@ -362,6 +412,10 @@ public struct SkillScanner: Sendable {
             agentIDsByRoot: [rootID: agentIDs],
             entryFilename: entryFilename,
             entryModificationDate: modificationDate,
+            contentFingerprint: try? SkillContentFingerprint.compute(rootDirectory: contentDirectory),
+            scanState: document.issues.contains { $0.diagnostic?.code == .unableToReadEntry }
+                ? nil
+                : state
         )
     }
 

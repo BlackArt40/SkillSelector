@@ -13,11 +13,14 @@ A native macOS app for managing Agent Skills on your machine: browse, search, co
 
 The main window is a three-column browser: a sidebar grouped by scope and Agent, a searchable, sortable list of Skills, and a detail pane showing the selected Skill's description, frontmatter, rendered Markdown document, associated Agents, and install locations. In search, a plain term matches the name, description, and path at once; prefix it with `name:`, `desc:`, `path:`, or `agent:` to search one field only — for example `agent:cursor path:.agents`.
 
-The file operations are the everyday ones: copy, move (to any folder you pick), symbolic links, and delete. Deletion only ever moves things to the Trash — there is no permanent-delete path anywhere in the app.
+The file operations are the everyday ones: copy, move (to any folder you pick), symbolic links, and delete. Deletion only ever moves things to the Trash — there is no permanent-delete path anywhere in the app. The list supports ⌘-click and Shift-range selection, and a multi-selection can be copied, moved, or deleted in one summarized confirmation.
 
 Also:
 
 - On first launch the app walks you through granting home-directory access (a sandboxed app can't get it silently), then scans automatically on later launches; you can add just project folders instead
+- The sidebar's "Duplicate Skills" groups content-identical copies scattered across Agents by content fingerprint, which makes tidying up straightforward; directories whose authorization broke land in "Needs re-authorization" with a one-click fix
+- Custom Agents export to JSON and import on another machine
+- The diagnostics report can be viewed in-app (redacted exactly like the export) or exported as JSON
 - SKILL.md files stay read-only — reveal in Finder or open in your default editor
 - Light/dark toggle in the title bar, or follow the system
 - English and Simplified Chinese, following the system language
@@ -40,10 +43,10 @@ Requires macOS 14 Sonoma or later; Universal 2 (Apple Silicon and Intel).
 2. Verify integrity (keep both files in the same directory):
 
    ```zsh
-   shasum -a 256 -c SkillSelector-1.1.0.dmg.sha256
+   shasum -a 256 -c SkillSelector-1.2.1.dmg.sha256
    ```
 
-   It must print `SkillSelector-1.1.0.dmg: OK`. If it doesn't, don't install it.
+   It must print `SkillSelector-1.2.1.dmg: OK`. If it doesn't, don't install it.
 
 3. Mount the `.dmg` and drag `SkillSelector.app` to Applications
 4. Right-click the app → Open → confirm Open
@@ -65,10 +68,10 @@ If that's not acceptable, build from source — it goes through the same packagi
 
 ```zsh
 swift build
-zsh Scripts/package-dmg.sh 1.1.0
+zsh Scripts/package-dmg.sh 1.2.1
 ```
 
-Produces `dist/SkillSelector.app`, `dist/SkillSelector.dmg`, `dist/SkillSelector-1.1.0.dmg`, and a matching `.sha256`.
+Produces `dist/SkillSelector.app`, `dist/SkillSelector.dmg`, `dist/SkillSelector-1.2.1.dmg`, and a matching `.sha256`.
 
 The only third-party dependency is Yams (frontmatter parsing). Run the tests with `swift test`; CI runs them on every PR and push.
 

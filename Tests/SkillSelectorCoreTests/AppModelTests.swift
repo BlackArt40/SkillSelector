@@ -66,6 +66,58 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    /// The packaged builds that triggered this bug ran sandboxed, where
+    /// `FileManager.default.homeDirectoryForCurrentUser` resolves to the app
+    /// container rather than the user's home. A pre-fix build persisted that
+    /// container path as the `.home` root, which scanned nothing and blocked
+    /// the first-run guide. This test pins the cleanup and the deferral to
+    /// the manual import path.
+    func testSandboxedLaunchPurgesContainerHomeRootAndSkipsAutoAuthorization() async throws {
+        let suite = "AppModelSandboxLaunch-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(
+            for: SkillRecord.self,
+            AuthorizedRootRecord.self,
+            configurations: configuration
+        )
+        let bookmarks = BookmarkStore(container: container)
+        // The pre-fix build recorded whatever homeDirectoryForCurrentUser
+        // returned (the container path under sandbox; the real home in this
+        // non-sandboxed test process — the same bogus-root shape).
+        let staleRoot = try bookmarks.save(url: FileManager.default.homeDirectoryForCurrentUser, kind: .home)
+
+        let home = FileManager.default.temporaryDirectory
+            .appending(path: "AppModelSandboxHome-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: home) }
+
+        let model = makeModel(
+            defaults: defaults,
+            homeDirectory: home,
+            container: container,
+            bookmarks: bookmarks
+        )
+        model.environmentIsSandboxed = true
+
+        await model.checkEnvironmentOnLaunch()
+
+        // The stale container home root is gone and nothing was authorized
+        // automatically under sandbox.
+        XCTAssertFalse(model.authorizedRoots.contains { $0.id == staleRoot.id })
+        XCTAssertTrue(model.authorizedRoots.isEmpty)
+        // With authorization cleared, the first-run guide can show again.
+        XCTAssertTrue(model.shouldShowOnboarding)
+    }
+
+    func testRealUserHomeDirectoryMatchesFileManagerOutsideSandbox() {
+        XCTAssertEqual(
+            AppModel.realUserHomeDirectory().standardizedFileURL,
+            FileManager.default.homeDirectoryForCurrentUser.standardizedFileURL
+        )
+    }
+
     func testOnboardingPresentedOnlyWhenNotShownAndUnauthorized() {
         let suite = "AppModelOnboardingTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
@@ -123,7 +175,9 @@ final class AppModelTests: XCTestCase {
 
     private func makeModel(
         defaults: UserDefaults? = nil,
-        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
+        container: ModelContainer? = nil,
+        bookmarks: BookmarkStore? = nil
     ) -> AppModel {
         let suite = "AppModelGeneralTests-\(UUID().uuidString)"
         let isolatedDefaults = defaults ?? UserDefaults(suiteName: suite)!
@@ -131,13 +185,13 @@ final class AppModelTests: XCTestCase {
             isolatedDefaults.removePersistentDomain(forName: suite)
         }
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(
+        let container = container ?? (try! ModelContainer(
             for: SkillRecord.self,
             AuthorizedRootRecord.self,
             configurations: configuration
-        )
+        ))
         let index = SkillIndex(container: container)
-        let bookmarks = BookmarkStore(container: container)
+        let bookmarks = bookmarks ?? BookmarkStore(container: container)
         let registry = BuiltInAgentRegistry.make()
         let refresher = IndexRefresher(registry: registry, bookmarks: bookmarks, index: index)
         return AppModel(

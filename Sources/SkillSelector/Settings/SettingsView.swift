@@ -67,6 +67,7 @@ struct SettingsView: View {
     @State private var editingRootID: String?
     @State private var editingRootName: String = ""
     @State private var showCustomAgentSheet = false
+    @State private var showDiagnosticsViewer = false
 
     init(initialTab: SettingsTab = .general) {
         _activeTab = State(initialValue: initialTab)
@@ -101,6 +102,15 @@ struct SettingsView: View {
         .themedAppearance()
         .sheet(isPresented: $showCustomAgentSheet) {
             customAgentSheet
+        }
+        .sheet(isPresented: $showDiagnosticsViewer) {
+            DiagnosticsViewerView(
+                input: model.redactedDiagnostics(),
+                onExport: {
+                    showDiagnosticsViewer = false
+                    exportDiagnostics()
+                }
+            )
         }
         .alert(
             L10n.string("Settings Error"),
@@ -208,9 +218,14 @@ struct SettingsView: View {
                     label: L10n.string("Export Diagnostics Report"),
                     sub: L10n.string("Export Diagnostics Sub")
                 ) {
-                    Button(L10n.string("Export…"), action: exportDiagnostics)
-                        .buttonStyle(SettingsButtonStyle())
-                        .help(L10n.string("Export Redacted Diagnostics"))
+                    HStack(spacing: 10) {
+                        Button(L10n.string("View…"), action: { showDiagnosticsViewer = true })
+                            .buttonStyle(SettingsButtonStyle())
+                            .help(L10n.string("View Redacted Diagnostics"))
+                        Button(L10n.string("Export…"), action: exportDiagnostics)
+                            .buttonStyle(SettingsButtonStyle())
+                            .help(L10n.string("Export Redacted Diagnostics"))
+                    }
                 }
             }
             if let exportStatus {
@@ -303,12 +318,21 @@ struct SettingsView: View {
                     label: L10n.string("Custom Agent Hint"),
                     hint: true
                 ) {
-                    Button(L10n.string("Add…")) {
-                        customAgentEditor.reset()
-                        showCustomAgentSheet = true
+                    HStack(spacing: 10) {
+                        Button(L10n.string("Add…")) {
+                            customAgentEditor.reset()
+                            showCustomAgentSheet = true
+                        }
+                        .buttonStyle(SettingsButtonStyle())
+                        .help(L10n.string("Add Custom Agent"))
+                        Button(L10n.string("Export…"), action: exportCustomAgents)
+                            .buttonStyle(SettingsButtonStyle())
+                            .help(L10n.string("Export Custom Agents"))
+                            .disabled(model.customAgentDefinitions.isEmpty)
+                        Button(L10n.string("Import…"), action: importCustomAgents)
+                            .buttonStyle(SettingsButtonStyle())
+                            .help(L10n.string("Import Custom Agents"))
                     }
-                    .buttonStyle(SettingsButtonStyle())
-                    .help(L10n.string("Add Custom Agent"))
                 }
             }
         }
@@ -316,6 +340,7 @@ struct SettingsView: View {
 
     private func authorizedRootRow(_ root: AuthorizedRootSnapshot) -> some View {
         let isHome = root.kind == .home
+        let isHealthy = !model.unhealthyRootIDs.contains(root.id)
         return SettingsRow(
             label: isHome ? L10n.string("User Home Directory") : root.displayName,
             sub: isHome
@@ -331,8 +356,16 @@ struct SettingsView: View {
                 } else {
                     statusDot(L10n.string("Project"), color: AppTheme.meta)
                 }
-                if isHome {
-                    statusDot(L10n.string("Authorized"), color: AppTheme.success)
+                statusDot(
+                    L10n.string(isHealthy ? "Authorized" : "Needs Re-authorization"),
+                    color: isHealthy ? AppTheme.success : AppTheme.warn
+                )
+                if !isHealthy {
+                    Button(L10n.string("Re-authorize…")) {
+                        reauthorize(root)
+                    }
+                    .buttonStyle(SettingsButtonStyle())
+                    .accessibilityLabel(L10n.string("Re-authorize Directory"))
                 }
                 if !isHome {
                     Button(L10n.string("Remove")) {
@@ -583,6 +616,40 @@ struct SettingsView: View {
             } catch {
                 settingsError = String(describing: error)
             }
+        }
+    }
+
+    private func exportCustomAgents() {
+        let panel = NSSavePanel()
+        panel.title = L10n.string("Export Custom Agents")
+        panel.prompt = L10n.string("Export")
+        panel.nameFieldStringValue = "SkillSelector-CustomAgents.json"
+        panel.allowedContentTypes = [.json]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try model.exportCustomAgents(to: url)
+            exportStatus = L10n.string("Custom Agents Exported")
+        } catch {
+            settingsError = String(describing: error)
+        }
+    }
+
+    private func importCustomAgents() {
+        let panel = NSOpenPanel()
+        panel.title = L10n.string("Import Custom Agents")
+        panel.prompt = L10n.string("Import")
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.json]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let result = try model.importCustomAgents(from: url)
+            exportStatus = String.localizedStringWithFormat(
+                L10n.string("Custom Agents Imported"), result.imported, result.skipped
+            )
+        } catch {
+            settingsError = String(describing: error)
         }
     }
 }

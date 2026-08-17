@@ -90,4 +90,16 @@ final class DiagnosticExporterTests: XCTestCase {
         XCTAssertEqual(decoded.diagnostics.count, 1)
         XCTAssertEqual(decoded.diagnostics[0].category, .scanning)
     }
+
+    /// The in-app viewer consumes `sanitized` directly; it must carry the
+    /// same redaction the JSON archive does.
+    func testSanitizedMatchesArchiveRedaction() throws {
+        let exporter = DiagnosticExporter(redactor: redactor)
+        let sanitized = exporter.sanitized(makeInput())
+
+        XCTAssertEqual(sanitized.appVersion, "1.0 (<home>/build)")
+        XCTAssertFalse(sanitized.diagnostics[0].message.contains("/Users/alice"))
+        XCTAssertEqual(sanitized.diagnostics[0].message, "Unable to scan <project:1>/.agents/skills")
+        XCTAssertEqual(sanitized.roots.map(\.id), ["<home>/.codex/skills", "<project:1>"])
+    }
 }

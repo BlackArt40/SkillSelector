@@ -80,6 +80,21 @@ public final class SkillIndex {
         return try context.fetch(descriptor).map { try snapshot($0) }
     }
 
+    /// The persisted incremental-scan cache: last fresh scan state and its
+    /// derived data, by installation path. Records without a trustworthy
+    /// state are absent — they simply rescan.
+    public func cachedScanEntries() throws -> [String: ScannedSkillCacheEntry] {
+        var entries: [String: ScannedSkillCacheEntry] = [:]
+        for record in try context.fetch(FetchDescriptor<SkillRecord>()) {
+            guard let data = record.scanStateData,
+                  let entry = try? decoder.decode(ScannedSkillCacheEntry.self, from: data) else {
+                continue
+            }
+            entries[record.path] = entry
+        }
+        return entries
+    }
+
     private func requiredRecord(path: String) throws -> SkillRecord {
         let normalizedPath = URL(fileURLWithPath: path).standardizedFileURL.path
         guard let record = try context.fetch(FetchDescriptor<SkillRecord>())
@@ -114,6 +129,22 @@ public final class SkillIndex {
         record.agentIDsByRootData = try encode(associations, path: record.path)
         record.entryFilename = scanned.entryFilename
         record.parseDiagnosticsData = (try? encoder.encode(scanned.document.issues)) ?? Data()
+        record.contentFingerprint = scanned.contentFingerprint
+        // Fresh scans persist their stat state for the next incremental
+        // pass; cache hits keep what they have; diagnostic candidates have
+        // no trustworthy state and drop any stale one.
+        if scanned.reusedCachedScan {
+            // unchanged
+        } else if let state = scanned.scanState {
+            record.scanStateData = try encoder.encode(ScannedSkillCacheEntry(
+                state: state,
+                document: scanned.document,
+                contentFingerprint: scanned.contentFingerprint,
+                entryModificationDate: scanned.entryModificationDate
+            ))
+        } else {
+            record.scanStateData = nil
+        }
     }
 
     private func snapshot(_ record: SkillRecord) throws -> SkillSnapshot {
@@ -129,7 +160,8 @@ public final class SkillIndex {
             }.sorted(),
             rootIDs: associations.keys.sorted(),
             entryFilename: record.entryFilename,
-            parseDiagnostics: (try? decoder.decode([ParseIssue].self, from: record.parseDiagnosticsData)) ?? []
+            parseDiagnostics: (try? decoder.decode([ParseIssue].self, from: record.parseDiagnosticsData)) ?? [],
+            contentFingerprint: record.contentFingerprint
         )
     }
 

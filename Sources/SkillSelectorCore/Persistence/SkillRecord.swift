@@ -12,6 +12,11 @@ public final class SkillRecord {
     public var agentIDsByRootData: Data
     public var entryFilename: String
     public var parseDiagnosticsData: Data
+    // Optional so stores created before duplicate grouping open unchanged.
+    public var contentFingerprint: String?
+    // JSON-encoded ScannedSkillCacheEntry for incremental scans; nil on
+    // records never scanned fresh (or whose scan could not be trusted).
+    public var scanStateData: Data?
 
     public init(
         path: String,
@@ -21,7 +26,9 @@ public final class SkillRecord {
         modificationDate: Date? = nil,
         agentIDsByRootData: Data = Data("{}".utf8),
         entryFilename: String,
-        parseDiagnosticsData: Data = Data()
+        parseDiagnosticsData: Data = Data(),
+        contentFingerprint: String? = nil,
+        scanStateData: Data? = nil
     ) {
         self.path = path
         self.resolvedTarget = resolvedTarget
@@ -31,5 +38,7 @@ public final class SkillRecord {
         self.agentIDsByRootData = agentIDsByRootData
         self.entryFilename = entryFilename
         self.parseDiagnosticsData = parseDiagnosticsData
+        self.contentFingerprint = contentFingerprint
+        self.scanStateData = scanStateData
     }
 }
