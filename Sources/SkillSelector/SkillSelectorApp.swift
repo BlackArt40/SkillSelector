@@ -11,6 +11,18 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
     }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Bare-binary dev launches (swift run, .build/debug/SkillSelector)
+        // carry no bundle Info.plist, so the process starts in the
+        // prohibited activation policy: no Dock icon, no Cmd+Tab entry,
+        // and the window stuck behind everything. Packaged apps are
+        // already .regular, so this is a no-op for them.
+        if NSApp.activationPolicy() == .prohibited {
+            NSApp.setActivationPolicy(.regular)
+            NSApp.activate()
+        }
+    }
 }
 
 @main
