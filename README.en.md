@@ -7,8 +7,6 @@ A native macOS app for managing Agent Skills on your machine: browse, search, co
 
 ![Main window (English)](screenshots/main-en.png)
 
-![Settings (English)](screenshots/settings-en.png)
-
 ## What it does
 
 The main window is a three-column browser: a sidebar grouped by scope and Agent, a searchable, sortable list of Skills, and a detail pane showing the selected Skill's description, frontmatter, rendered Markdown document, associated Agents, and install locations. In search, a plain term matches the name, description, and path at once; prefix it with `name:`, `desc:`, `path:`, or `agent:` to search one field only — for example `agent:cursor path:.agents`.
@@ -26,6 +24,16 @@ Also:
 - SKILL.md files stay read-only — reveal in Finder or open in your default editor
 - Light/dark toggle in the title bar, or follow the system
 - English and Simplified Chinese, following the system language
+
+![First-launch guide (English)](screenshots/onboarding-en.png)
+
+![Duplicate Skills (English)](screenshots/duplicates-en.png)
+
+![Custom Agent editor (English)](screenshots/agent-editor-en.png)
+
+![Settings (English)](screenshots/settings-en.png)
+
+![Diagnostics viewer (English)](screenshots/diagnostics-en.png)
 
 ## Supported Agents
 

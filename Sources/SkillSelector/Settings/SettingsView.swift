@@ -4,51 +4,6 @@ import Foundation
 import SwiftUI
 import UniformTypeIdentifiers
 
-@MainActor
-struct CustomAgentEditorState {
-    var selectedAgentID: String?
-    var agentName = ""
-    var globalRoots = ""
-    var projectPatterns = ""
-    var entryFilename = "SKILL.md"
-
-    mutating func beginEditing(_ definition: AgentDefinition) {
-        selectedAgentID = definition.id
-        agentName = definition.displayName
-        globalRoots = definition.globalRoots.joined(separator: ", ")
-        projectPatterns = definition.projectPatterns.joined(separator: ", ")
-        entryFilename = definition.entryFilename
-    }
-
-    mutating func save(using model: AppModel) throws {
-        try model.saveCustomAgent(
-            displayName: agentName,
-            globalRoots: splitPaths(globalRoots),
-            projectPatterns: splitPaths(projectPatterns),
-            entryFilename: entryFilename,
-            existingID: selectedAgentID
-        )
-        reset()
-    }
-
-    mutating func reset() {
-        selectedAgentID = nil
-        agentName = ""
-        globalRoots = ""
-        projectPatterns = ""
-        entryFilename = "SKILL.md"
-    }
-
-    mutating func resetIfEditing(removedID: String) {
-        guard selectedAgentID == removedID else { return }
-        reset()
-    }
-
-    private func splitPaths(_ value: String) -> [String] {
-        value.components(separatedBy: CharacterSet(charactersIn: ",\n"))
-    }
-}
-
 enum SettingsTab: Hashable {
     case general
     case directories
@@ -61,15 +16,12 @@ struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @AppStorage("SkillSelector.preferredLanguage") private var preferredLanguage: String?
     @State private var activeTab: SettingsTab = .general
-    @State private var customAgentEditor = CustomAgentEditorState()
     @State private var settingsError: String?
     @State private var exportStatus: String?
     @State private var editingRootID: String?
     @State private var editingRootName: String = ""
-    @State private var showCustomAgentSheet = false
+    @State private var customAgentSheetRequest: CustomAgentSheetRequest?
     @State private var showDiagnosticsViewer = false
-    @State private var patternDryRunResult: PatternDryRunReport?
-    @State private var isPatternDryRunning = false
 
     init(initialTab: SettingsTab = .general) {
         _activeTab = State(initialValue: initialTab)
@@ -102,8 +54,8 @@ struct SettingsView: View {
         .background(SettingsWindowTitle(title: L10n.string("Settings")))
         .languageReloading()
         .themedAppearance()
-        .sheet(isPresented: $showCustomAgentSheet) {
-            customAgentSheet
+        .sheet(item: $customAgentSheetRequest) { request in
+            CustomAgentSheet(editing: request.agent)
         }
         .sheet(isPresented: $showDiagnosticsViewer) {
             DiagnosticsViewerView(
@@ -322,9 +274,7 @@ struct SettingsView: View {
                 ) {
                     HStack(spacing: 10) {
                         Button(L10n.string("Add…")) {
-                            customAgentEditor.reset()
-                            patternDryRunResult = nil
-                            showCustomAgentSheet = true
+                            customAgentSheetRequest = CustomAgentSheetRequest(agent: nil)
                         }
                         .buttonStyle(SettingsButtonStyle())
                         .help(L10n.string("Add Custom Agent"))
@@ -408,7 +358,6 @@ struct SettingsView: View {
                 Button(L10n.string("Remove")) {
                     do {
                         try model.removeCustomAgent(id: agent.id)
-                        customAgentEditor.resetIfEditing(removedID: agent.id)
                     } catch {
                         settingsError = String(describing: error)
                     }
@@ -419,9 +368,7 @@ struct SettingsView: View {
         }
         .contextMenu {
             Button(L10n.string("Edit Custom Agent")) {
-                customAgentEditor.beginEditing(agent)
-                patternDryRunResult = nil
-                showCustomAgentSheet = true
+                customAgentSheetRequest = CustomAgentSheetRequest(agent: agent)
             }
         }
     }
@@ -490,201 +437,6 @@ struct SettingsView: View {
         .buttonStyle(.plain)
         .help(title)
         .accessibilityLabel(title)
-    }
-
-    // MARK: Custom agent form sheet
-
-    private var customAgentSheet: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(verbatim: L10n.string(customAgentEditor.selectedAgentID == nil
-                ? "Add Custom Agent"
-                : "Edit Custom Agent"))
-                .font(AppTheme.display(17, weight: .semibold))
-                .foregroundStyle(AppTheme.foreground)
-
-            VStack(spacing: 12) {
-                field(L10n.string("Agent Name"), text: $customAgentEditor.agentName, prompt: L10n.string("Agent Name"))
-                field(L10n.string("Global Roots"), text: $customAgentEditor.globalRoots, prompt: L10n.string("Comma-separated paths"))
-                field(L10n.string("Project Patterns"), text: $customAgentEditor.projectPatterns, prompt: L10n.string("Comma-separated paths"))
-                field(L10n.string("Entry Filename"), text: $customAgentEditor.entryFilename, prompt: "SKILL.md")
-            }
-            .onChange(of: customAgentEditor.projectPatterns) { _, _ in
-                patternDryRunResult = nil
-            }
-            .onChange(of: customAgentEditor.entryFilename) { _, _ in
-                patternDryRunResult = nil
-            }
-
-            patternDryRunSection
-
-            HStack(spacing: 8) {
-                Spacer()
-                Button(L10n.string("Cancel")) {
-                    customAgentEditor.reset()
-                    showCustomAgentSheet = false
-                }
-                .buttonStyle(ActionButtonStyle(role: .secondary))
-                .keyboardShortcut(.cancelAction)
-                Button(L10n.string(customAgentEditor.selectedAgentID == nil ? "Add" : "Save")) {
-                    do {
-                        try customAgentEditor.save(using: model)
-                        showCustomAgentSheet = false
-                    } catch {
-                        settingsError = String(describing: error)
-                    }
-                }
-                .buttonStyle(ActionButtonStyle(role: .primary))
-                .keyboardShortcut(.defaultAction)
-                .disabled(customAgentEditor.agentName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-        }
-        .padding(24)
-        .frame(width: 460)
-        .background(AppTheme.background)
-    }
-
-    private func field(_ label: String, text: Binding<String>, prompt: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(verbatim: label)
-                .font(AppTheme.body(12.5, weight: .medium))
-                .foregroundStyle(AppTheme.foregroundSecondary)
-            TextField(prompt, text: text)
-                .textFieldStyle(.plain)
-                .font(AppTheme.body(13))
-                .padding(.horizontal, 10)
-                .frame(height: 32)
-                .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 8))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(AppTheme.border, lineWidth: 1)
-                }
-        }
-    }
-
-    // MARK: Pattern dry run
-
-    private var draftPatterns: [String] {
-        customAgentEditor.projectPatterns
-            .components(separatedBy: CharacterSet(charactersIn: ",\n"))
-    }
-
-    private var hasDraftPatterns: Bool {
-        !draftPatterns
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .allSatisfy(\.isEmpty)
-    }
-
-    private var patternDryRunSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(verbatim: L10n.string("Pattern Preview"))
-                    .font(AppTheme.body(12.5, weight: .medium))
-                    .foregroundStyle(AppTheme.foregroundSecondary)
-                Spacer()
-                Button {
-                    runPatternDryRun()
-                } label: {
-                    HStack(spacing: 6) {
-                        if isPatternDryRunning {
-                            ProgressView()
-                                .controlSize(.small)
-                        }
-                        Text(verbatim: L10n.string("Dry Run…"))
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(SettingsButtonStyle())
-                .disabled(!hasDraftPatterns || isPatternDryRunning)
-                .help(L10n.string("Dry Run Help"))
-            }
-            if let patternDryRunResult {
-                patternDryRunResultView(patternDryRunResult)
-            }
-        }
-    }
-
-    private func patternDryRunResultView(_ report: PatternDryRunReport) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if report.matches.isEmpty {
-                Text(verbatim: hasProjectRoots
-                    ? L10n.string("Dry Run No Matches")
-                    : L10n.string("Dry Run No Project Roots"))
-                    .font(AppTheme.body(12))
-                    .foregroundStyle(AppTheme.warn)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                Text(verbatim: L10n.string("Dry Run Matches", report.matches.count))
-                    .font(AppTheme.body(12, weight: .medium))
-                    .foregroundStyle(AppTheme.foregroundSecondary)
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(report.matches) { match in
-                            patternDryRunMatchRow(match)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .frame(maxHeight: 150)
-                .fixedSize(horizontal: false, vertical: true)
-            }
-            if !report.skippedRootPaths.isEmpty {
-                Text(verbatim: L10n.string("Dry Run Skipped Roots", report.skippedRootPaths.count))
-                    .font(AppTheme.body(11.5))
-                    .foregroundStyle(AppTheme.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 8))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(AppTheme.borderSoft, lineWidth: 1)
-        }
-    }
-
-    private func patternDryRunMatchRow(_ match: PatternDryRunMatch) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(verbatim: match.url.path)
-                .font(AppTheme.mono(11.5))
-                .foregroundStyle(AppTheme.foreground)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .textSelection(.enabled)
-                .help(match.url.path)
-            HStack(spacing: 10) {
-                if match.skillNames.isEmpty {
-                    Text(verbatim: L10n.string("Dry Run No Skills", customAgentEditor.entryFilename.isEmpty ? "SKILL.md" : customAgentEditor.entryFilename))
-                        .foregroundStyle(AppTheme.warn)
-                } else {
-                    Text(verbatim: L10n.string("Dry Run Skill Count", match.skillNames.count))
-                        .foregroundStyle(AppTheme.muted)
-                }
-                ForEach(match.bindings.keys.sorted(), id: \.self) { name in
-                    Text(verbatim: "{\(name)} = \(match.bindings[name] ?? "")")
-                        .foregroundStyle(AppTheme.muted)
-                }
-            }
-            .font(AppTheme.body(11.5))
-        }
-        .padding(.horizontal, 4)
-        .accessibilityElement(children: .combine)
-    }
-
-    private var hasProjectRoots: Bool {
-        model.authorizedRoots.contains { $0.kind == .project }
-    }
-
-    private func runPatternDryRun() {
-        let entry = customAgentEditor.entryFilename.trimmingCharacters(in: .whitespacesAndNewlines)
-        isPatternDryRunning = true
-        Task {
-            patternDryRunResult = await model.dryRunProjectPatterns(
-                patterns: draftPatterns,
-                entryFilename: entry.isEmpty ? "SKILL.md" : entry
-            )
-            isPatternDryRunning = false
-        }
     }
 
     // MARK: Shared

@@ -22,6 +22,11 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.setActivationPolicy(.regular)
             NSApp.activate()
         }
+        if ScreenshotMode.isActive {
+            Task { @MainActor in
+                await ScreenshotMode.run()
+            }
+        }
     }
 }
 
@@ -34,6 +39,10 @@ struct SkillSelectorApp: App {
         if CommandLine.arguments.contains("--verify-localization-resource") {
             print(L10n.string("SkillSelector"))
             Darwin.exit(EXIT_SUCCESS)
+        }
+        if ScreenshotMode.configureFromCommandLine() {
+            _model = State(initialValue: ScreenshotMode.model!)
+            return
         }
         let container: ModelContainer
         do {

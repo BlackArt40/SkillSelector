@@ -8,11 +8,15 @@ import SwiftUI
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @AppStorage(ThemePreference.storageKey) private var themeMode = "system"
-    @State private var destination: BrowserDestination? = .all
+    @State private var destination: BrowserDestination?
     @State private var searchText = ""
     @State private var sort: SkillQuery.Sort = .default
     @State private var revealError: String?
     @FocusState private var searchFocused: Bool
+
+    init(initialDestination: BrowserDestination = .all) {
+        _destination = State(initialValue: initialDestination)
+    }
 
     var body: some View {
         @Bindable var model = model
