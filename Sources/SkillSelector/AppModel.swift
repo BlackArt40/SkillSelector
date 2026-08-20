@@ -278,9 +278,12 @@ struct SkillSelection: Hashable, Identifiable {
                 await refresh()
                 return
             }
-            _ = try bookmarks.save(url: url, kind: kind)
+            let saved = try bookmarks.save(url: url, kind: kind)
             try reloadAuthorizedRoots()
-            await refresh()
+            // Only the imported root rescan: other roots' installations are
+            // unchanged on disk, and their incremental caches make a full
+            // refresh pure overhead on the import's critical path.
+            await refresh(rootIDs: [saved.id])
             recordPathDiagnostic(
                 category: .persistence,
                 code: "ROOT_AUTHORIZED",
@@ -467,6 +470,17 @@ struct SkillSelection: Hashable, Identifiable {
     }
 
     func refresh() async {
+        await refresh(selectedRootIDs: nil)
+    }
+
+    /// Rescans only the given roots' installations; other roots keep their
+    /// indexed records and caches untouched. Import uses this so its
+    /// critical path costs the imported root alone.
+    func refresh(rootIDs: Set<String>) async {
+        await refresh(selectedRootIDs: rootIDs)
+    }
+
+    private func refresh(selectedRootIDs: Set<String>?) async {
         guard fileOperations.pendingOperationPlan == nil,
               fileOperations.pendingBatch == nil,
               !fileOperations.isOperating else {
@@ -481,7 +495,7 @@ struct SkillSelection: Hashable, Identifiable {
         let id = UUID()
         let task = Task { [weak self] in
             guard let self else { return }
-            await self.performRefresh()
+            await self.performRefresh(selectedRootIDs: selectedRootIDs)
         }
         activeRefresh = (id, task)
         await task.value
@@ -593,13 +607,18 @@ struct SkillSelection: Hashable, Identifiable {
         try documentManager.openDocumentInDefaultEditor(for: skill, authorizedRoots: authorizedRoots)
     }
 
-    private func performRefresh() async {
+    private func performRefresh(selectedRootIDs: Set<String>? = nil) async {
         refreshState = .running
         // Files may have changed since the last backfill attempt; give
         // previously failed paths another chance.
         fingerprintFailures = []
         do {
-            let summary = try await refresher.refresh()
+            let summary: RefreshSummary
+            if let selectedRootIDs {
+                summary = try await refresher.refresh(rootIDs: selectedRootIDs)
+            } else {
+                summary = try await refresher.refresh()
+            }
             try reloadSnapshot()
             refreshState = .finished(summary)
             diagnosticStore.record(

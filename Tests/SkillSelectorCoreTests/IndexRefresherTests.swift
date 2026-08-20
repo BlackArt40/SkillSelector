@@ -439,6 +439,44 @@ final class IndexRefresherTests: XCTestCase {
         XCTAssertEqual(adapter.stoppedURLs.filter { $0.path == secondURL.path }.count, 1)
     }
 
+    /// The import path refreshes only the newly authorized root; the other
+    /// roots' records and incremental caches must survive untouched (the
+    /// cache entries are what keeps later full refreshes fast).
+    func testSelectedRootRefreshLeavesOtherRootsRecordsAndCachesIntact() async throws {
+        let fixture = try RefreshFixture()
+        let firstURL = fixture.home.appending(path: "first")
+        let secondURL = fixture.home.appending(path: "second")
+        try RefreshFixture.writeSkill(at: firstURL.appending(path: ".cursor/skills/one"), name: "one")
+        try RefreshFixture.writeSkill(at: secondURL.appending(path: ".cursor/skills/two"), name: "two")
+        let adapter = FixtureBookmarkAdapter()
+        let container = try fixture.makeContainer()
+        let bookmarks = BookmarkStore(container: container, adapter: adapter)
+        let first = try bookmarks.save(url: firstURL, kind: .project)
+        let second = try bookmarks.save(url: secondURL, kind: .project)
+        let index = SkillIndex(container: container)
+        let refresher = IndexRefresher(
+            registry: BuiltInAgentRegistry.make(),
+            bookmarks: bookmarks,
+            index: index
+        )
+        _ = try await refresher.refresh()
+        XCTAssertEqual(try index.skills().map(\.name).sorted(), ["one", "two"])
+        let cachesBefore = try index.cachedScanEntries()
+
+        _ = try await refresher.refresh(rootIDs: [second.id])
+
+        // Both roots' records are still indexed, and the untouched root's
+        // cache entries survived the partial refresh verbatim.
+        XCTAssertEqual(try index.skills().map(\.name).sorted(), ["one", "two"])
+        let cachesAfter = try index.cachedScanEntries()
+        let onePath = cachesBefore.keys.first { $0.contains("/one") }
+        XCTAssertEqual(cachesAfter[try XCTUnwrap(onePath)], cachesBefore[onePath!])
+        // The selected root was scanned again: its bookmark resolved once
+        // more than the untouched root's.
+        XCTAssertEqual(adapter.stoppedURLs.filter { $0.path == secondURL.path }.count, 2)
+        XCTAssertEqual(adapter.stoppedURLs.filter { $0.path == firstURL.path }.count, 1)
+    }
+
 }
 
 private final class RefreshFixture: @unchecked Sendable {

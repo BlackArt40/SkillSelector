@@ -15,7 +15,8 @@ public struct SkillScanner: Sendable {
     }
 
     /// Directory names neither scanned nor previewed, shared with the
-    /// pattern dry run so both walks see the same tree.
+    /// pattern dry run so both walks see the same tree. Tool/build output
+    /// and dependency folders — huge, never holding Skills.
     static let skippedDirectoryNames: Set<String> = [
         ".git",
         "node_modules",
@@ -31,6 +32,34 @@ public struct SkillScanner: Sendable {
         "cache",
         "Caches",
         "Carthage",
+        // Python virtualenvs and tooling
+        ".venv",
+        "venv",
+        "__pycache__",
+        ".pytest_cache",
+        ".mypy_cache",
+        ".ruff_cache",
+        ".tox",
+        // Rust / JVM / Gradle
+        "target",
+        ".gradle",
+        ".metals",
+        ".bloop",
+        // JS framework build & install output
+        ".next",
+        ".nuxt",
+        ".output",
+        ".svelte-kit",
+        ".turbo",
+        ".yarn",
+        "bower_components",
+        // IDE and other tool state
+        ".idea",
+        ".vs",
+        // Other ecosystems
+        ".terraform",
+        ".dart_tool",
+        ".parcel-cache",
     ]
 
     public func scan(_ roots: [ScanRoot]) async -> ScanReport {

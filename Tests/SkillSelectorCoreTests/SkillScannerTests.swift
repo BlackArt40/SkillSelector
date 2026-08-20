@@ -28,6 +28,9 @@ final class SkillScannerTests: XCTestCase {
         let skippedDirectories = [
             ".git", "node_modules", ".build", "build", "dist", "DerivedData",
             ".swiftpm", "Pods", "vendor", ".cache", "Carthage",
+            // Expansion set: virtualenvs, build output, and IDE state.
+            ".venv", "__pycache__", "target", ".gradle", ".next", ".idea",
+            ".terraform", ".dart_tool",
         ]
         for directory in skippedDirectories {
             try fixture.writeSkill(
