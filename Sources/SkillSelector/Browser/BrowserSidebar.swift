@@ -26,6 +26,18 @@ enum BrowserDestination: Hashable {
         guard case .agent(let id) = self else { return nil }
         return id
     }
+
+    /// Where browsing should land after an authorized root is removed:
+    /// removing the root currently being browsed falls back to the
+    /// All Skills list, anything else stays put.
+    static func fallback(afterRemoving rootID: String, from destination: BrowserDestination) -> BrowserDestination {
+        switch destination {
+        case .system(let id), .project(let id):
+            return id == rootID ? .all : destination
+        default:
+            return destination
+        }
+    }
 }
 
 /// Sidebar mirroring the design's `.sidebar` column: 240 pt, surface
@@ -42,6 +54,7 @@ struct BrowserSidebar: View {
     var onAddProject: () -> Void
     var onDrop: ((SkillDragPayload, URL) -> Void)?
     var onReauthorize: ((AuthorizedRootSnapshot) -> Void)?
+    var onRemoveRoot: ((AuthorizedRootSnapshot) -> Void)?
 
     private var systemRoots: [AuthorizedRootSnapshot] {
         roots
@@ -256,6 +269,11 @@ struct BrowserSidebar: View {
             onDrop(item, root.url)
             return true
         }
+        .contextMenu {
+            Button(L10n.string("Remove Directory"), role: .destructive) {
+                onRemoveRoot?(root)
+            }
+        }
     }
 
     private func projectRow(_ project: AuthorizedRootSnapshot) -> some View {
@@ -273,6 +291,11 @@ struct BrowserSidebar: View {
             guard let item = items.first, let onDrop else { return false }
             onDrop(item, project.url)
             return true
+        }
+        .contextMenu {
+            Button(L10n.string("Remove Directory"), role: .destructive) {
+                onRemoveRoot?(project)
+            }
         }
     }
 

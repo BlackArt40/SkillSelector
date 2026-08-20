@@ -74,4 +74,38 @@ final class BrowserSidebarTests: XCTestCase {
             ["codex", "opencode"]
         )
     }
+
+    func testDestinationFallsBackToAllOnlyWhenBrowsedRootIsRemoved() {
+        // Removing the browsed system or project root falls back to All.
+        XCTAssertEqual(
+            BrowserDestination.fallback(afterRemoving: "root-1", from: .system(rootID: "root-1")),
+            .all
+        )
+        XCTAssertEqual(
+            BrowserDestination.fallback(afterRemoving: "root-1", from: .project(rootID: "root-1")),
+            .all
+        )
+        // Removing some other root leaves the destination untouched.
+        XCTAssertEqual(
+            BrowserDestination.fallback(afterRemoving: "root-2", from: .project(rootID: "root-1")),
+            .project(rootID: "root-1")
+        )
+        // Root-scoped destinations are the only ones affected by a removal.
+        XCTAssertEqual(
+            BrowserDestination.fallback(afterRemoving: "root-1", from: .all),
+            .all
+        )
+        XCTAssertEqual(
+            BrowserDestination.fallback(afterRemoving: "root-1", from: .global),
+            .global
+        )
+        XCTAssertEqual(
+            BrowserDestination.fallback(afterRemoving: "root-1", from: .agent(id: "codex")),
+            .agent(id: "codex")
+        )
+        XCTAssertEqual(
+            BrowserDestination.fallback(afterRemoving: "root-1", from: .duplicates),
+            .duplicates
+        )
+    }
 }

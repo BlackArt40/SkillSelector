@@ -275,6 +275,9 @@
 "Diagnostics Empty" = "No diagnostics recorded yet.";
 "Close" = "Close";
 
+/* Sidebar directory removal */
+"Remove Directory" = "Remove Directory";
+
 /* Pattern dry run */
 "Pattern Preview" = "Pattern Preview";
 "Dry Run…" = "Dry Run…";

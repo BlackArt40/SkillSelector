@@ -275,6 +275,9 @@
 "Diagnostics Empty" = "暂无诊断记录。";
 "Close" = "关闭";
 
+/* Sidebar directory removal */
+"Remove Directory" = "移除目录";
+
 /* Pattern dry run */
 "Pattern Preview" = "模式预览";
 "Dry Run…" = "试运行…";

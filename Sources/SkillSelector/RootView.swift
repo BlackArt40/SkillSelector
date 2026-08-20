@@ -53,7 +53,8 @@ struct RootView: View {
                     guard let skill = model.snapshots.first(where: { $0.path == payload.path }) else { return }
                     Task { await model.planFileOperation(.move, for: skill, destinationRootURL: rootURL) }
                 },
-                onReauthorize: { root in reauthorize(root) }
+                onReauthorize: { root in reauthorize(root) },
+                onRemoveRoot: { root in removeRoot(root) }
             )
             .frame(width: 240)
 
@@ -381,6 +382,14 @@ struct RootView: View {
         panel.directoryURL = root.url
         guard panel.runModal() == .OK, let url = panel.url else { return }
         Task { await model.authorize(url, as: root.kind) }
+    }
+
+    /// Sidebar context-menu removal: revoke the root's authorization and,
+    /// when the removed root is the one being browsed, fall back to the
+    /// All Skills list instead of an empty column titled by a dead root.
+    private func removeRoot(_ root: AuthorizedRootSnapshot) {
+        destination = BrowserDestination.fallback(afterRemoving: root.id, from: destination ?? .all)
+        Task { await model.revokeAuthorization(id: root.id) }
     }
 
     private func chooseDestinationRoot() {
