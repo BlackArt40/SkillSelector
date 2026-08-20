@@ -82,7 +82,7 @@ final class AppModelTests: XCTestCase {
             AuthorizedRootRecord.self,
             configurations: configuration
         )
-        let bookmarks = BookmarkStore(container: container)
+        let bookmarks = BookmarkStore(container: container, adapter: AppModelBookmarkAdapter())
         // The pre-fix build recorded whatever homeDirectoryForCurrentUser
         // returned (the container path under sandbox; the real home in this
         // non-sandboxed test process — the same bogus-root shape).
@@ -191,7 +191,7 @@ final class AppModelTests: XCTestCase {
             configurations: configuration
         ))
         let index = SkillIndex(container: container)
-        let bookmarks = bookmarks ?? BookmarkStore(container: container)
+        let bookmarks = bookmarks ?? BookmarkStore(container: container, adapter: AppModelBookmarkAdapter())
         let registry = BuiltInAgentRegistry.make()
         let refresher = IndexRefresher(registry: registry, bookmarks: bookmarks, index: index)
         return AppModel(
@@ -216,7 +216,7 @@ final class AppModelTests: XCTestCase {
         )
         let index = SkillIndex(container: container)
         let registry = BuiltInAgentRegistry.make()
-        let bookmarks = BookmarkStore(container: container)
+        let bookmarks = BookmarkStore(container: container, adapter: AppModelBookmarkAdapter())
         let refresher = IndexRefresher(registry: registry, bookmarks: bookmarks, index: index)
         let store = RecordingAgentDefinitionStore()
         let model = AppModel(
@@ -270,7 +270,7 @@ final class AppModelTests: XCTestCase {
         )
         let index = SkillIndex(container: container)
         let registry = BuiltInAgentRegistry.make()
-        let bookmarks = BookmarkStore(container: container)
+        let bookmarks = BookmarkStore(container: container, adapter: AppModelBookmarkAdapter())
         let refresher = IndexRefresher(registry: registry, bookmarks: bookmarks, index: index)
         let store = RecordingAgentDefinitionStore()
         let model = AppModel(
@@ -379,7 +379,7 @@ final class AppModelTests: XCTestCase {
         )
         let index = SkillIndex(container: container)
         let registry = BuiltInAgentRegistry.make()
-        let bookmarks = BookmarkStore(container: container)
+        let bookmarks = BookmarkStore(container: container, adapter: AppModelBookmarkAdapter())
         let refresher = IndexRefresher(registry: registry, bookmarks: bookmarks, index: index)
         let store = RecordingAgentDefinitionStore()
         let model = AppModel(
@@ -415,4 +415,24 @@ private final class RecordingAgentDefinitionStore: AgentDefinitionStoring, @unch
     }
 
     func remove(id: String) throws { values.removeAll { $0.id == id } }
+}
+
+/// Path-encoding bookmark adapter: creating a security-scoped bookmark
+/// requires the app-scope entitlement, which a bare `swift test` process
+/// does not have. The tests exercise AppModel behavior around authorize /
+/// purge / onboarding, not the bookmark format, so a round-trip adapter
+/// keeps them hermetic (same pattern as FixtureBookmarkAdapter).
+private final class AppModelBookmarkAdapter: BookmarkDataCreating, @unchecked Sendable {
+    func createBookmarkData(for url: URL) throws -> Data { Data(url.path.utf8) }
+
+    func resolveBookmarkData(_ data: Data) throws -> BookmarkResolution {
+        BookmarkResolution(
+            url: URL(fileURLWithPath: String(decoding: data, as: UTF8.self)),
+            isStale: false
+        )
+    }
+
+    func startAccessing(_ url: URL) -> Bool { true }
+
+    func stopAccessing(_ url: URL) {}
 }
