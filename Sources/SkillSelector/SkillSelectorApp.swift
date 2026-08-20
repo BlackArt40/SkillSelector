@@ -43,6 +43,10 @@ struct SkillSelectorApp: App {
         let refresher = IndexRefresher(
             registry: registry,
             bookmarks: bookmarks,
+            // Fingerprints are the scan's dominant I/O cost; deferring them
+            // lets the Skill list appear immediately after an import. The
+            // background backfill in AppModel fills them in afterwards.
+            scanner: SkillScanner(computesContentFingerprints: false),
             index: index
         )
         _model = State(

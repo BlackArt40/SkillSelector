@@ -48,6 +48,11 @@ struct SkillSelection: Hashable, Identifiable {
     /// process environment, so unit tests can exercise the sandboxed path.
     var environmentIsSandboxed: Bool?
     @ObservationIgnored private var activeRefresh: (id: UUID, task: Task<Void, Never>)?
+    @ObservationIgnored private var activeFingerprintBackfill: (id: UUID, task: Task<Void, Never>)?
+    /// Paths whose deferred fingerprint failed to compute (unreadable
+    /// content). They are not retried until the next refresh, when files
+    /// may have changed — this keeps the schedule self-terminating.
+    @ObservationIgnored private var fingerprintFailures: Set<String> = []
 
     var refreshState: RefreshState = .idle
     var selection: SkillSelection?
@@ -590,6 +595,9 @@ struct SkillSelection: Hashable, Identifiable {
 
     private func performRefresh() async {
         refreshState = .running
+        // Files may have changed since the last backfill attempt; give
+        // previously failed paths another chance.
+        fingerprintFailures = []
         do {
             let summary = try await refresher.refresh()
             try reloadSnapshot()
@@ -610,6 +618,101 @@ struct SkillSelection: Hashable, Identifiable {
                 redactor: currentRedactor()
             )
         }
+    }
+
+    // MARK: Deferred fingerprint backfill
+
+    /// Computes the content fingerprints the scan deferred (its dominant
+    /// I/O cost) off the critical path: the list is already on screen, and
+    /// the duplicate view fills in when this lands. Read-only aside from
+    /// the write-back into the index.
+    func backfillMissingFingerprints() async {
+        let pending = snapshots.filter {
+            $0.contentFingerprint == nil && !fingerprintFailures.contains($0.path)
+        }
+        guard !pending.isEmpty else { return }
+
+        // Reading content under the sandbox needs the roots' security
+        // scopes; hold every resolvable lease for the whole hash pass.
+        var accesses: [AuthorizedRootAccess] = []
+        if let bookmarks {
+            for root in authorizedRoots {
+                if let access = try? bookmarks.resolve(id: root.id) {
+                    accesses.append(access)
+                }
+            }
+        }
+        defer { accesses.forEach { $0.lease.close() } }
+
+        let targets = pending.map { skill in
+            // The scanner hashes the resolved target of a symlink, not the
+            // logical path; mirror that so fingerprints agree.
+            (path: skill.path, directory: skill.resolvedTarget ?? skill.path)
+        }
+        let outcome = await Task.detached(priority: .utility) {
+            () -> (fingerprints: [String: String], failures: [String]) in
+            var fingerprints: [String: String] = [:]
+            var failures: [String] = []
+            for target in targets {
+                if Task.isCancelled { break }
+                do {
+                    fingerprints[target.path] = try SkillContentFingerprint.compute(
+                        rootDirectory: URL(fileURLWithPath: target.directory)
+                    )
+                } catch {
+                    failures.append(target.path)
+                }
+            }
+            return (fingerprints, failures)
+        }.value
+        // Cancelled mid-hash (a newer scan or backfill replaced this one):
+        // drop everything, the replacement recomputes.
+        guard !Task.isCancelled else { return }
+
+        fingerprintFailures.formUnion(outcome.failures)
+        do {
+            let updated = try index.backfillContentFingerprints(outcome.fingerprints)
+            if updated > 0 {
+                try reloadSnapshot()
+                diagnosticStore.record(
+                    category: .scanning,
+                    code: "FINGERPRINTS_BACKFILLED",
+                    message: "Backfilled \(updated) content fingerprints",
+                    redactor: currentRedactor()
+                )
+            }
+        } catch {
+            // Non-fatal: the duplicate view simply stays without these
+            // fingerprints until the next refresh re-defers them.
+        }
+    }
+
+    /// Fires the background backfill when any snapshot is still missing
+    /// its fingerprint. Replaces an in-flight backfill — its hashes may
+    /// predate the scan that just reloaded the snapshots.
+    private func scheduleFingerprintBackfillIfNeeded() {
+        guard snapshots.contains(where: {
+            $0.contentFingerprint == nil && !fingerprintFailures.contains($0.path)
+        }) else { return }
+        activeFingerprintBackfill?.task.cancel()
+        let id = UUID()
+        let task = Task { [weak self] in
+            await self?.backfillMissingFingerprints()
+            self?.clearFingerprintBackfill(id: id)
+        }
+        activeFingerprintBackfill = (id, task)
+    }
+
+    /// Waits for any in-flight background backfill. Test seam.
+    func waitForFingerprintBackfill() async {
+        if let active = activeFingerprintBackfill {
+            await active.task.value
+        }
+    }
+
+    private func clearFingerprintBackfill(id: UUID) {
+        guard activeFingerprintBackfill?.id == id else { return }
+        activeFingerprintBackfill = nil
     }
 
     private static let autoScanHomeDefaultsKey = "SkillSelector.autoScanHome"
@@ -708,6 +811,7 @@ struct SkillSelection: Hashable, Identifiable {
            !updatedSnapshots.contains(where: { $0.path == selectionAnchor }) {
             self.selectionAnchor = nil
         }
+        scheduleFingerprintBackfillIfNeeded()
     }
 }
 

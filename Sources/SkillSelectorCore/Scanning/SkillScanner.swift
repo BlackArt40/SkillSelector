@@ -1,6 +1,19 @@
 import Foundation
 
 public struct SkillScanner: Sendable {
+    /// When false, fresh scans skip the content fingerprint (the scan's
+    /// dominant I/O cost — it reads every file's bytes) so the list of
+    /// Skills appears immediately; the caller computes the fingerprint
+    /// afterwards and writes it back through
+    /// `SkillIndex.backfillContentFingerprints`. Cache hits still return
+    /// whatever fingerprint the cached entry carries — a backfilled entry
+    /// keeps serving its fingerprint with no re-read.
+    public let computesContentFingerprints: Bool
+
+    public init(computesContentFingerprints: Bool = true) {
+        self.computesContentFingerprints = computesContentFingerprints
+    }
+
     /// Directory names neither scanned nor previewed, shared with the
     /// pattern dry run so both walks see the same tree.
     static let skippedDirectoryNames: Set<String> = [
@@ -19,8 +32,6 @@ public struct SkillScanner: Sendable {
         "Caches",
         "Carthage",
     ]
-
-    public init() {}
 
     public func scan(_ roots: [ScanRoot]) async -> ScanReport {
         await scan(roots, cache: .empty)
@@ -414,7 +425,9 @@ public struct SkillScanner: Sendable {
             agentIDsByRoot: [rootID: agentIDs],
             entryFilename: entryFilename,
             entryModificationDate: modificationDate,
-            contentFingerprint: try? SkillContentFingerprint.compute(rootDirectory: contentDirectory),
+            contentFingerprint: computesContentFingerprints
+                ? try? SkillContentFingerprint.compute(rootDirectory: contentDirectory)
+                : nil,
             scanState: document.issues.contains { $0.diagnostic?.code == .unableToReadEntry }
                 ? nil
                 : state

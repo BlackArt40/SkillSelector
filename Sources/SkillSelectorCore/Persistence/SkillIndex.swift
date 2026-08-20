@@ -95,6 +95,45 @@ public final class SkillIndex {
         return entries
     }
 
+    /// Writes fingerprints deferred from the scan (computed in the
+    /// background after the list was shown) into their records and their
+    /// incremental-scan cache entries, so the next cache hit serves the
+    /// fingerprint without re-reading the files. Paths without a record are
+    /// skipped — the Skill is gone and the next scan drops it anyway.
+    /// Returns how many records were updated.
+    @discardableResult
+    public func backfillContentFingerprints(_ fingerprintsByPath: [String: String]) throws -> Int {
+        guard !fingerprintsByPath.isEmpty else { return 0 }
+        do {
+            let records = try recordsByPath()
+            var updated = 0
+            for (path, fingerprint) in fingerprintsByPath {
+                guard let record = records[path],
+                      record.contentFingerprint != fingerprint else {
+                    continue
+                }
+                record.contentFingerprint = fingerprint
+                if let data = record.scanStateData,
+                   let entry = try? decoder.decode(ScannedSkillCacheEntry.self, from: data) {
+                    record.scanStateData = try encoder.encode(ScannedSkillCacheEntry(
+                        state: entry.state,
+                        document: entry.document,
+                        contentFingerprint: fingerprint,
+                        entryModificationDate: entry.entryModificationDate
+                    ))
+                }
+                updated += 1
+            }
+            if updated > 0 {
+                try context.save()
+            }
+            return updated
+        } catch {
+            context.rollback()
+            throw error
+        }
+    }
+
     private func requiredRecord(path: String) throws -> SkillRecord {
         let normalizedPath = URL(fileURLWithPath: path).standardizedFileURL.path
         guard let record = try context.fetch(FetchDescriptor<SkillRecord>())
