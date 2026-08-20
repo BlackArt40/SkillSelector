@@ -398,6 +398,47 @@ struct SkillSelection: Hashable, Identifiable {
         return (imported, candidates.count - imported)
     }
 
+    /// Previews which directories the draft project patterns would match in
+    /// the authorized project folders. Read-only: nothing is indexed or
+    /// refreshed. Security-scoped accesses are resolved on the main actor and
+    /// held for the duration of the background walk.
+    func dryRunProjectPatterns(
+        patterns: [String],
+        entryFilename: String
+    ) async -> PatternDryRunReport {
+        guard let bookmarks else {
+            return PatternDryRunReport(matches: [], skippedRootPaths: [])
+        }
+        let projectRoots = authorizedRoots.filter { $0.kind == .project }
+        guard !projectRoots.isEmpty else {
+            return PatternDryRunReport(matches: [], skippedRootPaths: [])
+        }
+
+        var accesses: [AuthorizedRootAccess] = []
+        var unresolvablePaths: [String] = []
+        for root in projectRoots {
+            do {
+                accesses.append(try bookmarks.resolve(id: root.id))
+            } catch {
+                unresolvablePaths.append(root.url.path)
+            }
+        }
+        defer { accesses.forEach { $0.lease.close() } }
+
+        let roots = accesses.map(\.root)
+        let runner = PatternDryRunner()
+        let report = await Task.detached(priority: .userInitiated) {
+            runner.run(patterns: patterns, roots: roots, entryFilename: entryFilename)
+        }.value
+        guard unresolvablePaths.isEmpty else {
+            return PatternDryRunReport(
+                matches: report.matches,
+                skippedRootPaths: report.skippedRootPaths + unresolvablePaths
+            )
+        }
+        return report
+    }
+
     func exportDiagnostics(to url: URL) async throws {
         try DiagnosticExporter(redactor: currentRedactor()).write(diagnosticExportInput(), to: url)
     }

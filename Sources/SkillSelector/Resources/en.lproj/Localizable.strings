@@ -274,3 +274,14 @@
 "Diagnostics Events" = "Recent Events";
 "Diagnostics Empty" = "No diagnostics recorded yet.";
 "Close" = "Close";
+
+/* Pattern dry run */
+"Pattern Preview" = "Pattern Preview";
+"Dry Run…" = "Dry Run…";
+"Dry Run Help" = "Preview which directories the project patterns match in the authorized project folders.";
+"Dry Run Matches" = "%d directories matched";
+"Dry Run Skill Count" = "%d Skills";
+"Dry Run No Skills" = "No %@ inside — check the entry filename";
+"Dry Run No Matches" = "No directories matched. Check the pattern spelling or path depth.";
+"Dry Run No Project Roots" = "Add a project folder first to preview pattern matches.";
+"Dry Run Skipped Roots" = "%d project directories could not be read.";

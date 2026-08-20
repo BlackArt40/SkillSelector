@@ -274,3 +274,14 @@
 "Diagnostics Events" = "最近事件";
 "Diagnostics Empty" = "暂无诊断记录。";
 "Close" = "关闭";
+
+/* Pattern dry run */
+"Pattern Preview" = "模式预览";
+"Dry Run…" = "试运行…";
+"Dry Run Help" = "预览项目模式会在已授权的项目文件夹中匹配到哪些目录。";
+"Dry Run Matches" = "匹配到 %d 个目录";
+"Dry Run Skill Count" = "%d 个 Skill";
+"Dry Run No Skills" = "内无 %@——请检查入口文件名";
+"Dry Run No Matches" = "没有目录被匹配。请检查模式拼写或路径层级。";
+"Dry Run No Project Roots" = "请先添加项目文件夹，才能预览模式匹配。";
+"Dry Run Skipped Roots" = "有 %d 个项目目录无法读取。";

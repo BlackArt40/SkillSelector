@@ -1,7 +1,9 @@
 import Foundation
 
 public struct SkillScanner: Sendable {
-    private static let skippedDirectoryNames: Set<String> = [
+    /// Directory names neither scanned nor previewed, shared with the
+    /// pattern dry run so both walks see the same tree.
+    static let skippedDirectoryNames: Set<String> = [
         ".git",
         "node_modules",
         ".build",

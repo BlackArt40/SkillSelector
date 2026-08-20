@@ -68,6 +68,8 @@ struct SettingsView: View {
     @State private var editingRootName: String = ""
     @State private var showCustomAgentSheet = false
     @State private var showDiagnosticsViewer = false
+    @State private var patternDryRunResult: PatternDryRunReport?
+    @State private var isPatternDryRunning = false
 
     init(initialTab: SettingsTab = .general) {
         _activeTab = State(initialValue: initialTab)
@@ -321,6 +323,7 @@ struct SettingsView: View {
                     HStack(spacing: 10) {
                         Button(L10n.string("Add…")) {
                             customAgentEditor.reset()
+                            patternDryRunResult = nil
                             showCustomAgentSheet = true
                         }
                         .buttonStyle(SettingsButtonStyle())
@@ -417,6 +420,7 @@ struct SettingsView: View {
         .contextMenu {
             Button(L10n.string("Edit Custom Agent")) {
                 customAgentEditor.beginEditing(agent)
+                patternDryRunResult = nil
                 showCustomAgentSheet = true
             }
         }
@@ -504,6 +508,14 @@ struct SettingsView: View {
                 field(L10n.string("Project Patterns"), text: $customAgentEditor.projectPatterns, prompt: L10n.string("Comma-separated paths"))
                 field(L10n.string("Entry Filename"), text: $customAgentEditor.entryFilename, prompt: "SKILL.md")
             }
+            .onChange(of: customAgentEditor.projectPatterns) { _, _ in
+                patternDryRunResult = nil
+            }
+            .onChange(of: customAgentEditor.entryFilename) { _, _ in
+                patternDryRunResult = nil
+            }
+
+            patternDryRunSection
 
             HStack(spacing: 8) {
                 Spacer()
@@ -546,6 +558,132 @@ struct SettingsView: View {
                     RoundedRectangle(cornerRadius: 8)
                         .stroke(AppTheme.border, lineWidth: 1)
                 }
+        }
+    }
+
+    // MARK: Pattern dry run
+
+    private var draftPatterns: [String] {
+        customAgentEditor.projectPatterns
+            .components(separatedBy: CharacterSet(charactersIn: ",\n"))
+    }
+
+    private var hasDraftPatterns: Bool {
+        !draftPatterns
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .allSatisfy(\.isEmpty)
+    }
+
+    private var patternDryRunSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(verbatim: L10n.string("Pattern Preview"))
+                    .font(AppTheme.body(12.5, weight: .medium))
+                    .foregroundStyle(AppTheme.foregroundSecondary)
+                Spacer()
+                Button {
+                    runPatternDryRun()
+                } label: {
+                    HStack(spacing: 6) {
+                        if isPatternDryRunning {
+                            ProgressView()
+                                .controlSize(.small)
+                        }
+                        Text(verbatim: L10n.string("Dry Run…"))
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(SettingsButtonStyle())
+                .disabled(!hasDraftPatterns || isPatternDryRunning)
+                .help(L10n.string("Dry Run Help"))
+            }
+            if let patternDryRunResult {
+                patternDryRunResultView(patternDryRunResult)
+            }
+        }
+    }
+
+    private func patternDryRunResultView(_ report: PatternDryRunReport) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if report.matches.isEmpty {
+                Text(verbatim: hasProjectRoots
+                    ? L10n.string("Dry Run No Matches")
+                    : L10n.string("Dry Run No Project Roots"))
+                    .font(AppTheme.body(12))
+                    .foregroundStyle(AppTheme.warn)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text(verbatim: L10n.string("Dry Run Matches", report.matches.count))
+                    .font(AppTheme.body(12, weight: .medium))
+                    .foregroundStyle(AppTheme.foregroundSecondary)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(report.matches) { match in
+                            patternDryRunMatchRow(match)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: 150)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            if !report.skippedRootPaths.isEmpty {
+                Text(verbatim: L10n.string("Dry Run Skipped Roots", report.skippedRootPaths.count))
+                    .font(AppTheme.body(11.5))
+                    .foregroundStyle(AppTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 8))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(AppTheme.borderSoft, lineWidth: 1)
+        }
+    }
+
+    private func patternDryRunMatchRow(_ match: PatternDryRunMatch) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(verbatim: match.url.path)
+                .font(AppTheme.mono(11.5))
+                .foregroundStyle(AppTheme.foreground)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .textSelection(.enabled)
+                .help(match.url.path)
+            HStack(spacing: 10) {
+                if match.skillNames.isEmpty {
+                    Text(verbatim: L10n.string("Dry Run No Skills", customAgentEditor.entryFilename.isEmpty ? "SKILL.md" : customAgentEditor.entryFilename))
+                        .foregroundStyle(AppTheme.warn)
+                } else {
+                    Text(verbatim: L10n.string("Dry Run Skill Count", match.skillNames.count))
+                        .foregroundStyle(AppTheme.muted)
+                }
+                ForEach(match.bindings.keys.sorted(), id: \.self) { name in
+                    Text(verbatim: "{\(name)} = \(match.bindings[name] ?? "")")
+                        .foregroundStyle(AppTheme.muted)
+                }
+            }
+            .font(AppTheme.body(11.5))
+        }
+        .padding(.horizontal, 4)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var hasProjectRoots: Bool {
+        model.authorizedRoots.contains { $0.kind == .project }
+    }
+
+    private func runPatternDryRun() {
+        let entry = customAgentEditor.entryFilename.trimmingCharacters(in: .whitespacesAndNewlines)
+        isPatternDryRunning = true
+        Task {
+            patternDryRunResult = await model.dryRunProjectPatterns(
+                patterns: draftPatterns,
+                entryFilename: entry.isEmpty ? "SKILL.md" : entry
+            )
+            isPatternDryRunning = false
         }
     }
 
