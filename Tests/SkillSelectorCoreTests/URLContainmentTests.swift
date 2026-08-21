@@ -54,4 +54,36 @@ final class URLContainmentTests: XCTestCase {
         let url = URL(fileURLWithPath: "/Users/alice/skills/demo")
         XCTAssertFalse(url.isContained(inAny: []))
     }
+
+    func testParentTraversalIsNotContainedEvenWhenLexicallyInside() {
+        // /a/b/../c lexically sits "inside" /a/b but resolves to /a/c, which
+        // is outside. isContained must not bless it (audit F-03). The
+        // internal standardization resolves the ".." before the comparison.
+        let url = URL(fileURLWithPath: "/a/b/../c")
+        let root = URL(fileURLWithPath: "/a/b")
+        XCTAssertFalse(url.isContained(in: root))
+    }
+
+    func testTraversalInRootIsResolvedBeforeComparison() {
+        // The root's own ".." is resolved by standardization; the comparison
+        // then works on the canonical root, which is the safe behavior.
+        let url = URL(fileURLWithPath: "/a/b/c")
+        let root = URL(fileURLWithPath: "/a/x/../b")
+        XCTAssertTrue(url.isContained(in: root))
+    }
+
+    func testStandardizationStillAcceptsNormalChild() {
+        // Callers that standardized already must see no behavior change.
+        let url = URL(fileURLWithPath: "/a/b/c").standardizedFileURL
+        let root = URL(fileURLWithPath: "/a/b").standardizedFileURL
+        XCTAssertTrue(url.isContained(in: root))
+    }
+
+    func testStandaloneDotInChildIsResolvedAndStillContained() {
+        // "/a/b/./c" is the same directory as "/a/b/c"; standardization
+        // makes the containment decision on the canonical path.
+        let url = URL(fileURLWithPath: "/a/b/./c")
+        let root = URL(fileURLWithPath: "/a/b")
+        XCTAssertTrue(url.isContained(in: root))
+    }
 }

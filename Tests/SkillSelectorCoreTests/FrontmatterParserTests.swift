@@ -116,4 +116,20 @@ final class FrontmatterParserTests: XCTestCase {
         XCTAssertEqual(parsed.firstDescriptiveParagraph, "Usage: Run this command.")
         XCTAssertTrue(parsed.issues.isEmpty)
     }
+
+    func testOversizedFrontmatterYieldsParseFailureDiagnostic() {
+        // Audit R9: a multi-megabyte frontmatter must not reach Yams.compose
+        // unbounded; it surfaces a parse-failure diagnostic instead.
+        let huge = String(repeating: "key: value\n", count: FrontmatterParser.maximumFrontmatterBytes / 8 + 1)
+        let parsed = FrontmatterParser.parse("---\n\(huge)---\n# Body")
+
+        XCTAssertTrue(parsed.issues.contains { $0.message.contains("limit") })
+    }
+
+    func testFrontmatterUnderLimitStillParses() {
+        let parsed = FrontmatterParser.parse("---\nname: ok\ndescription: fine\n---\n# Body")
+
+        XCTAssertEqual(parsed.name, "ok")
+        XCTAssertTrue(parsed.issues.isEmpty)
+    }
 }

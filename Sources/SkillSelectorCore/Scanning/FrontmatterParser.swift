@@ -2,6 +2,12 @@ import Foundation
 import Yams
 
 public enum FrontmatterParser {
+    /// Upper bound for a single YAML frontmatter block (audit R9). Scans
+    /// already cap the whole entry file at 1 MiB, but a skill can pack a
+    /// megabyte-sized frontmatter inside that budget; Yams.compose has no
+    /// internal limit.
+    public static let maximumFrontmatterBytes = 256 * 1024
+
     public static func parse(_ text: String) -> ParsedSkillDocument {
         let lines = normalizedLines(text)
         var fields: [String: String] = [:]
@@ -94,6 +100,17 @@ public enum FrontmatterParser {
     ) {
         let yaml = lines.joined(separator: "\n")
         guard !yaml.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        // Audit R9: cap the YAML block so a pathological frontmatter cannot
+        // tie up the scan with a multi-megabyte compose.
+        guard yaml.utf8.count <= maximumFrontmatterBytes else {
+            issues.append(
+                ParseIssue(
+                    code: .yamlParseFailed,
+                    arguments: ["Frontmatter exceeds the \(maximumFrontmatterBytes) byte limit"]
+                )
+            )
+            return
+        }
 
         let node: Node?
         do {

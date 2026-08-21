@@ -532,7 +532,8 @@ private enum FixtureBookmarkError: Error {
     case denied
 }
 
-private final class RecordingIndexRefresherFileSystem: IndexRefresherFileSystem {
+// Mutable recording mock; only used from the test's main thread.
+private final class RecordingIndexRefresherFileSystem: IndexRefresherFileSystem, @unchecked Sendable {
     var inaccessiblePaths: Set<String> = []
     private(set) var enumeratedURLs: [URL] = []
     private(set) var probedDirectoryURLs: [URL] = []

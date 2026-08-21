@@ -39,6 +39,21 @@ final class SkillDocumentReaderTests: XCTestCase {
         }
     }
 
+    func testRejectsNULInEntryFilename() throws {
+        // NUL cannot appear in an APFS filename or SwiftUI text input, but a
+        // hand-crafted value would trap or truncate in withCString/openat
+        // (audit F-08). The shared EntryFilename rule must reject it.
+        let installation = try makeSkill()
+        let filename = "SKILL\0.md"
+        XCTAssertThrowsError(
+            try SkillDocumentReader().validatedEntryURL(
+                request(installation: installation, entryFilename: filename)
+            )
+        ) { error in
+            XCTAssertEqual(error as? SkillDocumentReaderError, .invalidEntryFilename(filename))
+        }
+    }
+
     func testRejectsInstallationOutsideAuthorizedRoots() throws {
         let installation = try makeSkill(parent: FileManager.default.temporaryDirectory)
 

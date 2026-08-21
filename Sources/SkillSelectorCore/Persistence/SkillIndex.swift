@@ -20,14 +20,39 @@ public final class SkillIndex {
         do {
             var records = try recordsByPath()
 
+            // Decode each record's root associations once, not once per
+            // available root × record (audit R6: the old code was
+            // O(roots × records) JSON decodes on the main thread).
+            var associationsByPath: [String: [String: Set<String>]] = [:]
+            func associations(for record: SkillRecord) throws -> [String: Set<String>] {
+                if let cached = associationsByPath[record.path] { return cached }
+                let value = try agentIDsByRoot(for: record)
+                associationsByPath[record.path] = value
+                return value
+            }
+            func setAssociations(_ value: [String: Set<String>], for record: SkillRecord) throws {
+                associationsByPath[record.path] = value
+                record.agentIDsByRootData = try encode(value, path: record.path)
+            }
+            func drop(_ record: SkillRecord) {
+                context.delete(record)
+                records[record.path] = nil
+                associationsByPath[record.path] = nil
+            }
+
             // Roots that are no longer accessible (missing directory, revoked
             // authorization) drop their associated records entirely: the index
             // only ever reflects Skills that exist on disk right now.
             for root in report.roots {
                 guard case .unavailable = root.availability else { continue }
                 for record in Array(records.values) {
-                    if try disassociate(record, rootID: root.id) == .deleted {
-                        records[record.path] = nil
+                    var associations = try associations(for: record)
+                    guard associations[root.id] != nil else { continue }
+                    associations[root.id] = nil
+                    if associations.isEmpty {
+                        drop(record)
+                    } else {
+                        try setAssociations(associations, for: record)
                     }
                 }
             }
@@ -39,12 +64,16 @@ public final class SkillIndex {
                         .map { $0.path.standardizedFileURL.path }
                 )
                 for record in Array(records.values) {
-                    guard try agentIDsByRoot(for: record)[root.id] != nil,
+                    var associations = try associations(for: record)
+                    guard associations[root.id] != nil,
                           !reportedPaths.contains(record.path) else {
                         continue
                     }
-                    if try disassociate(record, rootID: root.id) == .deleted {
-                        records[record.path] = nil
+                    associations[root.id] = nil
+                    if associations.isEmpty {
+                        drop(record)
+                    } else {
+                        try setAssociations(associations, for: record)
                     }
                 }
             }
@@ -62,8 +91,14 @@ public final class SkillIndex {
                     )
                     context.insert(record)
                     records[path] = record
+                    associationsByPath[path] = [:]
                 }
                 try update(record, from: scanned)
+                // update() rewrites agentIDsByRootData; keep the cache in sync
+                // so later disassociation passes read the merged state.
+                if let fresh = try? decoder.decode([String: Set<String>].self, from: record.agentIDsByRootData) {
+                    associationsByPath[path] = fresh
+                }
             }
 
             try context.save()
@@ -134,15 +169,6 @@ public final class SkillIndex {
         }
     }
 
-    private func requiredRecord(path: String) throws -> SkillRecord {
-        let normalizedPath = URL(fileURLWithPath: path).standardizedFileURL.path
-        guard let record = try context.fetch(FetchDescriptor<SkillRecord>())
-            .first(where: { $0.path == normalizedPath }) else {
-            throw SkillIndexError.skillNotFound(path: normalizedPath)
-        }
-        return record
-    }
-
     private func resolvedName(for scanned: ScannedSkill) -> String {
         scanned.document.name
             ?? scanned.document.title
@@ -150,10 +176,23 @@ public final class SkillIndex {
     }
 
     private func recordsByPath() throws -> [String: SkillRecord] {
-        Dictionary(
-            uniqueKeysWithValues: try context.fetch(FetchDescriptor<SkillRecord>())
-                .map { ($0.path, $0) }
-        )
+        let records = try context.fetch(FetchDescriptor<SkillRecord>())
+        var byPath: [String: SkillRecord] = [:]
+        for record in records {
+            if let existing = byPath[record.path] {
+                // SwiftData's unique constraint is non-deterministic on
+                // conflicting inserts (cc4bc7b). A store that already holds
+                // duplicate rows must not crash on Dictionary(uniqueKeysWithValues:)
+                // and no longer needs them: keep the first, drop the rest.
+                // apply() saves below, persisting the cleanup.
+                if existing !== record {
+                    context.delete(record)
+                }
+            } else {
+                byPath[record.path] = record
+            }
+        }
+        return byPath
     }
 
     private func update(_ record: SkillRecord, from scanned: ScannedSkill) throws {
@@ -202,26 +241,6 @@ public final class SkillIndex {
             parseDiagnostics: (try? decoder.decode([ParseIssue].self, from: record.parseDiagnosticsData)) ?? [],
             contentFingerprint: record.contentFingerprint
         )
-    }
-
-    private enum DisassociationOutcome {
-        case untouched
-        case updated
-        case deleted
-    }
-
-    /// Drops the record's association with `rootID`; a record left with no
-    /// associations is deleted so the index only holds on-disk Skills.
-    private func disassociate(_ record: SkillRecord, rootID: String) throws -> DisassociationOutcome {
-        var associations = try agentIDsByRoot(for: record)
-        guard associations[rootID] != nil else { return .untouched }
-        associations[rootID] = nil
-        if associations.isEmpty {
-            context.delete(record)
-            return .deleted
-        }
-        record.agentIDsByRootData = try encode(associations, path: record.path)
-        return .updated
     }
 
     private func agentIDsByRoot(for record: SkillRecord) throws -> [String: Set<String>] {

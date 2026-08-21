@@ -70,6 +70,14 @@ public struct AgentRegistry: Sendable {
         definitions.first { $0.id == id }
     }
 
+    /// IDs of the bundled (built-in) definitions. Custom imports must not
+    /// overwrite these: merge() replaces definitions by id, so a hand-edited
+    /// transfer file with `id: "claude"` would silently mutate a built-in
+    /// Agent (audit R5).
+    public var bundledDefinitionIDs: Set<String> {
+        Set(bundledDefinitions.map(\.id))
+    }
+
     public func matchingGlobalRoot(_ root: String) -> [AgentDefinition] {
         let ownerIDs = Set(globalDeclarations.filter { $0.value == root }.compactMap(\.agentID))
         return definitions.filter { ownerIDs.contains($0.id) }

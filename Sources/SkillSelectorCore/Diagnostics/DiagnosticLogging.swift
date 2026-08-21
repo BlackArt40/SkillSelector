@@ -73,7 +73,12 @@ public final class DiagnosticStore: @unchecked Sendable {
 public enum DiagnosticLogger {
     static func write(_ event: AppDiagnostic, subsystem: String) {
         let message = "[\(event.code)] \(event.message)"
+        // .private by default (audit F-02): the message is already redacted
+        // before this point, but a future message that slips through the
+        // Redactor must not end up as plaintext in the unified log. The
+        // in-app diagnostic panel reads the in-memory store, not OSLog, so
+        // nothing user-visible is lost by keeping the log opaque.
         Logger(subsystem: subsystem, category: event.category.rawValue)
-            .info("\(message, privacy: .public)")
+            .info("\(message, privacy: .private)")
     }
 }

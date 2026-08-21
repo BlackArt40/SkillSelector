@@ -1,3 +1,7 @@
+// ScreenshotMode is a development tool: it must never ship in a release
+// build. It is compiled only under DEBUG, so the packaged binary has no
+// --screenshots entry point at all (audit F-06 / R11).
+#if DEBUG
 import AppKit
 import SkillSelectorCore
 import SwiftData
@@ -425,3 +429,4 @@ private final class ScreenshotBookmarkAdapter: BookmarkDataCreating, @unchecked 
 
     func stopAccessing(_ url: URL) {}
 }
+#endif

@@ -194,6 +194,20 @@ final class PatternDryRunTests: XCTestCase {
         XCTAssertTrue(report.isEmpty)
         XCTAssertEqual(report.skippedRootPaths, [missingRoot.url.path])
     }
+
+    func testInvalidEntryFilenameYieldsEmptyReportWithoutWalking() throws {
+        // Audit F-07: an entry filename that is not a safe single component
+        // must short-circuit instead of walking the whole tree.
+        for entryFilename in ["", "..", "a/b", "a\\b", "SKILL\0.md"] {
+            let report = PatternDryRunner().run(
+                patterns: [".goose/skills"],
+                roots: [fixture.root],
+                entryFilename: entryFilename
+            )
+            XCTAssertTrue(report.isEmpty, "entryFilename \(entryFilename) should short-circuit")
+            XCTAssertTrue(report.skippedRootPaths.isEmpty)
+        }
+    }
 }
 
 private final class DryRunFixture: @unchecked Sendable {

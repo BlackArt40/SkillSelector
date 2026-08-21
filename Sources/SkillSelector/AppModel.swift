@@ -30,9 +30,14 @@ struct SkillSelection: Hashable, Identifiable {
     var id: String { path }
 }
 
-    @MainActor
-    @Observable
-    final class AppModel {
+@MainActor
+@Observable
+final class AppModel {
+    /// Upper bound for a custom-Agent transfer file (audit F-10): imports
+    /// are user-picked, but an accidental multi-GB pick should not be read
+    /// into memory wholesale.
+    static let maximumImportBytes = 10 * 1024 * 1024
+
     private let refresher: IndexRefresher
     private let index: SkillIndex
     private let bookmarks: BookmarkStore?
@@ -253,7 +258,7 @@ struct SkillSelection: Hashable, Identifiable {
     /// Refreshes the in-memory authorized-root state from the store.
     private func reloadAuthorizedRoots() throws {
         authorizedRoots = try bookmarks?.roots() ?? []
-        rootsByID = Dictionary(uniqueKeysWithValues: authorizedRoots.map { ($0.id, $0) })
+        rootsByID = Dictionary(authorizedRoots.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
     }
 
     func authorize(_ url: URL, as kind: AuthorizedRootKind) async {
@@ -392,11 +397,19 @@ struct SkillSelection: Hashable, Identifiable {
 
     /// Imports definitions from a transfer file. Definitions whose id
     /// already exists are skipped untouched; new ones are appended.
+    /// Built-in ids are never overwritten by an import (audit R5), and
+    /// oversized files are rejected before any bytes are read (audit F-10).
     func importCustomAgents(from url: URL) throws -> (imported: Int, skipped: Int) {
+        guard let fileSize = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
+              fileSize <= Self.maximumImportBytes else {
+            throw CustomAgentTransferError.unreadableFile("Import file exceeds the \(Self.maximumImportBytes / (1024 * 1024)) MiB limit")
+        }
         let candidates = try CustomAgentTransfer().parse(Data(contentsOf: url))
         let existing = Set(customAgentDefinitions.map(\.id))
+        let builtInIDs = registry.bundledDefinitionIDs
         var imported = 0
         for candidate in candidates where !existing.contains(candidate.id) {
+            guard !builtInIDs.contains(candidate.id) else { continue }
             try customAgentStore.insert(candidate)
             imported += 1
         }
@@ -817,7 +830,7 @@ struct SkillSelection: Hashable, Identifiable {
         let updatedRoots = try bookmarks?.roots() ?? []
         snapshots = updatedSnapshots
         authorizedRoots = updatedRoots
-        rootsByID = Dictionary(uniqueKeysWithValues: updatedRoots.map { ($0.id, $0) })
+        rootsByID = Dictionary(updatedRoots.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         reloadBookmarkHealth()
         selectedPaths = selectedPaths.filter { path in
             updatedSnapshots.contains { $0.path == path }

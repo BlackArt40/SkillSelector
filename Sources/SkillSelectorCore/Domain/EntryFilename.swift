@@ -11,6 +11,7 @@ public enum EntryFilename {
         !filename.isEmpty
             && filename != "."
             && filename != ".."
+            && !filename.contains("\0")
             && !filename.contains("/")
             && !filename.contains("\\")
     }

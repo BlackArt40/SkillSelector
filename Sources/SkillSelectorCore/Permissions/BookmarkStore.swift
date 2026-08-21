@@ -105,7 +105,16 @@ public final class BookmarkStore {
 
     @discardableResult
     public func save(url: URL, kind: AuthorizedRootKind) throws -> AuthorizedRootSnapshot {
-        let url = url.standardizedFileURL
+        var url = url.standardizedFileURL
+        // Audit F-09: on case-insensitive filesystems (the APFS default) a
+        // user can authorize the same directory with a different case than
+        // the scanner sees. Uniformize the spelling when the resolved path
+        // is the same directory — but only then, so a genuine symlink's
+        // logical identity is preserved.
+        let resolved = url.resolvingSymlinksInPath().standardizedFileURL
+        if resolved.path.compare(url.path, options: .caseInsensitive) == .orderedSame {
+            url = resolved
+        }
         let data = try adapter.createBookmarkData(for: url)
         let records = try context.fetch(FetchDescriptor<AuthorizedRootRecord>())
         let record: AuthorizedRootRecord

@@ -305,6 +305,52 @@ final class SkillScannerTests: XCTestCase {
         XCTAssertEqual(fingerprints.count, report.installations.count)
         XCTAssertEqual(Set(fingerprints).count, 1)
     }
+
+    func testOversizedEntryFileReportsDiagnosticInsteadOfSaturatingMemory() async throws {
+        // Audit R3/F-01: the scanner must not slurp a multi-MB SKILL.md into
+        // memory; the entry is capped at the render path's limit and the
+        // skill surfaces an .unableToReadEntry diagnostic instead.
+        let fixture = try ScanFixture()
+        let oversized = fixture.url.appending(path: ".codex/skills/huge")
+        try FileManager.default.createDirectory(at: oversized, withIntermediateDirectories: true)
+        let padding = String(repeating: "x", count: SkillDocumentReader.maximumRenderBytes + 1)
+        try "---\nname: huge\ndescription: Big\n---\n# Huge\n".appending(padding).write(
+            to: oversized.appending(path: "SKILL.md"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let report = await SkillScanner().scan([fixture.projectRoot])
+        let scanned = try XCTUnwrap(report.installations.first)
+
+        // The diagnostic document has no name (nothing was parsed); its
+        // title falls back to the directory name and the issue reports the
+        // size cap.
+        XCTAssertEqual(scanned.document.title, "huge")
+        XCTAssertTrue(scanned.document.issues.contains { issue in
+            issue.message.contains("read limit")
+        })
+    }
+
+    func testBoundarySizedEntryFileStillParses() async throws {
+        // The cap is inclusive of the render limit; a file exactly at it
+        // must still parse.
+        let fixture = try ScanFixture()
+        let boundary = fixture.url.appending(path: ".codex/skills/boundary")
+        try FileManager.default.createDirectory(at: boundary, withIntermediateDirectories: true)
+        let body = String(repeating: "x", count: SkillDocumentReader.maximumRenderBytes - 64)
+        try "---\nname: boundary\ndescription: Edge\n---\n# Boundary\n".appending(body).write(
+            to: boundary.appending(path: "SKILL.md"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let report = await SkillScanner().scan([fixture.projectRoot])
+        let scanned = try XCTUnwrap(report.installations.first)
+
+        XCTAssertEqual(scanned.document.name, "boundary")
+        XCTAssertFalse(scanned.document.issues.contains { $0.message.contains("read limit") })
+    }
 }
 
 private final class ScanFixture: @unchecked Sendable {

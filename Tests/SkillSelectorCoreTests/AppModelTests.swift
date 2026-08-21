@@ -368,6 +368,49 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(store.values.isEmpty)
     }
 
+    func testImportCustomAgentsSkipsBuiltInIDs() throws {
+        // Audit R5: a hand-edited transfer file must not be able to overwrite
+        // a built-in Agent (merge() replaces definitions by id).
+        let (model, store) = try makeValidationModel()
+        let builtIn = try XCTUnwrap(BuiltInAgentRegistry.make().definitions.first)
+        let transferFile = FileManager.default.temporaryDirectory
+            .appending(path: "import-skip-builtin-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: transferFile) }
+        try CustomAgentTransfer().archive([
+            AgentDefinition(
+                id: builtIn.id,
+                displayName: "Evil Override",
+                globalRoots: ["/tmp/evil"],
+                projectPatterns: [],
+                entryFilename: "SKILL.md"
+            ),
+        ]).write(to: transferFile)
+
+        let result = try model.importCustomAgents(from: transferFile)
+
+        XCTAssertEqual(result.imported, 0)
+        XCTAssertEqual(result.skipped, 1)
+        XCTAssertTrue(store.values.isEmpty)
+        // The registry still serves the built-in definition.
+        XCTAssertEqual(model.registry.definition(id: builtIn.id)?.displayName, builtIn.displayName)
+    }
+
+    func testImportCustomAgentsRejectsOversizedFile() throws {
+        // Audit F-10: a giant transfer file is rejected before any read.
+        let (model, _) = try makeValidationModel()
+        let transferFile = FileManager.default.temporaryDirectory
+            .appending(path: "import-oversize-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: transferFile) }
+        let padding = String(repeating: "x", count: AppModel.maximumImportBytes + 1)
+        try Data(padding.utf8).write(to: transferFile)
+
+        XCTAssertThrowsError(try model.importCustomAgents(from: transferFile)) { error in
+            guard case CustomAgentTransferError.unreadableFile = error else {
+                return XCTFail("Expected unreadableFile, got \(error)")
+            }
+        }
+    }
+
     private func makeValidationModel() throws -> (AppModel, RecordingAgentDefinitionStore) {
         let suite = "AppModelValidationTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!

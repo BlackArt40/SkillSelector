@@ -153,6 +153,32 @@ final class SkillIndexTests: XCTestCase {
         }
     }
 
+    func testDuplicateRowsInStoreAreDedupedInsteadOfCrashing() throws {
+        // Audit R2: a store holding duplicate path rows (SwiftData unique
+        // constraint non-determinism) must not crash on the dictionary build
+        // and must converge to a single row.
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let path = "/tmp/project/.agents/skills/demo"
+        context.insert(SkillRecord(path: path, name: "first", entryFilename: "SKILL.md"))
+        context.insert(SkillRecord(path: path, name: "second", entryFilename: "SKILL.md"))
+        try context.save()
+
+        let index = SkillIndex(container: container)
+        try index.apply(
+            report: report(
+                rootID: "project",
+                availability: .available,
+                installations: [skill(path: path)]
+            )
+        )
+
+        let skills = try index.skills()
+        XCTAssertEqual(skills.count, 1)
+        let remaining = try context.fetch(FetchDescriptor<SkillRecord>())
+        XCTAssertEqual(remaining.count, 1)
+    }
+
     private func makeIndex() throws -> SkillIndex {
         SkillIndex(container: try makeContainer())
     }

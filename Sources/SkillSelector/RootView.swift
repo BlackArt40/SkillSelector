@@ -28,7 +28,8 @@ struct RootView: View {
             sort: sort
         )
         let agentNamesByID = Dictionary(
-            uniqueKeysWithValues: model.agentDefinitions.map { ($0.id, $0.displayName) }
+            model.agentDefinitions.map { ($0.id, $0.displayName) },
+            uniquingKeysWith: { first, _ in first }
         )
         let filteredSkills = query.apply(
             to: model.snapshots,

@@ -45,6 +45,13 @@ public struct PatternDryRunner: Sendable {
         roots: [AuthorizedRootSnapshot],
         entryFilename: String
     ) -> PatternDryRunReport {
+        // Reject an entry filename that cannot be a safe single component
+        // before walking anything (audit F-07): the walk follows the
+        // directory tree with fileExists, and an invalid value would
+        // silently turn every directory into a "no match".
+        guard EntryFilename.isValid(entryFilename) else {
+            return PatternDryRunReport(matches: [], skippedRootPaths: [])
+        }
         let uniquePatterns = Self.uniquePatterns(patterns)
         guard !uniquePatterns.isEmpty else {
             return PatternDryRunReport(matches: [], skippedRootPaths: [])

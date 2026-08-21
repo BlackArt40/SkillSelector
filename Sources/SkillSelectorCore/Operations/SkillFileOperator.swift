@@ -141,11 +141,15 @@ struct FileOperationFileSystem: @unchecked Sendable {
         }
         hash.update(data: Data("file".utf8))
         hash.update(data: Data(String(values.fileSize ?? -1).utf8))
-        let handle = try FileHandle(forReadingFrom: url)
-        defer { try? handle.close() }
-        while let data = try handle.read(upToCount: 64 * 1024), !data.isEmpty {
-            hash.update(data: data)
+        if let modificationDate = values.contentModificationDate {
+            hash.update(data: Data(String(modificationDate.timeIntervalSinceReferenceDate).utf8))
         }
+        // Metadata-only by design. File bytes are deliberately NOT hashed:
+        // plan() runs on the main thread, so hashing whole Skill trees there
+        // froze the UI (audit R1), and re-hashing on every validation step
+        // amplified copy/move I/O (audit R8). The fileResourceIdentifier,
+        // size, and mtime above are the TOCTOU criteria the security audit
+        // accepted (S-08); the resource identifier is folded in earlier.
     }
 }
 
@@ -793,6 +797,11 @@ public final class SkillFileOperator: @unchecked Sendable {
         let trashedDestination = try replaceDestinationIfNeeded(plan: plan, stage: stage)
         if removeSourceAfter {
             do {
+                // Audit F-04: the final validation sits directly before the
+                // delete. The window between the two is intentionally minimal,
+                // and the attacker would need write access to the authorized
+                // directory itself — which trivially allows deleting the
+                // source without any race. No privilege escalation is gained.
                 try validateSourceSnapshot(source, expected: plan.sourceSnapshot)
                 try fileSystem.remove(source)
             } catch let originalError {

@@ -1,6 +1,6 @@
 import Foundation
 
-protocol IndexRefresherFileSystem {
+protocol IndexRefresherFileSystem: Sendable {
     func probeDirectory(_ url: URL) throws -> DirectoryProbe
     func contentsOfDirectory(at url: URL) throws -> [URL]
     func resolvingSymlinks(in url: URL) -> URL
@@ -52,116 +52,27 @@ public struct RefreshSummary: Hashable, Sendable {
     }
 }
 
-public final class IndexRefresher {
-    private var registry: AgentRegistry
-    private let bookmarks: BookmarkStore
-    private let scanner: SkillScanner
-    private let index: SkillIndex
+/// A scan plan for one authorized root: which directories to scan and how
+/// each root should be disposed of.
+private struct ScanPlan {
+    var scanRoots: [ScanRoot]
+    var dispositions: [ScannedRoot]
+}
+
+/// Builds scan plans. Extracted from `IndexRefresher` so the directory
+/// probing and template expansion (pure file I/O) can run off the main
+/// thread — `refresh()` previously did all of it synchronously before its
+/// first `await`, blocking the UI for large home roots (audit R7).
+private struct ScanPlanBuilder: Sendable {
+    private let registry: AgentRegistry
     private let fileSystem: any IndexRefresherFileSystem
 
-    public init(
-        registry: AgentRegistry,
-        bookmarks: BookmarkStore,
-        scanner: SkillScanner = SkillScanner(),
-        index: SkillIndex
-    ) {
+    init(registry: AgentRegistry, fileSystem: any IndexRefresherFileSystem) {
         self.registry = registry
-        self.bookmarks = bookmarks
-        self.scanner = scanner
-        self.index = index
-        fileSystem = LocalIndexRefresherFileSystem()
-    }
-
-    init(
-        registry: AgentRegistry,
-        bookmarks: BookmarkStore,
-        scanner: SkillScanner = SkillScanner(),
-        index: SkillIndex,
-        fileSystem: any IndexRefresherFileSystem
-    ) {
-        self.registry = registry
-        self.bookmarks = bookmarks
-        self.scanner = scanner
-        self.index = index
         self.fileSystem = fileSystem
     }
 
-    @MainActor
-    public func updateRegistry(_ registry: AgentRegistry) {
-        self.registry = registry
-    }
-
-    @MainActor
-    public func refresh() async throws -> RefreshSummary {
-        try await refresh(selectedRootIDs: nil)
-    }
-
-    @MainActor
-    public func refresh(
-        rootIDs: Set<String>
-    ) async throws -> RefreshSummary {
-        try await refresh(selectedRootIDs: rootIDs)
-    }
-
-    @MainActor
-    private func refresh(
-        selectedRootIDs: Set<String>?
-    ) async throws -> RefreshSummary {
-        let before = try index.skills()
-        let snapshots = try bookmarks.roots().filter { root in
-            selectedRootIDs?.contains(root.id) ?? true
-        }
-        var accesses: [AuthorizedRootAccess] = []
-        var roots: [ScanRoot] = []
-        var dispositions: [ScannedRoot] = []
-        var unresolvedRoots: [ScannedRoot] = []
-
-        defer {
-            accesses.forEach { $0.lease.close() }
-        }
-
-        for snapshot in snapshots {
-            do {
-                let access = try bookmarks.resolve(id: snapshot.id)
-                accesses.append(access)
-                let plan = scanPlan(for: access.root)
-                roots.append(contentsOf: plan.scanRoots)
-                dispositions.append(contentsOf: plan.dispositions)
-            } catch {
-                let detail = String(describing: error)
-                let diagnostic = StructuredDiagnostic(
-                    code: .unableToResolveAuthorizedDirectory,
-                    arguments: [detail]
-                )
-                unresolvedRoots.append(
-                    ScannedRoot(
-                        id: snapshot.id,
-                        url: snapshot.url,
-                        availability: .unavailable(reason: diagnostic.fallbackMessage),
-                        unavailableDiagnostic: diagnostic
-                    )
-                )
-            }
-        }
-
-        var report = await scanner.scan(
-            roots,
-            cache: SkillScanCache(entriesByPath: (try? index.cachedScanEntries()) ?? [:])
-        )
-        report.roots = coalescedRoots(
-            report.roots + dispositions + unresolvedRoots
-        )
-        try index.apply(report: report)
-        let after = try index.skills()
-        return summary(before: before, after: after)
-    }
-
-    private struct ScanPlan {
-        var scanRoots: [ScanRoot]
-        var dispositions: [ScannedRoot]
-    }
-
-    private func scanPlan(for root: AuthorizedRootSnapshot) -> ScanPlan {
+    func scanPlan(for root: AuthorizedRootSnapshot) -> ScanPlan {
         switch root.kind {
         case .home:
             return homeRoots(root)
@@ -324,44 +235,6 @@ public final class IndexRefresher {
         )
     }
 
-    private func coalescedRoots(_ roots: [ScannedRoot]) -> [ScannedRoot] {
-        Dictionary(grouping: roots, by: \.id)
-            .sorted { $0.key < $1.key }
-            .map { id, roots in
-                if let unavailable = roots.first(where: {
-                    if case .unavailable = $0.availability { return true }
-                    return false
-                }), case .unavailable(let reason) = unavailable.availability {
-                    return ScannedRoot(
-                        id: id,
-                        url: unavailable.url,
-                        availability: .unavailable(reason: reason),
-                        unavailableDiagnostic: unavailable.unavailableDiagnostic
-                    )
-                }
-                let available = roots[0]
-                return ScannedRoot(id: id, url: available.url, availability: .available)
-            }
-    }
-
-    private func summary(before: [SkillSnapshot], after: [SkillSnapshot]) -> RefreshSummary {
-        let oldByPath = Dictionary(uniqueKeysWithValues: before.map { ($0.path, $0) })
-        let newByPath = Dictionary(uniqueKeysWithValues: after.map { ($0.path, $0) })
-        let added = newByPath.keys.filter { oldByPath[$0] == nil }.count
-        let removed = oldByPath.keys.filter { newByPath[$0] == nil }.count
-        let changed = newByPath.keys.filter { path in
-            guard let old = oldByPath[path], let snapshot = newByPath[path] else {
-                return false
-            }
-            return old != snapshot
-        }.count
-        return RefreshSummary(
-            added: added,
-            changed: changed,
-            removed: removed
-        )
-    }
-
     private func probeDirectory(_ url: URL) throws -> DirectoryProbe {
         try fileSystem.probeDirectory(url)
     }
@@ -414,7 +287,6 @@ public final class IndexRefresher {
             && !remainder.contains("}")
     }
 
-
     private func directoryContents(_ url: URL) throws -> [URL] {
         try fileSystem.contentsOfDirectory(at: url)
     }
@@ -429,5 +301,157 @@ public final class IndexRefresher {
 
     private func contains(_ candidate: URL, in root: URL) -> Bool {
         candidate.standardizedFileURL.isContained(in: root.standardizedFileURL)
+    }
+}
+
+public final class IndexRefresher {
+    private var registry: AgentRegistry
+    private let bookmarks: BookmarkStore
+    private let scanner: SkillScanner
+    private let index: SkillIndex
+    private let fileSystem: any IndexRefresherFileSystem
+
+    public init(
+        registry: AgentRegistry,
+        bookmarks: BookmarkStore,
+        scanner: SkillScanner = SkillScanner(),
+        index: SkillIndex
+    ) {
+        self.registry = registry
+        self.bookmarks = bookmarks
+        self.scanner = scanner
+        self.index = index
+        fileSystem = LocalIndexRefresherFileSystem()
+    }
+
+    init(
+        registry: AgentRegistry,
+        bookmarks: BookmarkStore,
+        scanner: SkillScanner = SkillScanner(),
+        index: SkillIndex,
+        fileSystem: any IndexRefresherFileSystem
+    ) {
+        self.registry = registry
+        self.bookmarks = bookmarks
+        self.scanner = scanner
+        self.index = index
+        self.fileSystem = fileSystem
+    }
+
+    @MainActor
+    public func updateRegistry(_ registry: AgentRegistry) {
+        self.registry = registry
+    }
+
+    @MainActor
+    public func refresh() async throws -> RefreshSummary {
+        try await refresh(selectedRootIDs: nil)
+    }
+
+    @MainActor
+    public func refresh(
+        rootIDs: Set<String>
+    ) async throws -> RefreshSummary {
+        try await refresh(selectedRootIDs: rootIDs)
+    }
+
+    @MainActor
+    private func refresh(
+        selectedRootIDs: Set<String>?
+    ) async throws -> RefreshSummary {
+        let before = try index.skills()
+        let snapshots = try bookmarks.roots().filter { root in
+            selectedRootIDs?.contains(root.id) ?? true
+        }
+        var accesses: [AuthorizedRootAccess] = []
+        var roots: [ScanRoot] = []
+        var dispositions: [ScannedRoot] = []
+        var unresolvedRoots: [ScannedRoot] = []
+
+        defer {
+            accesses.forEach { $0.lease.close() }
+        }
+
+        // Build the scan plan off the main thread: probing directories and
+        // expanding templates is file I/O that used to block the UI before
+        // the first await (audit R7). Bookmarks still resolve here — the
+        // Security framework scoped access must be created on this actor.
+        let builder = ScanPlanBuilder(registry: registry, fileSystem: fileSystem)
+        for snapshot in snapshots {
+            do {
+                let access = try bookmarks.resolve(id: snapshot.id)
+                accesses.append(access)
+                let plan = await Task.detached(priority: .userInitiated) {
+                    builder.scanPlan(for: access.root)
+                }.value
+                roots.append(contentsOf: plan.scanRoots)
+                dispositions.append(contentsOf: plan.dispositions)
+            } catch {
+                let detail = String(describing: error)
+                let diagnostic = StructuredDiagnostic(
+                    code: .unableToResolveAuthorizedDirectory,
+                    arguments: [detail]
+                )
+                unresolvedRoots.append(
+                    ScannedRoot(
+                        id: snapshot.id,
+                        url: snapshot.url,
+                        availability: .unavailable(reason: diagnostic.fallbackMessage),
+                        unavailableDiagnostic: diagnostic
+                    )
+                )
+            }
+        }
+
+        var report = await scanner.scan(
+            roots,
+            cache: SkillScanCache(entriesByPath: (try? index.cachedScanEntries()) ?? [:])
+        )
+        report.roots = coalescedRoots(
+            report.roots + dispositions + unresolvedRoots
+        )
+        try index.apply(report: report)
+        let after = try index.skills()
+        return summary(before: before, after: after)
+    }
+
+    private func coalescedRoots(_ roots: [ScannedRoot]) -> [ScannedRoot] {
+        Dictionary(grouping: roots, by: \.id)
+            .sorted { $0.key < $1.key }
+            .map { id, roots in
+                if let unavailable = roots.first(where: {
+                    if case .unavailable = $0.availability { return true }
+                    return false
+                }), case .unavailable(let reason) = unavailable.availability {
+                    return ScannedRoot(
+                        id: id,
+                        url: unavailable.url,
+                        availability: .unavailable(reason: reason),
+                        unavailableDiagnostic: unavailable.unavailableDiagnostic
+                    )
+                }
+                let available = roots[0]
+                return ScannedRoot(id: id, url: available.url, availability: .available)
+            }
+    }
+
+    private func summary(before: [SkillSnapshot], after: [SkillSnapshot]) -> RefreshSummary {
+        // Favor the first snapshot on duplicate paths (defensive: paths are
+        // unique in practice, but a corrupted store must not crash here).
+        let oldByPath = Dictionary(before.map { ($0.path, $0) }, uniquingKeysWith: { first, _ in first })
+        let newByPath = Dictionary(after.map { ($0.path, $0) }, uniquingKeysWith: { first, _ in first })
+        let added = newByPath.keys.filter { oldByPath[$0] == nil }.count
+        let removed = oldByPath.keys.filter { newByPath[$0] == nil }.count
+        let changed = newByPath.keys.filter { path in
+            guard let old = oldByPath[path], let snapshot = newByPath[path] else {
+                return false
+            }
+            return old != snapshot
+        }.count
+        return RefreshSummary(
+            added: added,
+            changed: changed,
+            removed: removed
+        )
     }
 }

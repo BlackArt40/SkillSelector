@@ -1,5 +1,17 @@
 import Foundation
 
+/// Why an entry file could not be read for parsing.
+enum EntryReadError: Error, LocalizedError {
+    case oversizedEntry(limit: Int)
+
+    var errorDescription: String? {
+        switch self {
+        case .oversizedEntry(let limit):
+            return "Entry file exceeds the \(limit) byte read limit"
+        }
+    }
+}
+
 public struct SkillScanner: Sendable {
     /// When false, fresh scans skip the content fingerprint (the scan's
     /// dominant I/O cost — it reads every file's bytes) so the list of
@@ -328,6 +340,15 @@ public struct SkillScanner: Sendable {
 
     /// Merges candidates for the same installation: agent associations union
     /// per root and the first resolved target wins.
+    ///
+    /// Audit R12: when two roots declare different entry filenames for the
+    /// same directory (e.g. root A uses SKILL.md, root B uses AGENT.md),
+    /// the winner is deterministic — the candidate produced first, which the
+    /// caller guarantees by iterating roots in sorted-path order — but the
+    /// other root's association still points at the winning file. Both
+    /// roots' agent IDs are retained; only the parsed document comes from
+    /// the first root. This is intentional: documented here so the
+    /// deterministic-but-surprising behavior is not mistaken for a bug.
     private func merged(_ existing: ScannedSkill?, with candidate: ScannedSkill) -> ScannedSkill {
         guard var existing else { return candidate }
         for (rootID, agentIDs) in candidate.agentIDsByRoot {
@@ -425,8 +446,28 @@ public struct SkillScanner: Sendable {
 
         var document: ParsedSkillDocument
         do {
+            // Bound entry reads exactly like the render path does (audit
+            // R3/F-01): a multi-GB SKILL.md inside an authorized root must
+            // not be slurped into memory during a scan (local DoS).
+            let fileSize = try resolvedEntryURL.resourceValues(forKeys: [.fileSizeKey]).fileSize
+            guard let fileSize, fileSize <= SkillDocumentReader.maximumRenderBytes else {
+                throw EntryReadError.oversizedEntry(
+                    limit: SkillDocumentReader.maximumRenderBytes
+                )
+            }
             document = FrontmatterParser.parse(
                 try String(contentsOf: resolvedEntryURL, encoding: .utf8)
+            )
+        } catch let error as EntryReadError {
+            let detail = error.localizedDescription
+            document = ParsedSkillDocument(
+                title: installationURL.lastPathComponent,
+                issues: [
+                    ParseIssue(
+                        code: .unableToReadEntry,
+                        arguments: [entryFilename, detail]
+                    ),
+                ]
             )
         } catch {
             let detail = error.localizedDescription
