@@ -22,7 +22,7 @@ let package = Package(
         .executable(name: "SkillSelector", targets: ["SkillSelector"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0"),
+        .package(url: "https://github.com/jpsim/Yams.git", from: "6.0.0"),
     ],
     targets: [
         .target(

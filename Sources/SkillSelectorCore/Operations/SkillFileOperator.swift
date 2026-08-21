@@ -308,7 +308,8 @@ public final class SkillFileOperator: @unchecked Sendable {
     public func execute(
         _ plan: FileOperationPlan,
         confirmation: ConfirmationToken,
-        replacementConfirmation: ConfirmationToken? = nil
+        replacementConfirmation: ConfirmationToken? = nil,
+        validateDestinationRootFingerprint: Bool = true
     ) async throws -> FileOperationResult {
         guard plan.issuerID == issuerID, isIssued(plan.id) else {
             throw SkillFileOperatorError.invalidOrConsumedPlan
@@ -349,8 +350,16 @@ public final class SkillFileOperator: @unchecked Sendable {
             throw SkillFileOperatorError.authorizationChanged
         }
         if let destinationRoot = plan.destinationRootURL {
-            guard try fileSystem.snapshot(destinationRoot) == plan.destinationRootSnapshot else {
-                throw SkillFileOperatorError.destinationChanged
+            // Batch orchestration passes validateDestinationRootFingerprint =
+            // false for every item after the first: each item mutates the
+            // shared destination root (the copy lands there), so the root's
+            // snapshot taken at plan time no longer matches by design. The
+            // first item still carries the fingerprint check so an external
+            // change between plan and execute is still caught.
+            if validateDestinationRootFingerprint {
+                guard try fileSystem.snapshot(destinationRoot) == plan.destinationRootSnapshot else {
+                    throw SkillFileOperatorError.destinationChanged
+                }
             }
             // Arbitrary (user-picked) destinations have no registered root
             // identity; only registered destinations are re-validated.

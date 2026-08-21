@@ -451,7 +451,7 @@ final class IndexRefresherTests: XCTestCase {
         let adapter = FixtureBookmarkAdapter()
         let container = try fixture.makeContainer()
         let bookmarks = BookmarkStore(container: container, adapter: adapter)
-        let first = try bookmarks.save(url: firstURL, kind: .project)
+        _ = try bookmarks.save(url: firstURL, kind: .project)
         let second = try bookmarks.save(url: secondURL, kind: .project)
         let index = SkillIndex(container: container)
         let refresher = IndexRefresher(

@@ -464,8 +464,10 @@ private final class RecordingAgentDefinitionStore: AgentDefinitionStoring, @unch
 /// requires the app-scope entitlement, which a bare `swift test` process
 /// does not have. The tests exercise AppModel behavior around authorize /
 /// purge / onboarding, not the bookmark format, so a round-trip adapter
-/// keeps them hermetic (same pattern as FixtureBookmarkAdapter).
-private final class AppModelBookmarkAdapter: BookmarkDataCreating, @unchecked Sendable {
+/// keeps them hermetic (same pattern as FixtureBookmarkAdapter). Internal so
+/// FileOperationCoordinatorTests can drive the batch state machine against
+/// real directories without touching the Security framework.
+final class AppModelBookmarkAdapter: BookmarkDataCreating, @unchecked Sendable {
     func createBookmarkData(for url: URL) throws -> Data { Data(url.path.utf8) }
 
     func resolveBookmarkData(_ data: Data) throws -> BookmarkResolution {

@@ -246,11 +246,19 @@ final class FileOperationCoordinator {
                   try bookmarks.roots() == batch.authorizedRoots else {
                 throw SkillFileOperatorError.authorizationChanged
             }
-            for entry in batch.entries {
+            for (index, entry) in batch.entries.enumerated() {
+                // Only the first item validates the shared destination root's
+                // fingerprint: every successful item mutates that root, so
+                // later items would otherwise always fail destinationChanged
+                // (audit #2: batch orchestration had zero tests and this
+                // defect shipped with batch copy/move). Registration and
+                // authorization are still re-validated per item inside
+                // execute; only the root-content fingerprint is skipped.
                 let result = try await batch.fileOperator.execute(
                     entry.plan,
                     confirmation: entry.plan.confirmationToken,
-                    replacementConfirmation: nil
+                    replacementConfirmation: nil,
+                    validateDestinationRootFingerprint: index == 0
                 )
                 guard result.outcome == .completed else { continue }
                 refreshRootIDs.formUnion(result.refreshRootIDs)

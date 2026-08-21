@@ -1,0 +1,23 @@
+# Dependabot keeps pinned third-party actions current. The CI workflow pins
+# actions/checkout to a full SHA (audit F-05); Dependabot opens the PR that
+# moves the pin forward, so the SHA never silently goes stale.
+#
+# Group updates into one PR per week per ecosystem. SwiftPM (Yams) is not
+# listed because the manifest has no actions to update; if Package.swift
+# gains dependencies, add a "swift" ecosystem entry here.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Shanghai"
+    groups:
+      actions:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: "build"
+      include: "scope"

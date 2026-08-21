@@ -23,6 +23,7 @@ final class IncrementalScanTests: XCTestCase {
         .project(id: "project", url: workspace, registry: BuiltInAgentRegistry.make())
     }
 
+    @discardableResult
     private func writeSkill(at relativePath: String, name: String, description: String) throws -> URL {
         let directory = workspace.appending(path: relativePath, directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
