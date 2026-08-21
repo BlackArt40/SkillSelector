@@ -17,7 +17,7 @@ jobs:
     name: Build and test
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (audit F-05: pin to SHA)
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4 (audit F-05: pin to SHA)
       - name: Build
         run: swift build
       - name: Test
@@ -28,7 +28,7 @@ jobs:
     if: github.event_name == 'push'
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (audit F-05: pin to SHA)
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4 (audit F-05: pin to SHA)
       - name: Package
         run: zsh Scripts/package-dmg.sh 0.0.0-ci
       - name: Smoke test
@@ -43,6 +43,6 @@ jobs:
       matrix:
         round: [1, 2, 3, 4, 5]
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (audit F-05: pin to SHA)
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4 (audit F-05: pin to SHA)
       - name: Test
         run: swift test
