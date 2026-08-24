@@ -121,10 +121,8 @@ public struct SkillQuery: Hashable, Sendable {
         return terms.allSatisfy { term in
             let key = Self.searchKey(term.term)
             switch term.field {
-            case nil:
-                // Free terms search the Skill name only, fuzzy.
-                return Self.searchKey(snapshot.name).contains(key)
-            case .name:
+            case nil, .name:
+                // Free terms search the Skill name too — same as a name: term.
                 return Self.searchKey(snapshot.name).contains(key)
             case .description:
                 return Self.searchKey(Self.effectiveDescription(for: snapshot)).contains(key)
