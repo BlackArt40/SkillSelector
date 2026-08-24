@@ -49,6 +49,12 @@ enum AppTheme {
         )
     }()
 
+    /// Agent chip label on an active row. The chip background is light in
+    /// both appearances, so the label stays the light-mode foreground in
+    /// both — using the adaptive secondary foreground made the label
+    /// near-invisible in dark mode (light-on-light).
+    static let accentChipText = Color(hex: 0x424245)
+
     /// Skill tile gradients (160deg) from the design.
     static let tileTop = adaptive(light: 0x424245, dark: 0x424245)
     static let tileBottom = adaptive(light: 0x1D1D1F, dark: 0x1D1D1F)

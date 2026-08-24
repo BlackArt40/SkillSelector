@@ -119,7 +119,9 @@ struct BadgeDot: View {
     }
 }
 
-/// `.agent-chip`: 10.5 pt pill on a surface background.
+/// `.agent-chip`: 10.5 pt pill on a surface background. On an active row
+/// the pill background is light in both appearances, so its label uses the
+/// fixed light-mode foreground — identical, readable chips across themes.
 struct AgentChip: View {
     let text: String
     var onActiveRow = false
@@ -127,7 +129,7 @@ struct AgentChip: View {
     var body: some View {
         Text(verbatim: text)
             .font(AppTheme.body(10.5, weight: .medium))
-            .foregroundStyle(AppTheme.foregroundSecondary)
+            .foregroundStyle(onActiveRow ? AppTheme.accentChipText : AppTheme.foregroundSecondary)
             .padding(.horizontal, 7)
             .padding(.vertical, 1)
             .background(onActiveRow ? AppTheme.accentChip : AppTheme.surface, in: Capsule())
