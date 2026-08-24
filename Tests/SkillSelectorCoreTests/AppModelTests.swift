@@ -107,8 +107,6 @@ final class AppModelTests: XCTestCase {
         // automatically under sandbox.
         XCTAssertFalse(model.authorizedRoots.contains { $0.id == staleRoot.id })
         XCTAssertTrue(model.authorizedRoots.isEmpty)
-        // With authorization cleared, the first-run guide can show again.
-        XCTAssertTrue(model.shouldShowOnboarding)
     }
 
     func testRealUserHomeDirectoryMatchesFileManagerOutsideSandbox() {
@@ -116,36 +114,6 @@ final class AppModelTests: XCTestCase {
             AppModel.realUserHomeDirectory().standardizedFileURL,
             FileManager.default.homeDirectoryForCurrentUser.standardizedFileURL
         )
-    }
-
-    func testOnboardingPresentedOnlyWhenNotShownAndUnauthorized() {
-        let suite = "AppModelOnboardingTests-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite)!
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let model = makeModel(defaults: defaults)
-
-        XCTAssertTrue(model.shouldShowOnboarding)
-        model.presentOnboardingIfNeeded()
-        XCTAssertTrue(model.showsOnboarding)
-
-        model.dismissOnboarding()
-        XCTAssertFalse(model.showsOnboarding)
-        XCTAssertFalse(model.shouldShowOnboarding)
-        XCTAssertTrue(defaults.bool(forKey: "SkillSelector.onboardingShown"))
-
-        // Dismissing once means the guide never returns on later launches.
-        model.presentOnboardingIfNeeded()
-        XCTAssertFalse(model.showsOnboarding)
-    }
-
-    func testOnboardingSuppressedWhenRootsAlreadyAuthorized() async {
-        let model = makeModel()
-
-        await model.authorize(FileManager.default.homeDirectoryForCurrentUser, as: .home)
-
-        XCTAssertFalse(model.shouldShowOnboarding)
-        model.presentOnboardingIfNeeded()
-        XCTAssertFalse(model.showsOnboarding)
     }
 
     func testLegacyAgentManualEnablePersistsAndIgnoresNonLegacyAgents() {
@@ -230,7 +198,6 @@ final class AppModelTests: XCTestCase {
         try model.saveCustomAgent(
             displayName: "Original",
             globalRoots: ["~/.original/skills"],
-            projectPatterns: [".original/skills"],
             entryFilename: "AGENT.md"
         )
         let created = try XCTUnwrap(model.customAgentDefinitions.first)
@@ -240,11 +207,9 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(editor.selectedAgentID, created.id)
         XCTAssertEqual(editor.agentName, "Original")
         XCTAssertEqual(editor.globalRoots, "~/.original/skills")
-        XCTAssertEqual(editor.projectPatterns, ".original/skills")
         XCTAssertEqual(editor.entryFilename, "AGENT.md")
         editor.agentName = "Renamed"
         editor.globalRoots = "~/.renamed/skills"
-        editor.projectPatterns = ".renamed/skills"
         editor.entryFilename = "CUSTOM.md"
         try editor.save(using: model)
 
@@ -283,7 +248,6 @@ final class AppModelTests: XCTestCase {
         try model.saveCustomAgent(
             displayName: "To Delete",
             globalRoots: ["~/.delete/skills"],
-            projectPatterns: [".delete/skills"],
             entryFilename: "AGENT.md"
         )
         let definition = try XCTUnwrap(model.customAgentDefinitions.first)
@@ -297,7 +261,6 @@ final class AppModelTests: XCTestCase {
         XCTAssertNil(editor.selectedAgentID)
         XCTAssertEqual(editor.agentName, "")
         XCTAssertEqual(editor.globalRoots, "")
-        XCTAssertEqual(editor.projectPatterns, "")
         XCTAssertEqual(editor.entryFilename, "SKILL.md")
     }
 
@@ -308,7 +271,6 @@ final class AppModelTests: XCTestCase {
         XCTAssertThrowsError(try model.saveCustomAgent(
             displayName: "Bad Entry",
             globalRoots: ["~/.skills"],
-            projectPatterns: [".skills"],
             entryFilename: "sub/dir/SKILL.md"
         )) { error in
             guard case .invalidEntryFilename = error as? AppModelValidationError else {
@@ -320,7 +282,6 @@ final class AppModelTests: XCTestCase {
         XCTAssertThrowsError(try model.saveCustomAgent(
             displayName: "Bad Entry",
             globalRoots: ["~/.skills"],
-            projectPatterns: [".skills"],
             entryFilename: "SKILL\\.md"
         )) { error in
             guard case .invalidEntryFilename = error as? AppModelValidationError else {
@@ -332,7 +293,6 @@ final class AppModelTests: XCTestCase {
         XCTAssertThrowsError(try model.saveCustomAgent(
             displayName: "Bad Root",
             globalRoots: ["/"],
-            projectPatterns: [".skills"],
             entryFilename: "SKILL.md"
         )) { error in
             guard case .invalidPathTemplate = error as? AppModelValidationError else {
@@ -344,7 +304,6 @@ final class AppModelTests: XCTestCase {
         XCTAssertThrowsError(try model.saveCustomAgent(
             displayName: "Bad Root",
             globalRoots: ["~"],
-            projectPatterns: [".skills"],
             entryFilename: "SKILL.md"
         )) { error in
             guard case .invalidPathTemplate = error as? AppModelValidationError else {
@@ -356,7 +315,6 @@ final class AppModelTests: XCTestCase {
         XCTAssertThrowsError(try model.saveCustomAgent(
             displayName: "Bad Root",
             globalRoots: ["*"],
-            projectPatterns: [".skills"],
             entryFilename: "SKILL.md"
         )) { error in
             guard case .invalidPathTemplate = error as? AppModelValidationError else {
@@ -366,49 +324,6 @@ final class AppModelTests: XCTestCase {
 
         // nothing was persisted despite multiple attempts
         XCTAssertTrue(store.values.isEmpty)
-    }
-
-    func testImportCustomAgentsSkipsBuiltInIDs() throws {
-        // Audit R5: a hand-edited transfer file must not be able to overwrite
-        // a built-in Agent (merge() replaces definitions by id).
-        let (model, store) = try makeValidationModel()
-        let builtIn = try XCTUnwrap(BuiltInAgentRegistry.make().definitions.first)
-        let transferFile = FileManager.default.temporaryDirectory
-            .appending(path: "import-skip-builtin-\(UUID().uuidString).json")
-        defer { try? FileManager.default.removeItem(at: transferFile) }
-        try CustomAgentTransfer().archive([
-            AgentDefinition(
-                id: builtIn.id,
-                displayName: "Evil Override",
-                globalRoots: ["/tmp/evil"],
-                projectPatterns: [],
-                entryFilename: "SKILL.md"
-            ),
-        ]).write(to: transferFile)
-
-        let result = try model.importCustomAgents(from: transferFile)
-
-        XCTAssertEqual(result.imported, 0)
-        XCTAssertEqual(result.skipped, 1)
-        XCTAssertTrue(store.values.isEmpty)
-        // The registry still serves the built-in definition.
-        XCTAssertEqual(model.registry.definition(id: builtIn.id)?.displayName, builtIn.displayName)
-    }
-
-    func testImportCustomAgentsRejectsOversizedFile() throws {
-        // Audit F-10: a giant transfer file is rejected before any read.
-        let (model, _) = try makeValidationModel()
-        let transferFile = FileManager.default.temporaryDirectory
-            .appending(path: "import-oversize-\(UUID().uuidString).json")
-        defer { try? FileManager.default.removeItem(at: transferFile) }
-        let padding = String(repeating: "x", count: AppModel.maximumImportBytes + 1)
-        try Data(padding.utf8).write(to: transferFile)
-
-        XCTAssertThrowsError(try model.importCustomAgents(from: transferFile)) { error in
-            guard case CustomAgentTransferError.unreadableFile = error else {
-                return XCTFail("Expected unreadableFile, got \(error)")
-            }
-        }
     }
 
     private func makeValidationModel() throws -> (AppModel, RecordingAgentDefinitionStore) {
@@ -463,10 +378,8 @@ private final class RecordingAgentDefinitionStore: AgentDefinitionStoring, @unch
 /// Path-encoding bookmark adapter: creating a security-scoped bookmark
 /// requires the app-scope entitlement, which a bare `swift test` process
 /// does not have. The tests exercise AppModel behavior around authorize /
-/// purge / onboarding, not the bookmark format, so a round-trip adapter
-/// keeps them hermetic (same pattern as FixtureBookmarkAdapter). Internal so
-/// FileOperationCoordinatorTests can drive the batch state machine against
-/// real directories without touching the Security framework.
+/// purge and the registry, not the bookmark format, so a round-trip adapter
+/// keeps them hermetic (same pattern as FixtureBookmarkAdapter).
 final class AppModelBookmarkAdapter: BookmarkDataCreating, @unchecked Sendable {
     func createBookmarkData(for url: URL) throws -> Data { Data(url.path.utf8) }
 

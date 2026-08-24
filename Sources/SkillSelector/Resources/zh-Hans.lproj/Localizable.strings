@@ -1,21 +1,12 @@
 "Agents" = "agent";
-"All" = "全部";
 "All Skills" = "全部 Skill";
-"Associations" = "关联";
 "Authorization storage is unavailable" = "授权存储不可用";
 "Authorize" = "授权";
-"Authorize Skill Folders" = "授权 Skill 文件夹";
-"Authorize your home directory or add a project to find local Skills." = "授权主目录或添加项目，以查找本机 Skill。";
 "Home Directory" = "主目录";
 "Project Directory" = "项目目录";
 "System Skill Directory" = "系统 Skill 目录";
 "Custom Skill Directory" = "自定义 Skill 目录";
-"Change the search or filters to show more Skills." = "更改搜索条件或筛选器以显示更多 Skill。";
-"Choose a Skill from the list to inspect its local details." = "从列表中选择一个 Skill 以查看本机详情。";
 "Choose a project directory to scan for all Skills." = "选择要扫描所有 Skill 的项目目录。";
-"Clear Filters" = "清除筛选";
-"Content Digest" = "内容摘要";
-"Custom" = "自定义";
 "diagnostic.authorizedDirectoryMissing" = "已授权的目录不存在";
 "diagnostic.authorizedHomeMissing" = "已授权的主目录不存在";
 "diagnostic.authorizedProjectMissing" = "已授权的项目目录不存在";
@@ -29,123 +20,48 @@
 "diagnostic.unableToResolveAuthorizedDirectory" = "无法解析已授权的目录：%@";
 "diagnostic.unsafeEntryFile" = "入口文件必须保持在已授权的 Skill 目录和根目录内且可读";
 "Default Order" = "默认顺序";
-"Delete" = "删除";
-"Description" = "简介";
 "Diagnostics" = "诊断";
-"Directories" = "目录";
 "Entry File" = "入口文件";
-"Fallback" = "回退内容";
 "Global Skills" = "全局 Skill";
-"Has diagnostics" = "存在诊断";
 "Installation Path" = "安装路径";
 "Loading Skill document" = "正在载入 Skill 文档";
-"Local Document" = "本机文档";
-"Local Fallback" = "本机回退内容";
-"Local Skill Document" = "本机 Skill 文档";
 "Locations" = "位置";
 "Name" = "名称";
 "No authorized folder is associated with this Skill." = "此 Skill 没有关联的已授权文件夹。";
 "No Matching Skills" = "没有匹配的 Skill";
-"No Skills Indexed" = "尚未索引 Skill";
-"Add another project to scan for Skills." = "添加另一个项目以扫描 Skill。";
 "None" = "无";
-"Not available" = "不可用";
 "Open Settings" = "打开设置";
 "Open Skill Document in Default Editor" = "在默认编辑器中打开 Skill 文档";
 "Path" = "路径";
 "Projects" = "项目";
 "Refresh Failed" = "刷新失败";
-"Refresh the authorized folders to check again." = "刷新已授权的文件夹以再次检查。";
-"Remote" = "远程";
 "Reveal Skill Document in Finder" = "在访达中显示 Skill 文档";
-"Resolved Target" = "解析后的目标";
 "Root" = "根目录";
 "Search Skills" = "搜索 Skill";
 "Save" = "保存";
 "Cancel" = "取消";
 "Select a Skill" = "选择一个 Skill";
-"SkillSelector Settings" = "SkillSelector 设置";
 "Skill Document" = "Skill 文档";
-"Skills" = "Skill";
-"Sort" = "排序";
 "Sort Skills" = "排序 Skill";
-"Source" = "来源";
-"The document is outside its authorized folder." = "文档位于已授权文件夹之外。";
 "The default editor could not open the Skill document." = "默认编辑器无法打开 Skill 文档。";
-"The entry filename is invalid." = "入口文件名无效。";
-"The Skill document cannot be read." = "无法读取 Skill 文档。";
-"The Skill document is larger than the 1 MiB render limit." = "Skill 文档超过 1 MiB 渲染上限。";
-"The Skill document is not a regular file." = "Skill 文档不是普通文件。";
-"The Skill document is not valid UTF-8 text." = "Skill 文档不是有效的 UTF-8 文本。";
-"The selected Skill is no longer indexed." = "所选 Skill 已不在索引中。";
-"A Skill with this name already exists." = "已存在同名 Skill。";
-"Affected Installations" = "受影响的安装位置";
 "Cancel" = "取消";
-"Choose Skill Root" = "选择 Skill 根目录";
-"Choose a destination Skill root." = "请选择目标 Skill 根目录。";
-"Choose a registered Skill root" = "选择已注册的 Skill 根目录";
-"Confirm Copy" = "确认复制";
-"Confirm Create Link" = "确认创建链接";
-"Confirm Move" = "确认移动";
-"Confirm Move to Trash" = "确认移到废纸篓";
-"Confirm file operation" = "确认文件操作";
-"Confirm replacement" = "确认替换";
-"Confirm replacement separately before continuing." = "继续前请单独确认替换。";
-"Copy" = "复制";
-"Create Link" = "创建链接";
-"Destination" = "目标";
-"Directory authorization changed. Plan the operation again." = "目录授权已更改，请重新规划操作。";
-"File Operation Failed" = "文件操作失败";
-"Finish the current file operation first." = "请先完成当前文件操作。";
-"I confirm replacing the existing Skill." = "我确认替换现有 Skill。";
-"Keep Both" = "保留两者";
-"Move" = "移动";
-"Move to Trash" = "移到废纸篓";
-"Name Conflict" = "名称冲突";
-"No authorized directory covers this operation." = "没有已授权目录覆盖此操作。";
 "OK" = "好";
-"Replace" = "替换";
-"Symbolic Link Target" = "符号链接目标";
-"The Agent registry changed. Plan the operation again." = "Agent 注册表已更改，请重新规划操作。";
-"The Skill name is not valid." = "Skill 名称无效。";
-"The destination changed. Plan the operation again." = "目标已更改，请重新规划操作。";
-"The destination is not a registered Skill root." = "目标不是已注册的 Skill 根目录。";
-"The destination is not authorized." = "目标未获授权。";
-"The existing destination will be moved to Trash before replacement." = "替换前，现有目标将移到废纸篓。";
-"The file operation failed: %@" = "文件操作失败：%@";
-"The source Skill changed. Plan the operation again." = "源 Skill 已更改，请重新规划操作。";
-"The source Skill is not authorized." = "源 Skill 未获授权。";
-"The source Skill no longer exists." = "源 Skill 已不存在。";
-"The source is not in a registered Skill root." = "源位置不在已注册的 Skill 根目录中。";
-"The staged copy is not a readable Skill." = "暂存副本不是可读取的 Skill。";
-"The symbolic link target changed." = "符号链接目标已更改。";
-"This Skill will be moved to Trash." = "此 Skill 将移到废纸篓。";
-"This confirmation is no longer valid." = "此确认已失效。";
 "Unable to Load Skill Document" = "无法载入 Skill 文档";
 "Unable to Open Skill Document" = "无法打开 Skill 文档";
-"Unable to Reveal in Finder" = "无法在访达中显示 Skill 文档";
 "Document Too Large to Render" = "文档过大，无法渲染";
 "Documents larger than 1 MiB can be opened in the default editor." = "超过 1 MiB 的文档仍可在默认编辑器中打开。";
 "Import" = "导入";
 "Import Project Directory" = "导入项目目录";
 "Import System Directory" = "导入系统目录";
-"Welcome to SkillSelector" = "欢迎使用 SkillSelector";
-"Onboarding Message" = "SkillSelector 需要一次性授权主目录以发现 Agent Skill（如 ~/.claude、~/.codex），且只读取内置注册表声明的 Agent 路径。";
-"Authorize Home and Scan" = "授权主目录并扫描";
-"Authorize Home Directory" = "授权主目录";
 "Authorize" = "授权";
-"Skip for Now" = "稍后再说";
 "Legacy Agents" = "旧版 Agent";
 "Legacy Agent Hint" = "在检测到 Skill 或在此启用前保持隐藏。";
 "Search Help" = "普通词匹配名称、描述和路径；用 name:、desc:、path:、agent: 前缀可限定单个字段。";
-"Move to Trash" = "移到废纸篓";
 "SkillSelector" = "SkillSelector";
 "Edit Custom Agent" = "编辑自定义 Agent";
-"Cancel Editing" = "取消编辑";
 "Agent Name" = "Agent 名称";
 "Authorized Directories" = "已授权目录";
 "Comma-separated paths" = "用逗号分隔路径";
-"Custom Agents" = "自定义 Agent";
 "Diagnostics" = "诊断";
 "Diagnostics Exported" = "诊断信息已导出";
 "Entry Filename" = "入口文件名";
@@ -154,7 +70,6 @@
 "Global Roots" = "全局根目录";
 "Name" = "名称";
 "No directories authorized." = "尚未授权目录。";
-"Project Patterns" = "项目路径模式";
 "Re-authorize Directory" = "重新授权目录";
 "Rename" = "重命名";
 "Scan" = "扫描";
@@ -163,16 +78,10 @@
 "Remove Custom Agent" = "移除自定义 Agent";
 "Revoke Authorization" = "撤销授权";
 "Settings Error" = "设置错误";
-"Interface Language" = "界面语言";
 "Follow System" = "跟随系统";
-"Language description" = "立即切换界面语言";
-"%d Skills" = "%d 个 Skill";
 "Settings" = "设置";
 "Add Project" = "添加项目";
 "Reveal in Finder" = "在 Finder 中显示";
-"Copy To…" = "复制到…";
-"Move To…" = "移动到…";
-"Create Link…" = "创建链接…";
 "Skill List Count" = "%d 个";
 "Core Role" = "核心作用";
 "Associated Agents" = "关联 Agents";
@@ -195,8 +104,6 @@
 "General" = "通用";
 "Display" = "显示";
 "Data" = "数据";
-"Skill Index" = "Skill 索引";
-"Skill Index Sub" = "仅保存元数据，不保存 Skill 内容";
 "Export Diagnostics Report" = "导出诊断报告";
 "Export Diagnostics Sub" = "自动脱敏路径与用户名";
 "Export…" = "导出…";
@@ -210,48 +117,26 @@
 "Custom Agent Hint" = "将任意本地 Skill 目录登记为一个自定义 Agent";
 "Add…" = "添加…";
 "Version Line" = "版本 %@ · Universal 2（Apple Silicon + Intel）";
-"Tagline" = "本机 Agent Skill 的查看与修改工具。不是市场，不是安装器，不是 AI 工具。";
+"Tagline" = "本机 Agent Skill 的只读信息看板：不做复制、移动、删除，不是市场，不是安装器，也不是 AI 工具。";
 "GitHub" = "GitHub";
 "Release Notes" = "版本记录";
 "Apache License" = "Apache 2.0 许可证";
 "Privacy" = "隐私";
-"Privacy Sub" = "离线运行 · 无遥测 · 无崩溃报告 · 删除仅走回收站";
+"Privacy Sub" = "离线运行 · 无遥测 · 无崩溃报告 · 无文件监视器 · 只读展示，应用内不做任何文件操作";
 "Signature" = "签名";
 "Signature Sub" = "Ad-hoc 签名 · 已启用 App Sandbox · 未经 Apple 公证";
-"About Footer" = "SkillSelector 仅管理已存在的本地 Skill。\n© 2026 SkillSelector Contributors · Apache License 2.0";
-"Copy Description" = "在目标目录创建一份独立的 Skill 副本，原 Skill 保持不变。";
-"Move Description" = "将 Skill 移动到目标目录，原位置不再保留。";
-"Link Description" = "在目标目录创建指向此 Skill 的软链接，作为独立安装记录。";
-"Delete Description" = "Skill 将被移入 macOS 回收站，可以从回收站恢复。此操作不会永久删除文件。";
+"About Footer" = "SkillSelector 只读展示已存在的本地 Skill。\n© 2026 SkillSelector Contributors · Apache License 2.0";
 "Add" = "添加";
 "Directory Authorization" = "目录授权";
 "About" = "关于";
 "diagnostic.yamlParseFailed" = "YAML 解析失败：%@";
-"Copy To Current Folder" = "复制到当前文件夹";
-"Move To Current Folder" = "移动到当前文件夹";
-"Choose a destination folder" = "选择目标文件夹";
 
 /* Batch operations */
-"Batch operations support copy, move, and delete." = "批量操作支持复制、移动和删除。";
-"Confirm Batch Copy" = "复制 %d 个 Skill";
-"Confirm Batch Move" = "移动 %d 个 Skill";
-"Confirm Batch Move to Trash" = "将 %d 个 Skill 移入废纸篓";
-"Batch Copy Description" = "把选中的 %d 个 Skill 复制到同一个目标文件夹，接下来请选择文件夹。";
-"Batch Move Description" = "把选中的 %d 个 Skill 移动到同一个目标文件夹，接下来请选择文件夹。";
-"Batch Delete Description" = "把选中的 %d 个 Skill 移入废纸篓，每个都可以单独从废纸篓恢复。";
-"Copy %d Items" = "复制 %d 项";
-"Move %d Items" = "移动 %d 项";
-"Move %d Items to Trash" = "移入废纸篓 %d 项";
-"These Skills will be moved to Trash." = "这些 Skill 将被移入废纸篓。";
-"Name conflicts keep both Skills; replacements need a single-Skill operation." = "同名冲突会保留两个 Skill；如需替换请对单个 Skill 操作。";
-"Selected Count" = "已选 %d 项";
-"Clear Selection" = "清除选择";
 
 /* Duplicate skills */
 "Duplicate Skills" = "重复 Skill";
 "Duplicate Groups Count" = "%d 组";
 "No Duplicates" = "没有重复";
-"No Duplicates Description" = "没有在各 Agent 之间找到内容完全相同的 Skill。";
 "Duplicate Members Count" = "%d 份副本";
 
 /* Bookmark health */
@@ -259,10 +144,6 @@
 "Re-authorize…" = "重新授权…";
 
 /* Custom agent transfer */
-"Export Custom Agents" = "导出自定义 Agent";
-"Import Custom Agents" = "导入自定义 Agent";
-"Custom Agents Exported" = "自定义 Agent 已导出。";
-"Custom Agents Imported" = "已导入 %d 个自定义 Agent（跳过 %d 个重复）。";
 
 /* Diagnostics viewer */
 "View…" = "查看…";
@@ -279,12 +160,29 @@
 "Remove Directory" = "移除目录";
 
 /* Pattern dry run */
-"Pattern Preview" = "模式预览";
-"Dry Run…" = "试运行…";
-"Dry Run Help" = "预览项目模式会在已授权的项目文件夹中匹配到哪些目录。";
-"Dry Run Matches" = "匹配到 %d 个目录";
-"Dry Run Skill Count" = "%d 个 Skill";
-"Dry Run No Skills" = "内无 %@——请检查入口文件名";
-"Dry Run No Matches" = "没有目录被匹配。请检查模式拼写或路径层级。";
-"Dry Run No Project Roots" = "请先添加项目文件夹，才能预览模式匹配。";
-"Dry Run Skipped Roots" = "有 %d 个项目目录无法读取。";
+
+/* Navigation */
+"Go Back" = "返回";
+"Go Forward" = "前进";
+"Open in Default Editor" = "用默认编辑器打开";
+"Unable to Open" = "无法打开";
+
+/* Symbolic links */
+"Symbolic Links" = "符号链接";
+"Symbolic Links Count" = "%d 个";
+"No Symbolic Links" = "没有符号链接";
+"No Symbolic Links Description" = "没有找到以符号链接安装的 Skill。";
+"Unreachable Target" = "目标不可访问";
+
+/* Sidebar */
+"System Directories" = "系统目录";
+"No Agents Detected" = "未检测到 Agent";
+
+/* Duplicate ignore */
+"Ignore" = "忽略";
+"Ignore Duplicate Group" = "忽略此重复组";
+
+/* Launch defaults */
+
+/* Re-authorization banner */
+"Authorization Lost Banner" = "部分目录已无法访问，请重新授权以继续扫描。";

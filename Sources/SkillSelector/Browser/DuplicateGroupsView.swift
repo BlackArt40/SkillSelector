@@ -9,8 +9,10 @@ struct DuplicateGroupsView: View {
     let selection: SkillSelection?
     let agentNamesByID: [String: String]
     let hasAuthorization: Bool
-    var onOperation: ((FileOperationKind, SkillSnapshot) -> Void)?
     var onRevealInFinder: ((SkillSnapshot) -> Void)?
+    var onOpenInEditor: ((SkillSnapshot) -> Void)?
+    /// Marks the whole group (by fingerprint) as ignored, hiding it.
+    var onIgnoreGroup: ((String) -> Void)?
     let onSelect: (String) -> Void
 
     var body: some View {
@@ -72,8 +74,9 @@ struct DuplicateGroupsView: View {
                             group: group,
                             selection: selection,
                             agentNamesByID: agentNamesByID,
-                            onOperation: onOperation,
                             onRevealInFinder: onRevealInFinder,
+                            onOpenInEditor: onOpenInEditor,
+                            onIgnoreGroup: onIgnoreGroup,
                             onSelect: onSelect
                         )
                     }
@@ -89,8 +92,9 @@ private struct DuplicateGroupSection: View {
     let group: DuplicateSkillGroup
     let selection: SkillSelection?
     let agentNamesByID: [String: String]
-    var onOperation: ((FileOperationKind, SkillSnapshot) -> Void)?
     var onRevealInFinder: ((SkillSnapshot) -> Void)?
+    var onOpenInEditor: ((SkillSnapshot) -> Void)?
+    var onIgnoreGroup: ((String) -> Void)?
     let onSelect: (String) -> Void
 
     var body: some View {
@@ -107,6 +111,20 @@ private struct DuplicateGroupSection: View {
                 ))
                 .font(AppTheme.body(11))
                 .foregroundStyle(AppTheme.meta)
+                Spacer(minLength: 8)
+                Button {
+                    onIgnoreGroup?(group.fingerprint)
+                } label: {
+                    Label(L10n.string("Ignore"), systemImage: "eye.slash")
+                        .font(AppTheme.body(11, weight: .medium))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(AppTheme.muted)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(AppTheme.surface, in: Capsule())
+                .overlay(Capsule().stroke(AppTheme.borderSoft, lineWidth: 1))
+                .help(L10n.string("Ignore Duplicate Group"))
             }
             .padding(.horizontal, 8)
             .padding(.top, 4)
@@ -117,10 +135,9 @@ private struct DuplicateGroupSection: View {
                         skill: skill,
                         agentNamesByID: agentNamesByID,
                         isActive: selection?.path == skill.path,
-                        isMultiSelected: false,
                         onSelect: { onSelect(skill.path) },
-                        onOperation: onOperation,
-                        onRevealInFinder: onRevealInFinder
+                        onRevealInFinder: onRevealInFinder,
+                        onOpenInEditor: onOpenInEditor
                     )
                 }
             }

@@ -496,7 +496,9 @@ public struct SkillScanner: Sendable {
             entryFilename: entryFilename,
             entryModificationDate: modificationDate,
             contentFingerprint: computesContentFingerprints
-                ? try? SkillContentFingerprint.compute(rootDirectory: contentDirectory)
+                ? try? SkillContentFingerprint.compute(
+                    entryFileURL: contentDirectory.appendingPathComponent(entryFilename)
+                )
                 : nil,
             scanState: document.issues.contains { $0.diagnostic?.code == .unableToReadEntry }
                 ? nil

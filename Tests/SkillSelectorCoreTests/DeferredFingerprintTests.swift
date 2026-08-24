@@ -39,7 +39,9 @@ final class DeferredFingerprintTests: XCTestCase {
         let fingerprints = try report.installations.dictionaryMap { installation in
             (
                 installation.path.standardizedFileURL.path,
-                try SkillContentFingerprint.compute(rootDirectory: installation.path)
+                try SkillContentFingerprint.compute(
+                    entryFileURL: installation.path.appending(path: "SKILL.md")
+                )
             )
         }
         XCTAssertEqual(try index.backfillContentFingerprints(fingerprints), 2)
@@ -71,7 +73,9 @@ final class DeferredFingerprintTests: XCTestCase {
         let fingerprints = try report.installations.dictionaryMap { installation in
             (
                 installation.path.standardizedFileURL.path,
-                try SkillContentFingerprint.compute(rootDirectory: installation.path)
+                try SkillContentFingerprint.compute(
+                    entryFileURL: installation.path.appending(path: "SKILL.md")
+                )
             )
         }
         try index.backfillContentFingerprints(fingerprints)

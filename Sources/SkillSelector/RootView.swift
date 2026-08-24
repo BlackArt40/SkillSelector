@@ -3,16 +3,21 @@ import SkillSelectorCore
 import SwiftUI
 
 /// The main browser window, laid out as the design's three fixed columns
-/// (240 / 400 / flexible) with a titlebar toolbar hosting search, sort and
-/// the appearance toggle.
+/// (240 / 400 / flexible) with a titlebar toolbar hosting back/forward,
+/// search and the appearance toggle.
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @AppStorage(ThemePreference.storageKey) private var themeMode = "system"
-    @State private var destination: BrowserDestination?
+    @State private var destination: BrowserDestination
     @State private var searchText = ""
     @State private var sort: SkillQuery.Sort = .default
-    @State private var revealError: String?
+    @State private var openError: String?
     @FocusState private var searchFocused: Bool
+    /// Suppresses history recording while a back/forward navigation is
+    /// restoring state — the restore is not a new action.
+    @State private var suppressingHistory = false
+    /// Seeds the history stack bottom once with the initial destination.
+    @State private var didSeedHistory = false
 
     init(initialDestination: BrowserDestination = .all) {
         _destination = State(initialValue: initialDestination)
@@ -20,7 +25,7 @@ struct RootView: View {
 
     var body: some View {
         @Bindable var model = model
-        let currentDestination = destination ?? .all
+        let currentDestination = destination
         let query = SkillQuery(
             scope: currentDestination.queryScope,
             agentID: currentDestination.agentID,
@@ -43,100 +48,82 @@ struct RootView: View {
         let selectedSkill = model.selection.flatMap { selection in
             model.snapshots.first { $0.path == selection.path }
         }
+        let symlinkSkills = model.snapshots.filter { $0.resolvedTarget != nil }
 
-        HStack(spacing: 0) {
-            BrowserSidebar(
-                destination: $destination,
-                roots: model.authorizedRoots,
-                definitions: model.agentDefinitions,
-                detectedAgentIDs: detectedAgentIDs,
-                manuallyEnabledAgentIDs: model.manuallyEnabledAgentIDs,
-                unhealthyRootIDs: model.unhealthyRootIDs,
-                counts: sidebarCounts,
-                onAddProject: { chooseDestinationRoot() },
-                onDrop: { payload, rootURL in
-                    guard let skill = model.snapshots.first(where: { $0.path == payload.path }) else { return }
-                    Task { await model.planFileOperation(.move, for: skill, destinationRootURL: rootURL) }
-                },
-                onReauthorize: { root in reauthorize(root) },
-                onRemoveRoot: { root in removeRoot(root) }
-            )
-            .frame(width: 240)
-
-            if currentDestination == .duplicates {
-                DuplicateGroupsView(
-                    groups: model.duplicateGroups,
-                    selection: model.selection,
-                    agentNamesByID: agentNamesByID,
-                    hasAuthorization: model.hasAuthorization,
-                    onOperation: { operation, skill in
-                        startOperation(operation, skill: skill)
-                    },
-                    onRevealInFinder: { skill in
-                        do {
-                            try model.revealDocumentInFinder(for: skill)
-                        } catch {
-                            revealError = (error as? LocalizedError)?.errorDescription
-                                ?? String(describing: error)
-                        }
-                    },
-                    onSelect: { path in model.selectOnly(path) }
-                )
-                .frame(width: 400)
-            } else {
-                SkillListView(
-                    selection: model.selection,
-                    selectedPaths: model.selectedPaths,
-                    searchText: $searchText,
-                    sort: $sort,
-                    title: currentDestination.title(rootsByID: model.rootsByID, definitions: model.agentDefinitions),
-                    skills: filteredSkills,
-                    allSkillCount: model.snapshots.count,
-                    hasAuthorization: model.hasAuthorization,
-                    hasActiveFilters: hasActiveFilters,
-                    refreshState: model.refreshState,
-                    agentNamesByID: agentNamesByID,
-                    onClearFilters: clearFilters,
-                    onImportProject: { chooseDestinationRoot() },
-                    onImportHome: { chooseSystemRoot() },
-                    onOperation: { operation, skill in
-                        startOperation(operation, skill: skill)
-                    },
-                    onRevealInFinder: { skill in
-                        do {
-                            try model.revealDocumentInFinder(for: skill)
-                        } catch {
-                            revealError = (error as? LocalizedError)?.errorDescription
-                                ?? String(describing: error)
-                        }
-                    },
-                    onPrimarySelect: { path in model.selectOnly(path) },
-                    onToggleSelect: { path in model.toggleSelection(path) },
-                    onRangeSelect: { path in
-                        model.selectRange(to: path, in: filteredSkills.map(\.path))
-                    },
-                    onClearSelection: { model.selectOnly(model.selection?.path) }
-                )
-                .frame(width: 400)
+        VStack(spacing: 0) {
+            if !model.unhealthyRootIDs.isEmpty {
+                authorizationBanner
             }
+            HStack(spacing: 0) {
+                BrowserSidebar(
+                    destination: $destination,
+                    roots: model.authorizedRoots,
+                    definitions: model.agentDefinitions,
+                    detectedAgentIDs: detectedAgentIDs,
+                    manuallyEnabledAgentIDs: model.manuallyEnabledAgentIDs,
+                    unhealthyRootIDs: model.unhealthyRootIDs,
+                    counts: sidebarCounts,
+                    onAddProject: { chooseDestinationRoot() },
+                    onReauthorize: { root in reauthorize(root) },
+                    onRemoveRoot: { root in removeRoot(root) }
+                )
+                .frame(width: 240)
 
-            SkillDetailView(
-                skill: selectedSkill,
-                rootsByID: model.rootsByID,
-                agentNamesByID: agentNamesByID,
-                onOperation: { operation, skill in
-                    startOperation(operation, skill: skill)
-                },
-                onRevealInFinder: { skill in
-                    do {
-                        try model.revealDocumentInFinder(for: skill)
-                    } catch {
-                        revealError = (error as? LocalizedError)?.errorDescription
-                            ?? String(describing: error)
-                    }
+                if currentDestination == .duplicates {
+                    DuplicateGroupsView(
+                        groups: model.duplicateGroups,
+                        selection: model.selection,
+                        agentNamesByID: agentNamesByID,
+                        hasAuthorization: model.hasAuthorization,
+                        onRevealInFinder: { skill in reveal(skill) },
+                        onOpenInEditor: { skill in openInEditor(skill) },
+                        onIgnoreGroup: { fingerprint in
+                            _ = try? model.setDuplicateGroupIgnored(fingerprint: fingerprint, ignored: true)
+                        },
+                        onSelect: { path in selectSkill(path) }
+                    )
+                    .frame(width: 400)
+                } else if currentDestination == .links {
+                    SymlinkListView(
+                        links: symlinkSkills,
+                        selection: model.selection,
+                        agentNamesByID: agentNamesByID,
+                        onRevealInFinder: { skill in reveal(skill) },
+                        onSelect: { path in selectSkill(path) }
+                    )
+                    .frame(width: 400)
+                } else {
+                    SkillListView(
+                        selection: model.selection,
+                        searchText: $searchText,
+                        sort: $sort,
+                        title: currentDestination.title(rootsByID: model.rootsByID, definitions: model.agentDefinitions),
+                        skills: filteredSkills,
+                        allSkillCount: model.snapshots.count,
+                        hasAuthorization: model.hasAuthorization,
+                        hasActiveFilters: hasActiveFilters,
+                        refreshState: model.refreshState,
+                        agentNamesByID: agentNamesByID,
+                        onClearFilters: clearFilters,
+                        onImportProject: { chooseDestinationRoot() },
+                        onImportHome: { chooseSystemRoot() },
+                        onRevealInFinder: { skill in reveal(skill) },
+                        onOpenInEditor: { skill in openInEditor(skill) },
+                        onPrimarySelect: { path in selectSkill(path) },
+                        onArrowSelect: { path in model.selectOnly(path) }
+                    )
+                    .frame(width: 400)
                 }
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                SkillDetailView(
+                    skill: selectedSkill,
+                    rootsByID: model.rootsByID,
+                    agentNamesByID: agentNamesByID,
+                    onRevealInFinder: { skill in reveal(skill) },
+                    onOpenInEditor: { skill in openInEditor(skill) }
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
         .frame(minWidth: 1080, minHeight: 700)
         .navigationTitle(currentDestination.title(rootsByID: model.rootsByID, definitions: model.agentDefinitions))
@@ -149,67 +136,80 @@ struct RootView: View {
             .keyboardShortcut("f", modifiers: .command)
             .opacity(0)
             .accessibilityHidden(true)
+            // ⌘[ / ⌘] macOS-standard navigation shortcuts. Kept on hidden
+            // buttons so they fire even when the toolbar buttons are
+            // disabled at a stack edge.
+            Button(L10n.string("Go Back")) {
+                goBack()
+            }
+            .keyboardShortcut("[", modifiers: .command)
+            .opacity(0)
+            .accessibilityHidden(true)
+            Button(L10n.string("Go Forward")) {
+                goForward()
+            }
+            .keyboardShortcut("]", modifiers: .command)
+            .opacity(0)
+            .accessibilityHidden(true)
+        }
+        .onAppear {
+            // The stack bottom is the launch default destination; seed it
+            // once so back can traverse all the way to it.
+            guard !didSeedHistory else { return }
+            didSeedHistory = true
+            model.recordNavigation(.sidebar(destination))
+        }
+        .onChange(of: destination) { _, newValue in
+            guard !suppressingHistory else { return }
+            model.recordNavigation(.sidebar(newValue))
+        }
+        .onChange(of: searchFocused) { _, focused in
+            guard !suppressingHistory else { return }
+            if focused {
+                model.recordNavigation(.search(searchText))
+            } else {
+                // Dismissing the field ends the search session (AC-15): the
+                // session's single history entry is removed.
+                model.endSearchIfNeeded()
+            }
+        }
+        .onChange(of: searchText) { _, newValue in
+            guard !suppressingHistory, searchFocused else { return }
+            // Intermediate search-word changes rewrite the in-flight search
+            // entry in place — never a second stack push.
+            if case .search = model.backEntries.last {
+                model.recordNavigation(.search(newValue))
+            }
         }
         .languageReloading()
         .themedAppearance()
         .toolbar {
+            ToolbarItemGroup(placement: .navigation) {
+                Button(action: goBack) {
+                    Image(systemName: "chevron.backward")
+                }
+                .disabled(!model.canGoBack)
+                .help(L10n.string("Go Back"))
+                .accessibilityLabel(L10n.string("Go Back"))
+                Button(action: goForward) {
+                    Image(systemName: "chevron.forward")
+                }
+                .disabled(!model.canGoForward)
+                .help(L10n.string("Go Forward"))
+                .accessibilityLabel(L10n.string("Go Forward"))
+            }
             ToolbarItemGroup(placement: .primaryAction) {
                 searchField
                 themeToggle
             }
         }
-        .sheet(isPresented: onboardingBinding) {
-            OnboardingView()
-        }
-
-        .sheet(item: pendingOperationBinding) { plan in
-            OperationConfirmationView(
-                plan: plan,
-                isOperating: model.isOperating,
-                onConflictChange: model.updatePendingConflictPolicy,
-                onCancel: model.cancelPendingFileOperation,
-                onConfirm: { replacementConfirmed in
-                    Task {
-                        await model.executePendingFileOperation(
-                            replacementConfirmed: replacementConfirmed
-                        )
-                    }
-                }
-            )
-            .id(plan.id)
-        }
-
-        .sheet(item: pendingBatchBinding) { batch in
-            BatchOperationConfirmationView(
-                batch: batch,
-                isOperating: model.isOperating,
-                onCancel: model.cancelPendingBatchOperation,
-                onConfirm: {
-                    Task {
-                        await model.executePendingBatchOperation()
-                        model.selectOnly(nil)
-                    }
-                }
-            )
-            .id(batch.id)
-        }
-
         .alert(
-            L10n.string("File Operation Failed"),
-            isPresented: operationErrorBinding
+            L10n.string("Unable to Open"),
+            isPresented: openErrorBinding
         ) {
-            Button(L10n.string("OK")) { model.operationError = nil }
+            Button(L10n.string("OK")) { openError = nil }
         } message: {
-            Text(verbatim: model.operationError ?? "")
-        }
-
-        .alert(
-            L10n.string("Unable to Reveal in Finder"),
-            isPresented: revealErrorBinding
-        ) {
-            Button(L10n.string("OK")) { revealError = nil }
-        } message: {
-            Text(verbatim: revealError ?? "")
+            Text(verbatim: openError ?? "")
         }
     }
 
@@ -262,6 +262,52 @@ struct RootView: View {
         )
     }
 
+    // MARK: Re-authorization banner
+
+    /// Top-of-window banner shown while any authorized root's bookmark no
+    /// longer resolves. With a single broken root the button goes straight
+    /// to the authorization panel (pre-selected to the lost directory) so
+    /// one click in the panel restores access; with several, it opens the
+    /// Settings directories pane to manage them together. Sandboxed apps
+    /// cannot silently re-acquire a broken bookmark — macOS requires the
+    /// user to re-pick the directory in the open panel.
+    private var authorizationBanner: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 13))
+                .foregroundStyle(AppTheme.warn)
+            Text(verbatim: L10n.string("Authorization Lost Banner"))
+                .font(AppTheme.body(13))
+                .foregroundStyle(AppTheme.foreground)
+            Spacer(minLength: 12)
+            Button(L10n.string("Re-authorize…")) {
+                reauthorizeUnhealthyRoots()
+            }
+            .buttonStyle(SettingsButtonStyle())
+            .help(L10n.string("Re-authorize Directory"))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(AppTheme.warn.opacity(0.12))
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(AppTheme.borderSoft)
+                .frame(height: 1)
+        }
+    }
+
+    /// Routes the banner's re-authorization: a single broken root opens the
+    /// authorization panel directly; multiple roots fall back to the
+    /// Settings directories pane.
+    private func reauthorizeUnhealthyRoots() {
+        let broken = model.authorizedRoots.filter { model.unhealthyRootIDs.contains($0.id) }
+        if let only = broken.count == 1 ? broken.first : nil {
+            reauthorize(only)
+        } else if !broken.isEmpty {
+            openSettingsDirectories()
+        }
+    }
+
     // MARK: Derived state
 
     private var hasActiveFilters: Bool {
@@ -274,6 +320,7 @@ struct RootView: View {
         counts[.all] = model.snapshots.count
         counts[.global] = SkillQuery(scope: .global).apply(to: model.snapshots, rootsByID: model.rootsByID).count
         counts[.duplicates] = DuplicateSkillGrouper.memberCount(in: model.duplicateGroups)
+        counts[.links] = model.snapshots.filter { $0.resolvedTarget != nil }.count
         for root in model.authorizedRoots {
             switch root.kind {
             case .home, .system:
@@ -296,86 +343,87 @@ struct RootView: View {
         searchText = ""
     }
 
+    // MARK: Navigation
+
+    /// An explicit click (list row, duplicate member, symlink row) selects
+    /// the Skill and records the detail as a history step. Clicking a search
+    /// result first ends the search session, so back goes straight to the
+    /// pre-search state (AC-15). Keyboard moves go through `onArrowSelect`
+    /// and never grow the stack.
+    private func selectSkill(_ path: String) {
+        model.selectOnly(path)
+        model.endSearchIfNeeded()
+        model.recordNavigation(.skillDetail(SkillSelection(path: path)))
+    }
+
+    private func goBack() {
+        if let entry = model.goBack() {
+            apply(entry)
+        } else {
+            restoreDefault()
+        }
+    }
+
+    private func goForward() {
+        if let entry = model.goForward() {
+            apply(entry)
+        }
+    }
+
+    private func apply(_ entry: NavigationEntry) {
+        suppressingHistory = true
+        if let destination = entry.sidebarDestination {
+            self.destination = destination
+            searchText = ""
+            model.selectOnly(nil)
+        } else if let query = entry.searchQuery {
+            searchText = query
+            model.selectOnly(nil)
+        } else if let selection = entry.skillSelection {
+            model.selectOnly(selection.path)
+        }
+        suppressingHistory = false
+    }
+
+    /// At the stack bottom, back restores the All Skills view.
+    private func restoreDefault() {
+        suppressingHistory = true
+        destination = .all
+        searchText = ""
+        model.selectOnly(nil)
+        suppressingHistory = false
+    }
+
+    // MARK: Reveal / open
+
+    private func reveal(_ skill: SkillSnapshot) {
+        do {
+            try model.revealDocumentInFinder(for: skill)
+        } catch {
+            openError = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
+        }
+    }
+
+    private func openInEditor(_ skill: SkillSnapshot) {
+        do {
+            try model.openDocumentInDefaultEditor(for: skill)
+        } catch {
+            openError = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
+        }
+    }
+
     // MARK: Bindings
 
-    private var onboardingBinding: Binding<Bool> {
+    private var openErrorBinding: Binding<Bool> {
         Binding(
-            get: { model.showsOnboarding },
-            set: { presented in
-                if !presented { model.dismissOnboarding() }
-            }
-        )
-    }
-
-    private var pendingOperationBinding: Binding<FileOperationPlan?> {
-        Binding(
-            get: { model.pendingOperationPlan },
-            set: { value in
-                if value == nil { model.cancelPendingFileOperation() }
-            }
-        )
-    }
-
-    private var pendingBatchBinding: Binding<PendingBatchOperation?> {
-        Binding(
-            get: { model.pendingBatchOperation },
-            set: { value in
-                if value == nil { model.cancelPendingBatchOperation() }
-            }
-        )
-    }
-
-    private var operationErrorBinding: Binding<Bool> {
-        Binding(
-            get: { model.operationError != nil },
+            get: { openError != nil },
             set: { isPresented in
-                if !isPresented { model.operationError = nil }
+                if !isPresented { openError = nil }
             }
         )
     }
 
-    private var revealErrorBinding: Binding<Bool> {
-        Binding(
-            get: { revealError != nil },
-            set: { isPresented in
-                if !isPresented { revealError = nil }
-            }
-        )
-    }
-
-    // MARK: Import / operations
-
-    /// Routes a context-menu operation: when the tapped row belongs to a
-    /// multi-selection, the operation runs as a batch over every selected
-    /// Skill; otherwise it is the ordinary single-Skill flow.
-    private func startOperation(_ operation: FileOperationKind, skill: SkillSnapshot) {
-        let skills = batchTargets(containing: skill, operation: operation)
-        if skills.count > 1 {
-            if operation == .delete {
-                Task { await model.planBatchFileOperation(operation, for: skills) }
-            } else {
-                chooseBatchDestination(for: operation, skills: skills)
-            }
-            return
-        }
-        if operation == .delete {
-            Task { await model.planFileOperation(operation, for: skill) }
-        } else {
-            chooseDestination(for: operation, skill: skill)
-        }
-    }
-
-    private func batchTargets(
-        containing skill: SkillSnapshot,
-        operation: FileOperationKind
-    ) -> [SkillSnapshot] {
-        guard operation == .copy || operation == .move || operation == .delete,
-              model.hasMultiSelection,
-              model.selectedPaths.contains(skill.path) else {
-            return [skill]
-        }
-        return model.multiSelectedSkills
-    }
+    // MARK: Directories
 
     private func reauthorize(_ root: AuthorizedRootSnapshot) {
         let panel = NSOpenPanel()
@@ -393,7 +441,7 @@ struct RootView: View {
     /// when the removed root is the one being browsed, fall back to the
     /// All Skills list instead of an empty column titled by a dead root.
     private func removeRoot(_ root: AuthorizedRootSnapshot) {
-        destination = BrowserDestination.fallback(afterRemoving: root.id, from: destination ?? .all)
+        destination = BrowserDestination.fallback(afterRemoving: root.id, from: destination)
         Task { await model.revokeAuthorization(id: root.id) }
     }
 
@@ -425,59 +473,12 @@ struct RootView: View {
         return panel.runModal() == .OK ? panel.url?.standardizedFileURL : nil
     }
 
-    private func chooseBatchDestination(for operation: FileOperationKind, skills: [SkillSnapshot]) {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.canCreateDirectories = false
-        // Any user-picked folder is a valid batch copy/move target — no
-        // registered Skill root required.
-        panel.title = L10n.string("Choose a destination folder")
-        panel.prompt = operation == .copy
-            ? L10n.string("Copy To Current Folder")
-            : L10n.string("Move To Current Folder")
-        panel.message = L10n.string("Choose a destination folder")
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        Task {
-            await model.planBatchFileOperation(
-                operation,
-                for: skills,
-                destinationRootURL: url,
-                destinationIsArbitrary: true
-            )
-        }
-    }
-
-    private func chooseDestination(for operation: FileOperationKind, skill: SkillSnapshot) {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.canCreateDirectories = false
-        if operation == .copy || operation == .move {
-            // Any user-picked folder is a valid copy/move target — no
-            // registered Skill root required.
-            panel.title = L10n.string("Choose a destination folder")
-            panel.prompt = operation == .copy
-                ? L10n.string("Copy To Current Folder")
-                : L10n.string("Move To Current Folder")
-            panel.message = L10n.string("Choose a destination folder")
-        } else {
-            panel.title = L10n.string("Choose Skill Root")
-            panel.prompt = L10n.string("Choose Skill Root")
-            panel.message = L10n.string("Choose a registered Skill root")
-        }
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        Task {
-            await model.planFileOperation(
-                operation,
-                for: skill,
-                destinationRootURL: url,
-                conflictPolicy: .keepBoth,
-                destinationIsArbitrary: operation == .copy || operation == .move
-            )
-        }
+    /// Opens the Settings scene on the directories pane — used by the
+    /// re-authorization banner.
+    private func openSettingsDirectories() {
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        NotificationCenter.default.post(name: .openSettingsTab, object: SettingsTab.directories)
     }
 }
 
@@ -489,6 +490,7 @@ extension BrowserDestination {
         case .all: L10n.string("All Skills")
         case .global: L10n.string("Global Skills")
         case .duplicates: L10n.string("Duplicate Skills")
+        case .links: L10n.string("Symbolic Links")
         case .system(let rootID), .project(let rootID):
             rootsByID[rootID]?.displayName ?? rootID
         case .agent(let id):

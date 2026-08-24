@@ -5,13 +5,14 @@ enum BrowserDestination: Hashable {
     case all
     case global
     case duplicates
+    case links
     case system(rootID: String)
     case project(rootID: String)
     case agent(id: String)
 
     var queryScope: SkillQuery.Scope {
         switch self {
-        case .all, .agent, .duplicates:
+        case .all, .agent, .duplicates, .links:
             .all
         case .global:
             .global
@@ -44,7 +45,7 @@ enum BrowserDestination: Hashable {
 /// background, section headings, icon rows with trailing counts, and a
 /// footer with 设置 / 添加项目 links.
 struct BrowserSidebar: View {
-    @Binding var destination: BrowserDestination?
+    @Binding var destination: BrowserDestination
     let roots: [AuthorizedRootSnapshot]
     let definitions: [AgentDefinition]
     let detectedAgentIDs: Set<String>
@@ -52,7 +53,6 @@ struct BrowserSidebar: View {
     var unhealthyRootIDs: Set<String> = []
     let counts: [BrowserDestination: Int]
     var onAddProject: () -> Void
-    var onDrop: ((SkillDragPayload, URL) -> Void)?
     var onReauthorize: ((AuthorizedRootSnapshot) -> Void)?
     var onRemoveRoot: ((AuthorizedRootSnapshot) -> Void)?
 
@@ -136,7 +136,8 @@ struct BrowserSidebar: View {
                 VStack(alignment: .leading, spacing: 20) {
                     mainSection
                     unhealthySection
-                    directoriesSection
+                    systemSection
+                    projectsSection
                     agentsSection
                 }
                 .padding(.horizontal, 8)
@@ -180,6 +181,14 @@ struct BrowserSidebar: View {
             ) {
                 destination = .duplicates
             }
+            SidebarItem(
+                title: L10n.string("Symbolic Links"),
+                glyph: Image(systemName: "link"),
+                count: counts[.links],
+                isActive: destination == .links
+            ) {
+                destination = .links
+            }
         }
     }
 
@@ -208,15 +217,45 @@ struct BrowserSidebar: View {
         }
     }
 
+    /// System directories (the home root and declared system roots) appear
+    /// only when their scan actually found Skills — the sidebar shows
+    /// nothing for empty directories.
+    static func visibleSystemRoots(
+        _ roots: [AuthorizedRootSnapshot],
+        counts: [BrowserDestination: Int]
+    ) -> [AuthorizedRootSnapshot] {
+        roots.filter { (counts[.system(rootID: $0.id)] ?? 0) > 0 }
+    }
+
+    /// Project directories likewise appear only when they hold Skills.
+    static func visibleProjectRoots(
+        _ roots: [AuthorizedRootSnapshot],
+        counts: [BrowserDestination: Int]
+    ) -> [AuthorizedRootSnapshot] {
+        roots.filter { (counts[.project(rootID: $0.id)] ?? 0) > 0 }
+    }
+
     @ViewBuilder
-    private var directoriesSection: some View {
-        if !systemRoots.isEmpty || !projects.isEmpty {
+    private var systemSection: some View {
+        let visible = Self.visibleSystemRoots(systemRoots, counts: counts)
+        if !visible.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
-                sideHeading(L10n.string("Directories"))
-                ForEach(systemRoots) { root in
+                sideHeading(L10n.string("System Directories"))
+                ForEach(visible) { root in
                     systemRow(root)
                 }
-                ForEach(projects) { project in
+            }
+        }
+    }
+
+    /// Project directories likewise appear only when they hold Skills.
+    @ViewBuilder
+    private var projectsSection: some View {
+        let visible = Self.visibleProjectRoots(projects, counts: counts)
+        if !visible.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                sideHeading(L10n.string("Projects"))
+                ForEach(visible) { project in
                     projectRow(project)
                 }
             }
@@ -225,9 +264,15 @@ struct BrowserSidebar: View {
 
     @ViewBuilder
     private var agentsSection: some View {
-        if !agents.isEmpty {
-            VStack(alignment: .leading, spacing: 0) {
-                sideHeading(L10n.string("Agents"))
+        VStack(alignment: .leading, spacing: 0) {
+            sideHeading(L10n.string("Agents"))
+            if agents.isEmpty {
+                Text(verbatim: L10n.string("No Agents Detected"))
+                    .font(AppTheme.body(12))
+                    .foregroundStyle(AppTheme.muted)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+            } else {
                 ForEach(agents) { agent in
                     SidebarItem(
                         title: agent.displayName,
@@ -264,11 +309,6 @@ struct BrowserSidebar: View {
         ) {
             destination = .system(rootID: root.id)
         }
-        .dropDestination(for: SkillDragPayload.self) { items, _ in
-            guard let item = items.first, let onDrop else { return false }
-            onDrop(item, root.url)
-            return true
-        }
         .contextMenu {
             Button(L10n.string("Remove Directory"), role: .destructive) {
                 onRemoveRoot?(root)
@@ -286,11 +326,6 @@ struct BrowserSidebar: View {
             isActive: destination == .project(rootID: project.id)
         ) {
             destination = .project(rootID: project.id)
-        }
-        .dropDestination(for: SkillDragPayload.self) { items, _ in
-            guard let item = items.first, let onDrop else { return false }
-            onDrop(item, project.url)
-            return true
         }
         .contextMenu {
             Button(L10n.string("Remove Directory"), role: .destructive) {

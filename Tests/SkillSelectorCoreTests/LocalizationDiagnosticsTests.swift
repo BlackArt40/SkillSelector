@@ -104,8 +104,8 @@ final class LocalizationDiagnosticsTests: XCTestCase {
         XCTAssertTrue(diagnosticKeys.isSubset(of: Set(english.keys)))
         XCTAssertTrue(diagnosticKeys.isSubset(of: Set(chinese.keys)))
         XCTAssertEqual(Set(english.keys), Set(chinese.keys))
-        XCTAssertEqual(english["SkillSelector Settings"], "SkillSelector Settings")
-        XCTAssertEqual(chinese["SkillSelector Settings"], "SkillSelector 设置")
+        XCTAssertEqual(english["Settings"], "Settings")
+        XCTAssertEqual(chinese["Settings"], "设置")
     }
 
     func testAvailableLocalizationsIncludesEnglishAndChinese() {
@@ -137,26 +137,5 @@ final class LocalizationDiagnosticsTests: XCTestCase {
         return try XCTUnwrap(
             PropertyListSerialization.propertyList(from: data, format: nil) as? [String: String]
         )
-    }
-}
-
-extension LocalizationDiagnosticsTests {
-    func testCopyMovePanelPromptsFollowUILanguage() {
-        let defaults = UserDefaults.standard
-        let original = defaults.string(forKey: "SkillSelector.preferredLanguage")
-
-        defaults.set("zh-Hans", forKey: "SkillSelector.preferredLanguage")
-        XCTAssertEqual(L10n.string("Copy To Current Folder"), "复制到当前文件夹")
-        XCTAssertEqual(L10n.string("Move To Current Folder"), "移动到当前文件夹")
-
-        defaults.set("en", forKey: "SkillSelector.preferredLanguage")
-        XCTAssertEqual(L10n.string("Copy To Current Folder"), "Copy to Current Folder")
-        XCTAssertEqual(L10n.string("Move To Current Folder"), "Move to Current Folder")
-
-        if let original {
-            defaults.set(original, forKey: "SkillSelector.preferredLanguage")
-        } else {
-            defaults.removeObject(forKey: "SkillSelector.preferredLanguage")
-        }
     }
 }

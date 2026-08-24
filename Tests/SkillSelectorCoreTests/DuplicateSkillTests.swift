@@ -36,38 +36,71 @@ final class SkillContentFingerprintTests: XCTestCase {
         return directory
     }
 
+    private func fingerprint(of directory: URL) throws -> String {
+        try SkillContentFingerprint.compute(
+            entryFileURL: directory.appending(path: "SKILL.md")
+        )
+    }
+
+    // AC-1: identical entry bodies in different paths group together.
     func testIdenticalContentInDifferentDirectoriesSharesAFingerprint() throws {
         let content = "---\nname: demo\ndescription: same everywhere\n---\n# demo\nshared body\n"
         let first = try makeSkill(name: "demo-a", skillMDContent: content, extra: "echo hi\n")
         let second = try makeSkill(name: "demo-b", skillMDContent: content, extra: "echo hi\n")
 
         XCTAssertEqual(
-            try SkillContentFingerprint.compute(rootDirectory: first),
-            try SkillContentFingerprint.compute(rootDirectory: second)
+            try fingerprint(of: first),
+            try fingerprint(of: second)
         )
     }
 
+    // AC-2: frontmatter differences (name/description) never participate.
+    func testFrontmatterDifferencesDoNotChangeTheFingerprint() throws {
+        let first = try makeSkill(
+            name: "demo-a",
+            skillMDContent: "---\nname: alpha\ndescription: first\n---\n# shared\nbody\n"
+        )
+        let second = try makeSkill(
+            name: "demo-b",
+            skillMDContent: "---\nname: beta\ndescription: second\n---\n# shared\nbody\n"
+        )
+
+        XCTAssertEqual(
+            try fingerprint(of: first),
+            try fingerprint(of: second)
+        )
+    }
+
+    // AC-3: different bodies produce different fingerprints.
     func testDifferentContentProducesDifferentFingerprints() throws {
         let first = try makeSkill(name: "demo-a", skillMDContent: "---\nname: d\n---\nbody one")
         let second = try makeSkill(name: "demo-b", skillMDContent: "---\nname: d\n---\nbody two")
 
         XCTAssertNotEqual(
-            try SkillContentFingerprint.compute(rootDirectory: first),
-            try SkillContentFingerprint.compute(rootDirectory: second)
+            try fingerprint(of: first),
+            try fingerprint(of: second)
         )
     }
 
-    func testAddingAFileChangesTheFingerprint() throws {
+    // AC-4: sibling files (docs/, templates/, scripts/) never participate.
+    func testSubfilesDoNotChangeTheFingerprint() throws {
         let directory = try makeSkill(name: "demo")
-        let before = try SkillContentFingerprint.compute(rootDirectory: directory)
+        let before = try fingerprint(of: directory)
 
         try "notes".write(
             to: directory.appending(path: "NOTES.txt"),
             atomically: true,
             encoding: .utf8
         )
+        let subdirectory = directory.appending(path: "docs", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: subdirectory, withIntermediateDirectories: true)
+        try "extra documentation".write(
+            to: subdirectory.appending(path: "README.md"),
+            atomically: true,
+            encoding: .utf8
+        )
 
-        XCTAssertNotEqual(before, try SkillContentFingerprint.compute(rootDirectory: directory))
+        XCTAssertEqual(before, try fingerprint(of: directory))
     }
 
     func testCopiesKeepByteLevelStabilityAcrossCopyOperations() throws {
@@ -76,14 +109,32 @@ final class SkillContentFingerprintTests: XCTestCase {
         try FileManager.default.copyItem(at: original, to: copy)
 
         XCTAssertEqual(
-            try SkillContentFingerprint.compute(rootDirectory: original),
-            try SkillContentFingerprint.compute(rootDirectory: copy)
+            try fingerprint(of: original),
+            try fingerprint(of: copy)
+        )
+    }
+
+    // A skill whose entry is only frontmatter hashes its empty body; two
+    // such skills still share a fingerprint (they are byte-identical in
+    // the meaningful sense the duplicates view hunts for).
+    func testFrontmatterOnlySkillsShareAnEmptyBodyFingerprint() throws {
+        let first = try makeSkill(name: "a", skillMDContent: "---\nname: a\n---\n")
+        let second = try makeSkill(name: "b", skillMDContent: "---\nname: b\n---\n")
+
+        XCTAssertEqual(
+            try fingerprint(of: first),
+            try fingerprint(of: second)
         )
     }
 }
 
 final class DuplicateSkillGrouperTests: XCTestCase {
-    private func snapshot(path: String, name: String, fingerprint: String?) -> SkillSnapshot {
+    private func snapshot(
+        path: String,
+        name: String,
+        fingerprint: String?,
+        ignoredDuplicateGroup: String? = nil
+    ) -> SkillSnapshot {
         SkillSnapshot(
             path: path,
             resolvedTarget: nil,
@@ -94,7 +145,8 @@ final class DuplicateSkillGrouperTests: XCTestCase {
             rootIDs: [],
             entryFilename: "SKILL.md",
             parseDiagnostics: [],
-            contentFingerprint: fingerprint
+            contentFingerprint: fingerprint,
+            ignoredDuplicateGroup: ignoredDuplicateGroup
         )
     }
 
@@ -128,5 +180,50 @@ final class DuplicateSkillGrouperTests: XCTestCase {
 
         XCTAssertEqual(groups.count, 1)
         XCTAssertEqual(DuplicateSkillGrouper.memberCount(in: groups), 2)
+    }
+
+    // AC-6: an ignored member leaves the group.
+    func testIgnoredMembersLeaveTheGroup() {
+        let groups = DuplicateSkillGrouper.groups([
+            snapshot(path: "/a/demo", name: "demo", fingerprint: "fff", ignoredDuplicateGroup: "fff"),
+            snapshot(path: "/b/demo", name: "demo", fingerprint: "fff"),
+            snapshot(path: "/c/demo", name: "demo", fingerprint: "fff"),
+        ])
+
+        XCTAssertEqual(groups.count, 1)
+        XCTAssertEqual(groups[0].members.map(\.path), ["/b/demo", "/c/demo"])
+    }
+
+    // AC-6: a group left with a single visible member disappears.
+    func testGroupWithSingleVisibleMemberDisappears() {
+        let groups = DuplicateSkillGrouper.groups([
+            snapshot(path: "/a/demo", name: "demo", fingerprint: "fff", ignoredDuplicateGroup: "fff"),
+            snapshot(path: "/b/demo", name: "demo", fingerprint: "fff"),
+        ])
+
+        XCTAssertTrue(groups.isEmpty)
+    }
+
+    // AC-6: a fully ignored group disappears entirely.
+    func testFullyIgnoredGroupDisappears() {
+        let groups = DuplicateSkillGrouper.groups([
+            snapshot(path: "/a/demo", name: "demo", fingerprint: "fff", ignoredDuplicateGroup: "fff"),
+            snapshot(path: "/b/demo", name: "demo", fingerprint: "fff", ignoredDuplicateGroup: "fff"),
+        ])
+
+        XCTAssertTrue(groups.isEmpty)
+    }
+
+    // Ignoring one fingerprint never touches another group.
+    func testIgnoringOneGroupLeavesOthersUntouched() {
+        let groups = DuplicateSkillGrouper.groups([
+            snapshot(path: "/a/one", name: "one", fingerprint: "111", ignoredDuplicateGroup: "111"),
+            snapshot(path: "/b/one", name: "one", fingerprint: "111", ignoredDuplicateGroup: "111"),
+            snapshot(path: "/c/two", name: "two", fingerprint: "222"),
+            snapshot(path: "/d/two", name: "two", fingerprint: "222"),
+        ])
+
+        XCTAssertEqual(groups.count, 1)
+        XCTAssertEqual(groups[0].fingerprint, "222")
     }
 }

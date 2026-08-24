@@ -27,7 +27,7 @@ public struct AgentDefinition: Codable, Hashable, Identifiable, Sendable {
     public static func custom(
         displayName: String,
         globalRoots: [String],
-        projectPatterns: [String],
+        projectPatterns: [String] = [],
         entryFilename: String = "SKILL.md",
         id: String? = nil
     ) -> AgentDefinition {

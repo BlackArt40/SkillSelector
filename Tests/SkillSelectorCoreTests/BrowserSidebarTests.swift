@@ -107,5 +107,56 @@ final class BrowserSidebarTests: XCTestCase {
             BrowserDestination.fallback(afterRemoving: "root-1", from: .duplicates),
             .duplicates
         )
+        XCTAssertEqual(
+            BrowserDestination.fallback(afterRemoving: "root-1", from: .links),
+            .links
+        )
+    }
+
+    // AC-33/AC-35: system-directory entries appear only when their scan
+    // found Skills; empty authorized directories show nothing.
+    func testSystemDirectoryEntriesAppearOnlyWithSkills() {
+        let home = AuthorizedRootSnapshot(
+            id: "home-1",
+            url: URL(fileURLWithPath: "/Users/me"),
+            kind: .home
+        )
+        let emptySystem = AuthorizedRootSnapshot(
+            id: "sys-1",
+            url: URL(fileURLWithPath: "/etc/empty"),
+            kind: .system
+        )
+        let counts: [BrowserDestination: Int] = [
+            .system(rootID: "home-1"): 3,
+            .system(rootID: "sys-1"): 0,
+        ]
+        XCTAssertEqual(
+            BrowserSidebar.visibleSystemRoots([home, emptySystem], counts: counts).map(\.id),
+            ["home-1"]
+        )
+        XCTAssertTrue(BrowserSidebar.visibleSystemRoots([emptySystem], counts: counts).isEmpty)
+    }
+
+    // AC-34: project entries appear only when the project holds Skills.
+    func testProjectDirectoryEntriesAppearOnlyWithSkills() {
+        let withSkills = AuthorizedRootSnapshot(
+            id: "p-1",
+            url: URL(fileURLWithPath: "/Users/me/demo-webapp"),
+            kind: .project
+        )
+        let empty = AuthorizedRootSnapshot(
+            id: "p-2",
+            url: URL(fileURLWithPath: "/Users/me/empty-repo"),
+            kind: .project
+        )
+        let counts: [BrowserDestination: Int] = [
+            .project(rootID: "p-1"): 2,
+            .project(rootID: "p-2"): 0,
+        ]
+        XCTAssertEqual(
+            BrowserSidebar.visibleProjectRoots([withSkills, empty], counts: counts).map(\.id),
+            ["p-1"]
+        )
+        XCTAssertTrue(BrowserSidebar.visibleProjectRoots([empty], counts: counts).isEmpty)
     }
 }

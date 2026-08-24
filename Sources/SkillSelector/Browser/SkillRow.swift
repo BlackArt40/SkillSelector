@@ -7,10 +7,9 @@ struct SkillRow: View {
     let skill: SkillSnapshot
     let agentNamesByID: [String: String]
     let isActive: Bool
-    var isMultiSelected = false
     var onSelect: () -> Void
-    var onOperation: ((FileOperationKind, SkillSnapshot) -> Void)?
     var onRevealInFinder: ((SkillSnapshot) -> Void)?
+    var onOpenInEditor: ((SkillSnapshot) -> Void)?
 
     private var descriptionText: String {
         skill.localDescription ?? skill.name
@@ -38,7 +37,7 @@ struct SkillRow: View {
                                 dot: AnyView(Circle().fill(AppTheme.warn).frame(width: 6, height: 6))
                             )
                         }
-                        if skill.resolvedTarget != nil {
+                        if let target = skill.resolvedTarget {
                             BadgeDot(
                                 text: L10n.string("Link Badge"),
                                 color: AppTheme.muted,
@@ -48,6 +47,7 @@ struct SkillRow: View {
                                         .frame(width: 5, height: 5)
                                 )
                             )
+                            .help(target)
                         }
                     }
                     Text(verbatim: descriptionText)
@@ -71,44 +71,23 @@ struct SkillRow: View {
             .background(rowBackground, in: RoundedRectangle(cornerRadius: 10))
             .overlay {
                 RoundedRectangle(cornerRadius: 10)
-                    .stroke(
-                        isActive || isMultiSelected ? AppTheme.accentTintBorder : Color.clear,
-                        lineWidth: 1
-                    )
+                    .stroke(isActive ? AppTheme.accentTintBorder : Color.clear, lineWidth: 1)
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(RowHoverStyle())
         .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(isActive || isMultiSelected ? .isSelected : [])
-        .draggable(SkillDragPayload(path: skill.path, name: skill.name))
+        .accessibilityAddTraits(isActive ? .isSelected : [])
         .contextMenu {
             Button {
                 onRevealInFinder?(skill)
             } label: {
                 Label(L10n.string("Reveal Skill Document in Finder"), systemImage: "folder")
             }
-            Divider()
             Button {
-                onOperation?(.copy, skill)
+                onOpenInEditor?(skill)
             } label: {
-                Label(L10n.string("Copy"), systemImage: "document.on.document")
-            }
-            Button {
-                onOperation?(.move, skill)
-            } label: {
-                Label(L10n.string("Move"), systemImage: "folder")
-            }
-            Button {
-                onOperation?(.createSymbolicLink, skill)
-            } label: {
-                Label(L10n.string("Create Link"), systemImage: "link")
-            }
-            Divider()
-            Button(role: .destructive) {
-                onOperation?(.delete, skill)
-            } label: {
-                Label(L10n.string("Move to Trash"), systemImage: "trash")
+                Label(L10n.string("Open in Default Editor"), systemImage: "chevron.left.forwardslash.chevron.right")
             }
         }
     }
@@ -117,12 +96,8 @@ struct SkillRow: View {
         skill.agentDisplayNames(by: agentNamesByID)
     }
 
-    /// Primary selection gets the full tint; other multi-selected rows a
-    /// calmer variant of the same accent family.
     private var rowBackground: Color {
-        if isActive { return AppTheme.accentTint }
-        if isMultiSelected { return AppTheme.accentTint.opacity(0.55) }
-        return .clear
+        isActive ? AppTheme.accentTint : .clear
     }
 }
 

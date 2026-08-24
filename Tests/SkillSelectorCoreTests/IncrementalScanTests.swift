@@ -92,7 +92,10 @@ final class IncrementalScanTests: XCTestCase {
         XCTAssertNotNil(installation.scanState)
     }
 
-    func testAddedAuxiliaryFileInvalidatesTheCache() async throws {
+    /// The auxiliary file changes the directory's stat tree, so the cache
+    /// is invalidated and the installation re-reads — but the body-only
+    /// fingerprint stays stable (AC-4: sub-files never participate).
+    func testAddedAuxiliaryFileInvalidatesTheCacheButKeepsTheFingerprint() async throws {
         let directory = try writeSkill(at: ".codex/skills/demo", name: "demo", description: "same")
         let first = await SkillScanner().scan([projectRoot])
         let firstFingerprint = try XCTUnwrap(first.installations.first?.contentFingerprint)
@@ -106,7 +109,7 @@ final class IncrementalScanTests: XCTestCase {
 
         let installation = try XCTUnwrap(second.installations.first)
         XCTAssertFalse(installation.reusedCachedScan)
-        XCTAssertNotEqual(installation.contentFingerprint, firstFingerprint)
+        XCTAssertEqual(installation.contentFingerprint, firstFingerprint)
     }
 
     func testIndexPersistsScanCacheForTheNextRefresh() async throws {

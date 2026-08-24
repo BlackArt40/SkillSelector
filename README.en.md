@@ -3,29 +3,25 @@
 
 # SkillSelector
 
-A native macOS app for managing Agent Skills on your machine: browse, search, copy, move, delete, link. That's all it does — it is not a marketplace, not an installer, and there is no AI in it.
+A native macOS app for managing Agent Skills on your machine: browse, search, review duplicates and symbolic links. It is a read-only dashboard — not a marketplace, not an installer, and there is no AI in it; file operations belong to Finder.
 
 ![Main window (English)](screenshots/main-en.png)
 
 ## What it does
 
-The main window is a three-column browser: a sidebar grouped by scope and Agent, a searchable, sortable list of Skills, and a detail pane showing the selected Skill's description, frontmatter, rendered Markdown document, associated Agents, and install locations. In search, a plain term matches the name, description, and path at once; prefix it with `name:`, `desc:`, `path:`, or `agent:` to search one field only — for example `agent:cursor path:.agents`.
-
-The file operations are the everyday ones: copy, move (to any folder you pick), symbolic links, and delete. Deletion only ever moves things to the Trash — there is no permanent-delete path anywhere in the app. The list supports ⌘-click and Shift-range selection, and a multi-selection can be copied, moved, or deleted in one summarized confirmation.
+The main window is a three-column browser: a sidebar grouped by scope and Agent, a searchable, sortable list of Skills, and a detail pane showing the selected Skill's description, frontmatter, rendered Markdown document, associated Agents, and install locations. In search, a plain term matches the name, description, and path at once; prefix it with `name:`, `desc:`, `path:`, or `agent:` to search one field only — for example `agent:cursor path:.agents`. Back/forward (⌘[ / ⌘]) sit in the title bar; sidebar switches, detail openings and each search session record one history step.
 
 Also:
 
-- On first launch the app walks you through granting home-directory access (a sandboxed app can't get it silently), then scans automatically on later launches; you can add just project folders instead
-- The sidebar's "Duplicate Skills" groups content-identical copies scattered across Agents by content fingerprint, which makes tidying up straightforward; directories whose authorization broke land in "Needs re-authorization" with a one-click fix
-- Sidebar directories have a right-click Remove; the custom Agent editor includes a project-pattern dry run that previews which directories a pattern will hit before you save
+- Authorization is never forced: the app opens to an empty state you can browse, and a prominent button starts the scan; later launches auto-scan, or you can add just project folders
+- The sidebar's "Duplicate Skills" groups content-identical copies by body-only fingerprint (SKILL.md, ignoring frontmatter) — mark a whole group ignored and the choice survives restarts; directories whose authorization broke land in a top banner and "Needs re-authorization" with a one-click fix
+- The sidebar's "Symbolic Links" lists every link installation (source → target) and highlights broken targets
+- Project / system-directory entries appear only when they hold Skills; "All Skills", "Global Skills", "Duplicates", "Symbolic Links" and "Agents" are always visible
 - Importing a folder scans that folder only — the Skill list appears right away instead of after a wait
-- Custom Agents export to JSON and import on another machine
 - The diagnostics report can be viewed in-app (redacted exactly like the export) or exported as JSON
-- SKILL.md files stay read-only — reveal in Finder or open in your default editor
+- SKILL.md files stay read-only — reveal in Finder or open in your default editor; the app performs no copy, move, delete, or link operations
 - Light/dark toggle in the title bar, or follow the system
 - English and Simplified Chinese, following the system language
-
-![First-launch guide (English)](screenshots/onboarding-en.png)
 
 ![Duplicate Skills (English)](screenshots/duplicates-en.png)
 

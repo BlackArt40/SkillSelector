@@ -33,11 +33,6 @@ struct SkillSelection: Hashable, Identifiable {
 @MainActor
 @Observable
 final class AppModel {
-    /// Upper bound for a custom-Agent transfer file (audit F-10): imports
-    /// are user-picked, but an accidental multi-GB pick should not be read
-    /// into memory wholesale.
-    static let maximumImportBytes = 10 * 1024 * 1024
-
     private let refresher: IndexRefresher
     private let index: SkillIndex
     private let bookmarks: BookmarkStore?
@@ -48,7 +43,6 @@ final class AppModel {
     private let defaults: UserDefaults
     private let diagnosticStore: DiagnosticStore
     private let homeDirectory: URL
-    let fileOperations: FileOperationCoordinator
     /// Test seam: pins the sandbox verdict that `isSandboxed` reads from the
     /// process environment, so unit tests can exercise the sandboxed path.
     var environmentIsSandboxed: Bool?
@@ -61,30 +55,21 @@ final class AppModel {
 
     var refreshState: RefreshState = .idle
     var selection: SkillSelection?
-    /// Multi-select set for batch operations. Always contains the primary
-    /// selection's path when one exists.
-    private(set) var selectedPaths: Set<String> = []
-    private var selectionAnchor: String?
-    private(set) var showsOnboarding = false
     private(set) var snapshots: [SkillSnapshot] = []
     private(set) var authorizedRoots: [AuthorizedRootSnapshot] = []
     private(set) var rootsByID: [String: AuthorizedRootSnapshot] = [:]
     private(set) var agentDefinitions: [AgentDefinition]
     private(set) var customAgentDefinitions: [AgentDefinition]
+    /// Fine-grained navigation history. Views record actions through
+    /// `recordNavigation`; they never mutate the stacks directly.
+    private(set) var backEntries: [NavigationEntry] = []
+    private(set) var forwardEntries: [NavigationEntry] = []
     var autoScanHome: Bool {
         didSet { defaults.set(autoScanHome, forKey: Self.autoScanHomeDefaultsKey) }
     }
     private(set) var manuallyEnabledAgentIDs: Set<String> {
         didSet { defaults.set(manuallyEnabledAgentIDs.sorted(), forKey: Self.manuallyEnabledAgentsDefaultsKey) }
     }
-
-    var pendingOperationPlan: FileOperationPlan? { fileOperations.pendingOperationPlan }
-    var pendingBatchOperation: PendingBatchOperation? { fileOperations.pendingBatch }
-    var operationError: String? {
-        get { fileOperations.operationError }
-        set { fileOperations.operationError = newValue }
-    }
-    var isOperating: Bool { fileOperations.isOperating }
 
     init(
         refresher: IndexRefresher,
@@ -117,13 +102,6 @@ final class AppModel {
         manuallyEnabledAgentIDs = Set(defaults.stringArray(forKey: Self.manuallyEnabledAgentsDefaultsKey) ?? [])
         agentDefinitions = effectiveRegistry.definitions
         refresher.updateRegistry(effectiveRegistry)
-        fileOperations = FileOperationCoordinator(
-            bookmarks: bookmarks,
-            refresher: refresher,
-            index: index,
-            diagnosticStore: diagnosticStore
-        )
-        fileOperations.owner = self
         do {
             try reloadSnapshot()
         } catch {
@@ -151,27 +129,6 @@ final class AppModel {
         } catch {
             refreshState = .failed(String(describing: error))
         }
-    }
-
-    /// Whether the first-launch guide is eligible: it has not been shown
-    /// yet and no folder is authorized. Upgrades that already carry roots
-    /// never see it, and non-sandboxed dev builds authorize the home
-    /// directory during the launch check before this is consulted.
-    var shouldShowOnboarding: Bool {
-        !defaults.bool(forKey: Self.onboardingShownDefaultsKey) && !hasAuthorization
-    }
-
-    /// Presents the onboarding sheet if eligible. Called after the launch
-    /// check so the sheet cannot flash in builds that authorize silently.
-    func presentOnboardingIfNeeded() {
-        showsOnboarding = shouldShowOnboarding
-    }
-
-    /// Closes the onboarding sheet and records it as shown, so both
-    /// completing and skipping the guide stop it from returning.
-    func dismissOnboarding() {
-        showsOnboarding = false
-        defaults.set(true, forKey: Self.onboardingShownDefaultsKey)
     }
 
     /// Agents flagged legacy in the registry (currently Roo Code). They stay
@@ -267,12 +224,6 @@ final class AppModel {
             return
         }
         await waitForActiveRefresh()
-        guard fileOperations.pendingOperationPlan == nil,
-              fileOperations.pendingBatch == nil,
-              !fileOperations.isOperating else {
-            operationError = L10n.string("Finish the current file operation first.")
-            return
-        }
         do {
             // The home root is unique: the auto-scan already authorizes the
             // user's home directory, and scanning it covers every declared
@@ -304,7 +255,6 @@ final class AppModel {
         guard let bookmarks,
               let root = authorizedRoots.first(where: { $0.id == id }) else { return }
         await waitForActiveRefresh()
-        guard !fileOperationCommandsDisabled else { return }
         do {
             try index.apply(report: ScanReport(
                 roots: [ScannedRoot(
@@ -346,7 +296,6 @@ final class AppModel {
     func saveCustomAgent(
         displayName: String,
         globalRoots: [String],
-        projectPatterns: [String],
         entryFilename: String,
         existingID: String? = nil
     ) throws {
@@ -360,8 +309,7 @@ final class AppModel {
         }
 
         let resolvedRoots = normalizedLines(globalRoots)
-        let resolvedPatterns = normalizedLines(projectPatterns)
-        for template in resolvedRoots + resolvedPatterns {
+        for template in resolvedRoots {
             let stripped = template.replacingOccurrences(of: "*", with: "")
                 .trimmingCharacters(in: .whitespaces)
             guard template != "/", template != "~", !stripped.isEmpty else {
@@ -372,7 +320,6 @@ final class AppModel {
         let definition = AgentDefinition.custom(
             displayName: name,
             globalRoots: resolvedRoots,
-            projectPatterns: resolvedPatterns,
             entryFilename: finalEntry,
             id: existingID
         )
@@ -387,77 +334,6 @@ final class AppModel {
     func removeCustomAgent(id: String) throws {
         try customAgentStore.remove(id: id)
         try reloadAgentDefinitions()
-    }
-
-    /// Writes the custom Agent definitions to a local JSON file so they can
-    /// move to another machine (UserDefaults stays behind otherwise).
-    func exportCustomAgents(to url: URL) throws {
-        try CustomAgentTransfer().archive(customAgentDefinitions).write(to: url, options: .atomic)
-    }
-
-    /// Imports definitions from a transfer file. Definitions whose id
-    /// already exists are skipped untouched; new ones are appended.
-    /// Built-in ids are never overwritten by an import (audit R5), and
-    /// oversized files are rejected before any bytes are read (audit F-10).
-    func importCustomAgents(from url: URL) throws -> (imported: Int, skipped: Int) {
-        guard let fileSize = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
-              fileSize <= Self.maximumImportBytes else {
-            throw CustomAgentTransferError.unreadableFile("Import file exceeds the \(Self.maximumImportBytes / (1024 * 1024)) MiB limit")
-        }
-        let candidates = try CustomAgentTransfer().parse(Data(contentsOf: url))
-        let existing = Set(customAgentDefinitions.map(\.id))
-        let builtInIDs = registry.bundledDefinitionIDs
-        var imported = 0
-        for candidate in candidates where !existing.contains(candidate.id) {
-            guard !builtInIDs.contains(candidate.id) else { continue }
-            try customAgentStore.insert(candidate)
-            imported += 1
-        }
-        if imported > 0 {
-            try reloadAgentDefinitions()
-        }
-        return (imported, candidates.count - imported)
-    }
-
-    /// Previews which directories the draft project patterns would match in
-    /// the authorized project folders. Read-only: nothing is indexed or
-    /// refreshed. Security-scoped accesses are resolved on the main actor and
-    /// held for the duration of the background walk.
-    func dryRunProjectPatterns(
-        patterns: [String],
-        entryFilename: String
-    ) async -> PatternDryRunReport {
-        guard let bookmarks else {
-            return PatternDryRunReport(matches: [], skippedRootPaths: [])
-        }
-        let projectRoots = authorizedRoots.filter { $0.kind == .project }
-        guard !projectRoots.isEmpty else {
-            return PatternDryRunReport(matches: [], skippedRootPaths: [])
-        }
-
-        var accesses: [AuthorizedRootAccess] = []
-        var unresolvablePaths: [String] = []
-        for root in projectRoots {
-            do {
-                accesses.append(try bookmarks.resolve(id: root.id))
-            } catch {
-                unresolvablePaths.append(root.url.path)
-            }
-        }
-        defer { accesses.forEach { $0.lease.close() } }
-
-        let roots = accesses.map(\.root)
-        let runner = PatternDryRunner()
-        let report = await Task.detached(priority: .userInitiated) {
-            runner.run(patterns: patterns, roots: roots, entryFilename: entryFilename)
-        }.value
-        guard unresolvablePaths.isEmpty else {
-            return PatternDryRunReport(
-                matches: report.matches,
-                skippedRootPaths: report.skippedRootPaths + unresolvablePaths
-            )
-        }
-        return report
     }
 
     func exportDiagnostics(to url: URL) async throws {
@@ -494,11 +370,6 @@ final class AppModel {
     }
 
     private func refresh(selectedRootIDs: Set<String>?) async {
-        guard fileOperations.pendingOperationPlan == nil,
-              fileOperations.pendingBatch == nil,
-              !fileOperations.isOperating else {
-            return
-        }
         if let activeRefresh {
             await activeRefresh.task.value
             clearRefresh(id: activeRefresh.id)
@@ -545,67 +416,6 @@ final class AppModel {
             }
         }
         unhealthyRootIDs = unhealthy
-    }
-
-    var fileOperationCommandsDisabled: Bool {
-        fileOperations.isOperating
-            || fileOperations.pendingOperationPlan != nil
-            || fileOperations.pendingBatch != nil
-            || activeRefresh != nil
-    }
-
-
-
-    func planFileOperation(
-        _ operation: FileOperationKind,
-        for skill: SkillSnapshot,
-        destinationRootURL: URL? = nil,
-        conflictPolicy: FileConflictPolicy = .keepBoth,
-        destinationIsArbitrary: Bool = false
-    ) async {
-        await waitForActiveRefresh()
-        await fileOperations.plan(
-            operation,
-            for: skill,
-            destinationRootURL: destinationRootURL,
-            conflictPolicy: conflictPolicy,
-            destinationIsArbitrary: destinationIsArbitrary
-        )
-    }
-
-    func updatePendingConflictPolicy(_ policy: FileConflictPolicy) {
-        fileOperations.updateConflictPolicy(policy)
-    }
-
-    func cancelPendingFileOperation() {
-        fileOperations.cancelPending()
-    }
-
-    func executePendingFileOperation(replacementConfirmed: Bool) async {
-        await fileOperations.execute(replacementConfirmed: replacementConfirmed)
-    }
-
-    func planBatchFileOperation(
-        _ operation: FileOperationKind,
-        for skills: [SkillSnapshot],
-        destinationRootURL: URL? = nil,
-        destinationIsArbitrary: Bool = false
-    ) async {
-        await waitForActiveRefresh()
-        await fileOperations.planBatch(
-            operation,
-            for: skills,
-            destinationRootURL: destinationRootURL,
-            destinationIsArbitrary: destinationIsArbitrary
-        )
-    }
-
-    func cancelPendingBatchOperation() {
-        fileOperations.cancelPendingBatch()
-    }
-
-    func executePendingBatchOperation() async {
-        await fileOperations.executePendingBatch()
     }
 
     func loadDocument(for skill: SkillSnapshot) async throws -> SkillDocument {
@@ -679,7 +489,11 @@ final class AppModel {
         let targets = pending.map { skill in
             // The scanner hashes the resolved target of a symlink, not the
             // logical path; mirror that so fingerprints agree.
-            (path: skill.path, directory: skill.resolvedTarget ?? skill.path)
+            (
+                path: skill.path,
+                directory: skill.resolvedTarget ?? skill.path,
+                entryFilename: skill.entryFilename
+            )
         }
         let outcome = await Task.detached(priority: .utility) {
             () -> (fingerprints: [String: String], failures: [String]) in
@@ -689,7 +503,8 @@ final class AppModel {
                 if Task.isCancelled { break }
                 do {
                     fingerprints[target.path] = try SkillContentFingerprint.compute(
-                        rootDirectory: URL(fileURLWithPath: target.directory)
+                        entryFileURL: URL(fileURLWithPath: target.directory)
+                            .appendingPathComponent(target.entryFilename)
                     )
                 } catch {
                     failures.append(target.path)
@@ -749,7 +564,6 @@ final class AppModel {
 
     private static let autoScanHomeDefaultsKey = "SkillSelector.autoScanHome"
     private static let manuallyEnabledAgentsDefaultsKey = "SkillSelector.manuallyEnabledAgents"
-    private static let onboardingShownDefaultsKey = "SkillSelector.onboardingShown"
     private static let rootNameDefaultsKeyPrefix = "SkillSelector.rootName."
 
     private func reloadAgentDefinitions() throws {
@@ -832,32 +646,77 @@ final class AppModel {
         authorizedRoots = updatedRoots
         rootsByID = Dictionary(updatedRoots.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         reloadBookmarkHealth()
-        selectedPaths = selectedPaths.filter { path in
-            updatedSnapshots.contains { $0.path == path }
-        }
         if let selection,
            !updatedSnapshots.contains(where: { $0.path == selection.path }) {
-            self.selection = selectedPaths.sorted().first.map(SkillSelection.init(path:))
-        }
-        if let selectionAnchor,
-           !updatedSnapshots.contains(where: { $0.path == selectionAnchor }) {
-            self.selectionAnchor = nil
+            self.selection = nil
         }
         scheduleFingerprintBackfillIfNeeded()
     }
 }
 
-extension AppModel: FileOperationCoordinatorOwner {
-    func updateSelection(to path: String?) {
-        selectOnly(path)
+// MARK: - Navigation history
+
+extension AppModel {
+    var canGoBack: Bool { !backEntries.isEmpty }
+    var canGoForward: Bool { !forwardEntries.isEmpty }
+
+    /// Records a navigation action. Re-recording a search session replaces
+    /// the in-flight search entry instead of pushing a second one, so
+    /// intermediate search-word changes never grow the stack. Any forward
+    /// history is cleared, per macOS convention.
+    func recordNavigation(_ entry: NavigationEntry) {
+        if case .search(let query) = entry,
+           case .search = backEntries.last {
+            backEntries[backEntries.count - 1] = .search(query)
+            return
+        }
+        backEntries.append(entry)
+        forwardEntries = []
     }
 
-    func setRefreshState(_ state: RefreshState) {
-        refreshState = state
+    /// Pops the current state onto the forward stack and returns the state
+    /// to restore. The stack bottom is the launch default destination
+    /// (seeded by the root view); at the bottom, nil is returned and the
+    /// caller restores the default view (AC-16).
+    func goBack() -> NavigationEntry? {
+        guard backEntries.count >= 2 else { return nil }
+        guard let current = backEntries.popLast() else { return nil }
+        forwardEntries.append(current)
+        return backEntries.last
     }
 
-    func makeRedactor() -> Redactor {
-        currentRedactor()
+    /// Pops the forward stack back onto the back stack and returns the
+    /// state to restore.
+    func goForward() -> NavigationEntry? {
+        guard let entry = forwardEntries.popLast() else { return nil }
+        backEntries.append(entry)
+        return entry
+    }
+
+    /// Ends an in-flight search session (clicking a result or dismissing the
+    /// field): the search entry is removed so back returns directly to the
+    /// pre-search state — the whole session counts as one step (AC-15).
+    func endSearchIfNeeded() {
+        if case .search = backEntries.last {
+            _ = backEntries.popLast()
+        }
+    }
+}
+
+// MARK: - Duplicate group ignore
+
+extension AppModel {
+    /// Marks (or unmarks) every Skill in the duplicate group identified by
+    /// `fingerprint` as ignored, removing the group from the duplicates
+    /// view. Persisted with SwiftData. Returns the number of records
+    /// updated.
+    @discardableResult
+    func setDuplicateGroupIgnored(fingerprint: String, ignored: Bool) throws -> Int {
+        let updated = try index.setIgnoredDuplicateGroup(fingerprint, ignored: ignored)
+        if updated > 0 {
+            try reloadSnapshot()
+        }
+        return updated
     }
 }
 
@@ -866,50 +725,6 @@ extension AppModel: FileOperationCoordinatorOwner {
 extension AppModel {
     /// Plain click / keyboard navigation: single selection.
     func selectOnly(_ path: String?) {
-        guard let path else {
-            selection = nil
-            selectedPaths = []
-            selectionAnchor = nil
-            return
-        }
-        selection = SkillSelection(path: path)
-        selectedPaths = [path]
-        selectionAnchor = path
-    }
-
-    /// ⌘-click: toggle membership; the primary selection follows the last
-    /// touched row (or the first remaining member when it was removed).
-    func toggleSelection(_ path: String) {
-        if selectedPaths.contains(path) {
-            selectedPaths.remove(path)
-            if selection?.path == path {
-                selection = selectedPaths.sorted().first.map(SkillSelection.init(path:))
-            }
-        } else {
-            selectedPaths.insert(path)
-            selection = SkillSelection(path: path)
-        }
-        selectionAnchor = path
-    }
-
-    /// Shift-click: range from the anchor to the tapped row, in the visible
-    /// list order the caller provides.
-    func selectRange(to path: String, in orderedPaths: [String]) {
-        guard let anchor = selectionAnchor ?? selection?.path,
-              let anchorIndex = orderedPaths.firstIndex(of: anchor),
-              let targetIndex = orderedPaths.firstIndex(of: path) else {
-            selectOnly(path)
-            return
-        }
-        selectedPaths = Set(orderedPaths[min(anchorIndex, targetIndex)...max(anchorIndex, targetIndex)])
-        selection = SkillSelection(path: path)
-    }
-
-    var hasMultiSelection: Bool {
-        selectedPaths.count > 1
-    }
-
-    var multiSelectedSkills: [SkillSnapshot] {
-        snapshots.filter { selectedPaths.contains($0.path) }
+        selection = path.map(SkillSelection.init(path:))
     }
 }

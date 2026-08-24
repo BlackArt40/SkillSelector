@@ -94,10 +94,10 @@ enum ScreenshotMode {
         await settle()
         capture(settings, name: "settings-\(languageTag).png")
 
-        // 4. Custom agent editor sheet, dry-run preview seeded.
+        // 4. Custom agent editor sheet.
         if let droid = model.customAgentDefinitions.first {
             let editor = presentSheet(
-                CustomAgentSheet(editing: droid, runsDryRunOnAppear: true)
+                CustomAgentSheet(editing: droid)
                     .environment(model),
                 on: settings
             )
@@ -118,17 +118,6 @@ enum ScreenshotMode {
         await settle()
         capture(diagnostics, name: "diagnostics-\(languageTag).png", chrome: true)
         settings.endSheet(diagnostics)
-
-        // 6. First-launch onboarding sheet on the main window.
-        if let mainWindow {
-            let onboarding = presentSheet(
-                OnboardingView().environment(model),
-                on: mainWindow
-            )
-            await settle()
-            capture(onboarding, name: "onboarding-\(languageTag).png", chrome: true)
-            mainWindow.endSheet(onboarding)
-        }
 
         restorePreferences()
         exit(EXIT_SUCCESS)
@@ -174,7 +163,6 @@ enum ScreenshotMode {
         try model.saveCustomAgent(
             displayName: "Droid",
             globalRoots: ["~/.droid/skills"],
-            projectPatterns: [".droid/skills"],
             entryFilename: "AGENT.md"
         )
         return model

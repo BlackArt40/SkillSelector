@@ -10,6 +10,13 @@ enum SettingsTab: Hashable {
     case about
 }
 
+extension Notification.Name {
+    /// Posted (with a `SettingsTab` as object) when another scene asks the
+    /// settings window to open on a specific pane — e.g. the re-authorization
+    /// banner jumping to the directory authorization pane.
+    static let openSettingsTab = Notification.Name("SkillSelector.openSettingsTab")
+}
+
 /// The settings window from design/screens/settings.html: a tab bar with
 /// 通用 / 目录授权 / 关于 panes built from `.group` cards.
 struct SettingsView: View {
@@ -54,6 +61,11 @@ struct SettingsView: View {
         .background(SettingsWindowTitle(title: L10n.string("Settings")))
         .languageReloading()
         .themedAppearance()
+        .onReceive(NotificationCenter.default.publisher(for: .openSettingsTab)) { note in
+            if let tab = note.object as? SettingsTab {
+                activeTab = tab
+            }
+        }
         .sheet(item: $customAgentSheetRequest) { request in
             CustomAgentSheet(editing: request.agent)
         }
@@ -165,10 +177,6 @@ struct SettingsView: View {
                 .padding(.top, 4)
             SettingsGroup {
                 SettingsRow(
-                    label: L10n.string("Skill Index"),
-                    sub: L10n.string("Skill Index Sub")
-                )
-                SettingsRow(
                     label: L10n.string("Export Diagnostics Report"),
                     sub: L10n.string("Export Diagnostics Sub")
                 ) {
@@ -272,20 +280,11 @@ struct SettingsView: View {
                     label: L10n.string("Custom Agent Hint"),
                     hint: true
                 ) {
-                    HStack(spacing: 10) {
-                        Button(L10n.string("Add…")) {
-                            customAgentSheetRequest = CustomAgentSheetRequest(agent: nil)
-                        }
-                        .buttonStyle(SettingsButtonStyle())
-                        .help(L10n.string("Add Custom Agent"))
-                        Button(L10n.string("Export…"), action: exportCustomAgents)
-                            .buttonStyle(SettingsButtonStyle())
-                            .help(L10n.string("Export Custom Agents"))
-                            .disabled(model.customAgentDefinitions.isEmpty)
-                        Button(L10n.string("Import…"), action: importCustomAgents)
-                            .buttonStyle(SettingsButtonStyle())
-                            .help(L10n.string("Import Custom Agents"))
+                    Button(L10n.string("Add…")) {
+                        customAgentSheetRequest = CustomAgentSheetRequest(agent: nil)
                     }
+                    .buttonStyle(SettingsButtonStyle())
+                    .help(L10n.string("Add Custom Agent"))
                 }
             }
         }
@@ -506,40 +505,6 @@ struct SettingsView: View {
             } catch {
                 settingsError = String(describing: error)
             }
-        }
-    }
-
-    private func exportCustomAgents() {
-        let panel = NSSavePanel()
-        panel.title = L10n.string("Export Custom Agents")
-        panel.prompt = L10n.string("Export")
-        panel.nameFieldStringValue = "SkillSelector-CustomAgents.json"
-        panel.allowedContentTypes = [.json]
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        do {
-            try model.exportCustomAgents(to: url)
-            exportStatus = L10n.string("Custom Agents Exported")
-        } catch {
-            settingsError = String(describing: error)
-        }
-    }
-
-    private func importCustomAgents() {
-        let panel = NSOpenPanel()
-        panel.title = L10n.string("Import Custom Agents")
-        panel.prompt = L10n.string("Import")
-        panel.canChooseDirectories = false
-        panel.canChooseFiles = true
-        panel.allowsMultipleSelection = false
-        panel.allowedContentTypes = [.json]
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        do {
-            let result = try model.importCustomAgents(from: url)
-            exportStatus = String.localizedStringWithFormat(
-                L10n.string("Custom Agents Imported"), result.imported, result.skipped
-            )
-        } catch {
-            settingsError = String(describing: error)
         }
     }
 }

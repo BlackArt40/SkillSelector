@@ -6,8 +6,6 @@ import SwiftUI
 struct SkillListView: View {
     /// Primary selection (last clicked row); drives the detail pane.
     let selection: SkillSelection?
-    /// Full multi-selection set; rows in it get the batch tint.
-    let selectedPaths: Set<String>
     @Binding var searchText: String
     @Binding var sort: SkillQuery.Sort
 
@@ -21,16 +19,12 @@ struct SkillListView: View {
     let onClearFilters: () -> Void
     let onImportProject: () -> Void
     let onImportHome: () -> Void
-    var onOperation: ((FileOperationKind, SkillSnapshot) -> Void)?
     var onRevealInFinder: ((SkillSnapshot) -> Void)?
+    var onOpenInEditor: ((SkillSnapshot) -> Void)?
     /// Plain click and keyboard navigation: single selection.
     var onPrimarySelect: ((String) -> Void)?
-    /// ⌘-click: toggle row membership in the multi-selection.
-    var onToggleSelect: ((String) -> Void)?
-    /// Shift-click: select the range from the anchor to this row.
-    var onRangeSelect: ((String) -> Void)?
-    /// Clears the multi-selection (chip button in the header).
-    var onClearSelection: (() -> Void)?
+    /// Arrow-key selection moves without recording navigation history.
+    var onArrowSelect: ((String) -> Void)?
 
     @State private var sortHovering = false
 
@@ -53,29 +47,11 @@ struct SkillListView: View {
                 .font(AppTheme.display(17, weight: .semibold))
                 .foregroundStyle(AppTheme.foreground)
                 .lineLimit(1)
-            if selectedPaths.count > 1 {
-                Button {
-                    onClearSelection?()
-                } label: {
-                    Text(verbatim: String.localizedStringWithFormat(
-                        L10n.string("Selected Count"), selectedPaths.count
-                    ))
-                }
-                .font(AppTheme.body(12))
-                .foregroundStyle(AppTheme.accent)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 2)
-                .background(AppTheme.accentTint, in: Capsule())
-                .buttonStyle(.plain)
-                .help(L10n.string("Clear Selection"))
-                .accessibilityLabel(L10n.string("Clear Selection"))
-            } else {
-                Text(verbatim: String.localizedStringWithFormat(
-                    L10n.string("Skill List Count"), skills.count
-                ))
-                .font(AppTheme.body(12))
-                .foregroundStyle(AppTheme.muted)
-            }
+            Text(verbatim: String.localizedStringWithFormat(
+                L10n.string("Skill List Count"), skills.count
+            ))
+            .font(AppTheme.body(12))
+            .foregroundStyle(AppTheme.muted)
             Spacer(minLength: 8)
             sortMenu
         }
@@ -149,11 +125,9 @@ struct SkillListView: View {
                             skill: skill,
                             agentNamesByID: agentNamesByID,
                             isActive: selection?.path == skill.path,
-                            isMultiSelected: selectedPaths.count > 1
-                                && selectedPaths.contains(skill.path),
-                            onSelect: { handleRowTap(skill.path) },
-                            onOperation: onOperation,
-                            onRevealInFinder: onRevealInFinder
+                            onSelect: { onPrimarySelect?(skill.path) },
+                            onRevealInFinder: onRevealInFinder,
+                            onOpenInEditor: onOpenInEditor
                         )
                         .padding(.horizontal, 8)
                     }
@@ -165,21 +139,9 @@ struct SkillListView: View {
         }
     }
 
-    /// Plain clicks select; ⌘-click toggles multi-selection membership;
-    /// Shift-click selects a range from the last touched row.
-    private func handleRowTap(_ path: String) {
-        let modifiers = NSEvent.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        if modifiers.contains(.command) {
-            onToggleSelect?(path)
-        } else if modifiers.contains(.shift) {
-            onRangeSelect?(path)
-        } else {
-            onPrimarySelect?(path)
-        }
-    }
-
     /// Moves the selection within the visible list; with nothing selected,
-    /// Arrow Down picks the first row and Arrow Up the last.
+    /// Arrow Down picks the first row and Arrow Up the last. History is not
+    /// recorded for keyboard moves — only explicit clicks open a detail.
     private func moveSelection(_ delta: Int) -> KeyPress.Result {
         guard !skills.isEmpty else { return .ignored }
         let current = selection.flatMap { selected in
@@ -191,7 +153,7 @@ struct SkillListView: View {
         } else {
             next = delta > 0 ? 0 : skills.count - 1
         }
-        onPrimarySelect?(skills[next].path)
+        (onArrowSelect ?? onPrimarySelect)?(skills[next].path)
         return .handled
     }
 

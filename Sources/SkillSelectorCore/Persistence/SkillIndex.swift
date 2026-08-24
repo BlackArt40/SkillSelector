@@ -118,11 +118,20 @@ public final class SkillIndex {
     /// The persisted incremental-scan cache: last fresh scan state and its
     /// derived data, by installation path. Records without a trustworthy
     /// state are absent — they simply rescan.
+    ///
+    /// Entries whose fingerprint was produced by an older algorithm (the
+    /// pre-v2 directory-tree hash) are excluded: a cache hit would keep
+    /// serving the stale grouping forever. They rescan once and the new
+    /// body-only fingerprint replaces them.
     public func cachedScanEntries() throws -> [String: ScannedSkillCacheEntry] {
         var entries: [String: ScannedSkillCacheEntry] = [:]
         for record in try context.fetch(FetchDescriptor<SkillRecord>()) {
             guard let data = record.scanStateData,
                   let entry = try? decoder.decode(ScannedSkillCacheEntry.self, from: data) else {
+                continue
+            }
+            if let fingerprint = entry.contentFingerprint,
+               !SkillContentFingerprint.isCurrentVersion(fingerprint) {
                 continue
             }
             entries[record.path] = entry
@@ -239,8 +248,34 @@ public final class SkillIndex {
             rootIDs: associations.keys.sorted(),
             entryFilename: record.entryFilename,
             parseDiagnostics: (try? decoder.decode([ParseIssue].self, from: record.parseDiagnosticsData)) ?? [],
-            contentFingerprint: record.contentFingerprint
+            contentFingerprint: record.contentFingerprint,
+            ignoredDuplicateGroup: record.ignoredDuplicateGroup
         )
+    }
+
+    /// Marks every Skill sharing `fingerprint` as ignored for duplicate
+    /// grouping (or, with `ignored: false`, lifts the ignore). Persisted
+    /// with the records, so the choice survives restarts. Returns how many
+    /// records were updated.
+    @discardableResult
+    public func setIgnoredDuplicateGroup(_ fingerprint: String, ignored: Bool) throws -> Int {
+        do {
+            var updated = 0
+            for record in try context.fetch(FetchDescriptor<SkillRecord>())
+            where record.contentFingerprint == fingerprint {
+                let target = ignored ? fingerprint : nil
+                guard record.ignoredDuplicateGroup != target else { continue }
+                record.ignoredDuplicateGroup = target
+                updated += 1
+            }
+            if updated > 0 {
+                try context.save()
+            }
+            return updated
+        } catch {
+            context.rollback()
+            throw error
+        }
     }
 
     private func agentIDsByRoot(for record: SkillRecord) throws -> [String: Set<String>] {

@@ -1,21 +1,12 @@
 "Agents" = "agent";
-"All" = "All";
 "All Skills" = "All Skills";
-"Associations" = "Associations";
 "Authorization storage is unavailable" = "Authorization storage is unavailable";
 "Authorize" = "Authorize";
-"Authorize Skill Folders" = "Authorize Skill Folders";
-"Authorize your home directory or add a project to find local Skills." = "Authorize your home directory or add a project to find local Skills.";
 "Home Directory" = "Home Directory";
 "Project Directory" = "Project Directory";
 "System Skill Directory" = "System Skill Directory";
 "Custom Skill Directory" = "Custom Skill Directory";
-"Change the search or filters to show more Skills." = "Change the search or filters to show more Skills.";
-"Choose a Skill from the list to inspect its local details." = "Choose a Skill from the list to inspect its local details.";
 "Choose a project directory to scan for all Skills." = "Choose a project directory to scan for all Skills.";
-"Clear Filters" = "Clear Filters";
-"Content Digest" = "Content Digest";
-"Custom" = "Custom";
 "diagnostic.authorizedDirectoryMissing" = "Authorized directory is missing";
 "diagnostic.authorizedHomeMissing" = "Authorized home directory is missing";
 "diagnostic.authorizedProjectMissing" = "Authorized project directory is missing";
@@ -29,123 +20,48 @@
 "diagnostic.unableToResolveAuthorizedDirectory" = "Unable to resolve authorized directory: %@";
 "diagnostic.unsafeEntryFile" = "Entry file must remain readable within its authorized package and root";
 "Default Order" = "Default Order";
-"Delete" = "Delete";
-"Description" = "Description";
 "Diagnostics" = "Diagnostics";
-"Directories" = "Directories";
 "Entry File" = "Entry File";
-"Fallback" = "Fallback";
 "Global Skills" = "Global Skills";
-"Has diagnostics" = "Has diagnostics";
 "Installation Path" = "Installation Path";
 "Loading Skill document" = "Loading Skill document";
-"Local Document" = "Local Document";
-"Local Fallback" = "Local Fallback";
-"Local Skill Document" = "Local Skill Document";
 "Locations" = "Locations";
 "Name" = "Name";
 "No authorized folder is associated with this Skill." = "No authorized folder is associated with this Skill.";
 "No Matching Skills" = "No Matching Skills";
-"No Skills Indexed" = "No Skills Indexed";
-"Add another project to scan for Skills." = "Add another project to scan for Skills.";
 "None" = "None";
-"Not available" = "Not available";
 "Open Settings" = "Open Settings";
 "Open Skill Document in Default Editor" = "Open Skill Document in Default Editor";
 "Path" = "Path";
 "Projects" = "Projects";
 "Refresh Failed" = "Refresh Failed";
-"Refresh the authorized folders to check again." = "Refresh the authorized folders to check again.";
-"Remote" = "Remote";
 "Reveal Skill Document in Finder" = "Reveal Skill Document in Finder";
-"Resolved Target" = "Resolved Target";
 "Root" = "Root";
 "Search Skills" = "Search Skills";
 "Save" = "Save";
 "Cancel" = "Cancel";
 "Select a Skill" = "Select a Skill";
-"SkillSelector Settings" = "SkillSelector Settings";
 "Skill Document" = "Skill Document";
-"Skills" = "Skills";
-"Sort" = "Sort";
 "Sort Skills" = "Sort Skills";
-"Source" = "Source";
-"The document is outside its authorized folder." = "The document is outside its authorized folder.";
 "The default editor could not open the Skill document." = "The default editor could not open the Skill document.";
-"The entry filename is invalid." = "The entry filename is invalid.";
-"The Skill document cannot be read." = "The Skill document cannot be read.";
-"The Skill document is larger than the 1 MiB render limit." = "The Skill document is larger than the 1 MiB render limit.";
-"The Skill document is not a regular file." = "The Skill document is not a regular file.";
-"The Skill document is not valid UTF-8 text." = "The Skill document is not valid UTF-8 text.";
-"The selected Skill is no longer indexed." = "The selected Skill is no longer indexed.";
-"A Skill with this name already exists." = "A Skill with this name already exists.";
-"Affected Installations" = "Affected Installations";
 "Cancel" = "Cancel";
-"Choose Skill Root" = "Choose Skill Root";
-"Choose a destination Skill root." = "Choose a destination Skill root.";
-"Choose a registered Skill root" = "Choose a registered Skill root";
-"Confirm Copy" = "Confirm Copy";
-"Confirm Create Link" = "Confirm Create Link";
-"Confirm Move" = "Confirm Move";
-"Confirm Move to Trash" = "Confirm Move to Trash";
-"Confirm file operation" = "Confirm file operation";
-"Confirm replacement" = "Confirm replacement";
-"Confirm replacement separately before continuing." = "Confirm replacement separately before continuing.";
-"Copy" = "Copy";
-"Create Link" = "Create Link";
-"Destination" = "Destination";
-"Directory authorization changed. Plan the operation again." = "Directory authorization changed. Plan the operation again.";
-"File Operation Failed" = "File Operation Failed";
-"Finish the current file operation first." = "Finish the current file operation first.";
-"I confirm replacing the existing Skill." = "I confirm replacing the existing Skill.";
-"Keep Both" = "Keep Both";
-"Move" = "Move";
-"Move to Trash" = "Move to Trash";
-"Name Conflict" = "Name Conflict";
-"No authorized directory covers this operation." = "No authorized directory covers this operation.";
 "OK" = "OK";
-"Replace" = "Replace";
-"Symbolic Link Target" = "Symbolic Link Target";
-"The Agent registry changed. Plan the operation again." = "The Agent registry changed. Plan the operation again.";
-"The Skill name is not valid." = "The Skill name is not valid.";
-"The destination changed. Plan the operation again." = "The destination changed. Plan the operation again.";
-"The destination is not a registered Skill root." = "The destination is not a registered Skill root.";
-"The destination is not authorized." = "The destination is not authorized.";
-"The existing destination will be moved to Trash before replacement." = "The existing destination will be moved to Trash before replacement.";
-"The file operation failed: %@" = "The file operation failed: %@";
-"The source Skill changed. Plan the operation again." = "The source Skill changed. Plan the operation again.";
-"The source Skill is not authorized." = "The source Skill is not authorized.";
-"The source Skill no longer exists." = "The source Skill no longer exists.";
-"The source is not in a registered Skill root." = "The source is not in a registered Skill root.";
-"The staged copy is not a readable Skill." = "The staged copy is not a readable Skill.";
-"The symbolic link target changed." = "The symbolic link target changed.";
-"This Skill will be moved to Trash." = "This Skill will be moved to Trash.";
-"This confirmation is no longer valid." = "This confirmation is no longer valid.";
 "Unable to Load Skill Document" = "Unable to Load Skill Document";
 "Unable to Open Skill Document" = "Unable to Open Skill Document";
-"Unable to Reveal in Finder" = "Unable to Reveal in Finder";
 "Document Too Large to Render" = "Document Too Large to Render";
 "Documents larger than 1 MiB can be opened in the default editor." = "Documents larger than 1 MiB can be opened in the default editor.";
 "Import" = "Import";
 "Import Project Directory" = "Import Project Directory";
 "Import System Directory" = "Import System Directory";
-"Welcome to SkillSelector" = "Welcome to SkillSelector";
-"Onboarding Message" = "SkillSelector needs one-time access to your home folder to discover Agent Skills (such as ~/.claude or ~/.codex). It only reads the Agent paths declared in its built-in registry.";
-"Authorize Home and Scan" = "Authorize Home and Scan";
-"Authorize Home Directory" = "Authorize Home Directory";
 "Authorize" = "Authorize";
-"Skip for Now" = "Skip for Now";
 "Legacy Agents" = "Legacy Agents";
 "Legacy Agent Hint" = "Hidden until their Skills are detected or enabled here.";
 "Search Help" = "Free terms match name, description and path. Prefix a term with name:, desc:, path: or agent: to search a single field.";
-"Move to Trash" = "Move to Trash";
 "SkillSelector" = "SkillSelector";
 "Edit Custom Agent" = "Edit Custom Agent";
-"Cancel Editing" = "Cancel Editing";
 "Agent Name" = "Agent Name";
 "Authorized Directories" = "Authorized Directories";
 "Comma-separated paths" = "Comma-separated paths";
-"Custom Agents" = "Custom Agents";
 "Diagnostics" = "Diagnostics";
 "Diagnostics Exported" = "Diagnostics Exported";
 "Entry Filename" = "Entry Filename";
@@ -154,7 +70,6 @@
 "Global Roots" = "Global Roots";
 "Name" = "Name";
 "No directories authorized." = "No directories authorized.";
-"Project Patterns" = "Project Patterns";
 "Re-authorize Directory" = "Re-authorize Directory";
 "Rename" = "Rename";
 "Scan" = "Scan";
@@ -163,16 +78,10 @@
 "Remove Custom Agent" = "Remove Custom Agent";
 "Revoke Authorization" = "Revoke Authorization";
 "Settings Error" = "Settings Error";
-"Interface Language" = "Interface Language";
 "Follow System" = "Follow System";
-"Language description" = "Switch language immediately.";
-"%d Skills" = "%d Skills";
 "Settings" = "Settings";
 "Add Project" = "Add Project";
 "Reveal in Finder" = "Reveal in Finder";
-"Copy To…" = "Copy To…";
-"Move To…" = "Move To…";
-"Create Link…" = "Create Link…";
 "Skill List Count" = "%d Skills";
 "Core Role" = "Core Role";
 "Associated Agents" = "Associated Agents";
@@ -195,8 +104,6 @@
 "General" = "General";
 "Display" = "Display";
 "Data" = "Data";
-"Skill Index" = "Skill Index";
-"Skill Index Sub" = "Stores metadata only, never Skill content";
 "Export Diagnostics Report" = "Export Diagnostics Report";
 "Export Diagnostics Sub" = "Automatically redacts paths and user names";
 "Export…" = "Export…";
@@ -210,48 +117,26 @@
 "Custom Agent Hint" = "Register any local Skill directory as a custom Agent";
 "Add…" = "Add…";
 "Version Line" = "Version %@ · Universal 2 (Apple Silicon + Intel)";
-"Tagline" = "View and edit local Agent Skills. Not a marketplace, not an installer, not an AI tool.";
+"Tagline" = "A read-only dashboard for your local Agent Skills. No copy, move, or delete — not a marketplace, not an installer, and no AI.";
 "GitHub" = "GitHub";
 "Release Notes" = "Release Notes";
 "Apache License" = "Apache 2.0 License";
 "Privacy" = "Privacy";
-"Privacy Sub" = "Runs offline · No telemetry · No crash reports · Deletes go to Trash only";
+"Privacy Sub" = "Runs offline · no telemetry · no crash reporting · no file watching · read-only, performs no file operations";
 "Signature" = "Signature";
 "Signature Sub" = "Ad-hoc signed · App Sandbox enabled · Not notarized by Apple";
-"About Footer" = "SkillSelector only manages existing local Skills.\n© 2026 SkillSelector Contributors · Apache License 2.0";
-"Copy Description" = "Creates an independent copy of the Skill in the destination directory; the original stays untouched.";
-"Move Description" = "Moves the Skill to the destination directory; the original location is no longer kept.";
-"Link Description" = "Creates a symbolic link to this Skill in the destination directory, recorded as an independent install.";
-"Delete Description" = "The Skill moves into the macOS Trash and can be restored from there. Nothing is permanently deleted.";
+"About Footer" = "SkillSelector displays existing local Skills read-only.\n© 2026 SkillSelector Contributors · Apache License 2.0";
 "Add" = "Add";
 "Directory Authorization" = "Directory Authorization";
 "About" = "About";
 "diagnostic.yamlParseFailed" = "YAML parse failed: %@";
-"Copy To Current Folder" = "Copy to Current Folder";
-"Move To Current Folder" = "Move to Current Folder";
-"Choose a destination folder" = "Choose a destination folder";
 
 /* Batch operations */
-"Batch operations support copy, move, and delete." = "Batch operations support copy, move, and delete.";
-"Confirm Batch Copy" = "Copy %d Skills";
-"Confirm Batch Move" = "Move %d Skills";
-"Confirm Batch Move to Trash" = "Move %d Skills to Trash";
-"Batch Copy Description" = "Copy %d selected Skills to one destination folder. Pick the folder next.";
-"Batch Move Description" = "Move %d selected Skills to one destination folder. Pick the folder next.";
-"Batch Delete Description" = "Move %d selected Skills to the Trash. Each one can be restored individually from the Trash.";
-"Copy %d Items" = "Copy %d Items";
-"Move %d Items" = "Move %d Items";
-"Move %d Items to Trash" = "Move %d Items to Trash";
-"These Skills will be moved to Trash." = "These Skills will be moved to Trash.";
-"Name conflicts keep both Skills; replacements need a single-Skill operation." = "Name conflicts keep both Skills; replacements need a single-Skill operation.";
-"Selected Count" = "%d selected";
-"Clear Selection" = "Clear selection";
 
 /* Duplicate skills */
 "Duplicate Skills" = "Duplicate Skills";
 "Duplicate Groups Count" = "%d groups";
 "No Duplicates" = "No Duplicates";
-"No Duplicates Description" = "No content-identical Skills were found across your Agents.";
 "Duplicate Members Count" = "%d copies";
 
 /* Bookmark health */
@@ -259,10 +144,6 @@
 "Re-authorize…" = "Re-authorize…";
 
 /* Custom agent transfer */
-"Export Custom Agents" = "Export Custom Agents";
-"Import Custom Agents" = "Import Custom Agents";
-"Custom Agents Exported" = "Custom Agents exported.";
-"Custom Agents Imported" = "Imported %d custom Agents (%d skipped as duplicates).";
 
 /* Diagnostics viewer */
 "View…" = "View…";
@@ -279,12 +160,29 @@
 "Remove Directory" = "Remove Directory";
 
 /* Pattern dry run */
-"Pattern Preview" = "Pattern Preview";
-"Dry Run…" = "Dry Run…";
-"Dry Run Help" = "Preview which directories the project patterns match in the authorized project folders.";
-"Dry Run Matches" = "%d directories matched";
-"Dry Run Skill Count" = "%d Skills";
-"Dry Run No Skills" = "No %@ inside — check the entry filename";
-"Dry Run No Matches" = "No directories matched. Check the pattern spelling or path depth.";
-"Dry Run No Project Roots" = "Add a project folder first to preview pattern matches.";
-"Dry Run Skipped Roots" = "%d project directories could not be read.";
+
+/* Navigation */
+"Go Back" = "Go Back";
+"Go Forward" = "Go Forward";
+"Open in Default Editor" = "Open in Default Editor";
+"Unable to Open" = "Unable to Open";
+
+/* Symbolic links */
+"Symbolic Links" = "Symbolic Links";
+"Symbolic Links Count" = "%d items";
+"No Symbolic Links" = "No Symbolic Links";
+"No Symbolic Links Description" = "No Skills installed as symbolic links were found.";
+"Unreachable Target" = "Unreachable Target";
+
+/* Sidebar */
+"System Directories" = "System Directories";
+"No Agents Detected" = "No Agents Detected";
+
+/* Duplicate ignore */
+"Ignore" = "Ignore";
+"Ignore Duplicate Group" = "Ignore this duplicate group";
+
+/* Launch defaults */
+
+/* Re-authorization banner */
+"Authorization Lost Banner" = "Some directories are no longer accessible. Re-authorize to keep scanning them.";

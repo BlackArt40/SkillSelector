@@ -1,55 +1,51 @@
 import CryptoKit
 import Foundation
 
-/// Content-only SHA-256 fingerprint of a Skill directory, stable across
-/// copies: it hashes relative paths, node kinds, symlink destinations, and
-/// file bytes — never file identifiers or timestamps, which differ between
-/// two identical copies and would defeat duplicate grouping.
+/// SHA-256 of a Skill's entry-file **body only** — everything outside the
+/// YAML frontmatter. The fingerprint is stable across copies: frontmatter
+/// (`name`, `description`, …), sibling files (`docs/`, `templates/`, …),
+/// file names, paths, and timestamps never participate, so two copies of
+/// the same Skill that differ only in metadata or sub-files still group as
+/// duplicates.
 public enum SkillContentFingerprint {
-    public static func compute(rootDirectory: URL) throws -> String {
-        var hash = SHA256()
-        try append(rootDirectory, relativePath: ".", hash: &hash)
-        return hash.finalize().map { String(format: "%02x", $0) }.joined()
+    /// Version marker of the body-only fingerprint algorithm. Older stores
+    /// carry a directory-tree SHA-256 without any prefix; `isCurrentVersion`
+    /// lets the incremental cache skip those entries so the next scan
+    /// recomputes the body-only fingerprint (a one-time migration cost).
+    public static let currentVersionPrefix = "v2:"
+
+    /// True when the fingerprint was produced by the current algorithm.
+    public static func isCurrentVersion(_ fingerprint: String) -> Bool {
+        fingerprint.hasPrefix(currentVersionPrefix)
     }
 
-    private static func append(
-        _ url: URL,
-        relativePath: String,
-        hash: inout SHA256
-    ) throws {
-        let values = try url.resourceValues(forKeys: [
-            .isDirectoryKey,
-            .isRegularFileKey,
-            .isSymbolicLinkKey,
-        ])
-        hash.update(data: Data(relativePath.utf8))
-        if values.isSymbolicLink == true {
-            hash.update(data: Data("link".utf8))
-            hash.update(data: Data(
-                try FileManager.default.destinationOfSymbolicLink(atPath: url.path).utf8
-            ))
-            return
-        }
-        if values.isDirectory == true {
-            hash.update(data: Data("directory".utf8))
-            let children = try FileManager.default.contentsOfDirectory(
-                at: url,
-                includingPropertiesForKeys: [.isSymbolicLinkKey],
-                options: []
-            ).sorted { $0.lastPathComponent < $1.lastPathComponent }
-            for child in children {
-                let childPath = relativePath == "."
-                    ? child.lastPathComponent
-                    : "\(relativePath)/\(child.lastPathComponent)"
-                try append(child, relativePath: childPath, hash: &hash)
+    public enum Error: Swift.Error, LocalizedError {
+        case oversizedEntry(limit: Int)
+
+        public var errorDescription: String? {
+            switch self {
+            case .oversizedEntry(let limit):
+                return "Entry file exceeds the \(limit) byte read limit"
             }
-            return
         }
-        guard values.isRegularFile == true else {
-            hash.update(data: Data("other".utf8))
-            return
+    }
+
+    /// Bound the read exactly like the scan/render path does (audit
+    /// R3/F-01): a multi-GB SKILL.md inside an authorized root must not be
+    /// slurped into memory while hashing (local DoS).
+    public static func compute(entryFileURL: URL) throws -> String {
+        let fileSize = try entryFileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize
+        guard let fileSize, fileSize <= SkillDocumentReader.maximumRenderBytes else {
+            throw Error.oversizedEntry(limit: SkillDocumentReader.maximumRenderBytes)
         }
-        hash.update(data: Data("file".utf8))
-        hash.update(data: Data(try Data(contentsOf: url, options: .mappedIfSafe)))
+        let text = try String(contentsOf: entryFileURL, encoding: .utf8)
+        // bodyLines() tolerates whitespace around the delimiters and falls
+        // back to the whole text when no frontmatter boundary exists — the
+        // same single implementation the renderer uses.
+        let body = FrontmatterParser.bodyLines(from: text).joined(separator: "\n")
+        let digest = SHA256.hash(data: Data(body.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+        return currentVersionPrefix + digest
     }
 }

@@ -9,8 +9,8 @@ struct SkillDetailView: View {
     let skill: SkillSnapshot?
     let rootsByID: [String: AuthorizedRootSnapshot]
     let agentNamesByID: [String: String]
-    var onOperation: ((FileOperationKind, SkillSnapshot) -> Void)?
     var onRevealInFinder: ((SkillSnapshot) -> Void)?
+    var onOpenInEditor: ((SkillSnapshot) -> Void)?
 
     var body: some View {
         if let skill {
@@ -93,33 +93,12 @@ struct SkillDetailView: View {
             }
             actionButton(
                 icon: nil,
-                title: L10n.string("Copy To…"),
+                title: L10n.string("Open in Default Editor"),
                 role: .secondary
             ) {
-                onOperation?(.copy, skill)
-            }
-            actionButton(
-                icon: nil,
-                title: L10n.string("Move To…"),
-                role: .secondary
-            ) {
-                onOperation?(.move, skill)
-            }
-            actionButton(
-                icon: nil,
-                title: L10n.string("Create Link…"),
-                role: .secondary
-            ) {
-                onOperation?(.createSymbolicLink, skill)
+                onOpenInEditor?(skill)
             }
             Spacer(minLength: 8)
-            actionButton(
-                icon: Image(systemName: "trash"),
-                title: L10n.string("Move to Trash"),
-                role: .destructive
-            ) {
-                onOperation?(.delete, skill)
-            }
         }
         .frame(maxWidth: .infinity)
     }

@@ -125,7 +125,6 @@ struct SkillSelectorApp: App {
                     .environment(model)
                     .task {
                         await model.checkEnvironmentOnLaunch()
-                        model.presentOnboardingIfNeeded()
                     }
             } else {
                 StorageUnavailableView()
