@@ -56,7 +56,7 @@
 "Authorize" = "Authorize";
 "Legacy Agents" = "Legacy Agents";
 "Legacy Agent Hint" = "Hidden until their Skills are detected or enabled here.";
-"Search Help" = "Free terms match name, description and path. Prefix a term with name:, desc:, path: or agent: to search a single field.";
+"Search Help" = "Plain terms fuzzy-match the Skill name; prefix a term with name:, desc:, path:, or agent: to search one field only.";
 "SkillSelector" = "SkillSelector";
 "Edit Custom Agent" = "Edit Custom Agent";
 "Agent Name" = "Agent Name";

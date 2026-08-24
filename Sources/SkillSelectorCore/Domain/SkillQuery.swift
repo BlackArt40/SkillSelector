@@ -49,9 +49,10 @@ public struct SkillQuery: Hashable, Sendable {
             .sorted(by: comesBefore)
     }
 
-    /// One whitespace-separated search token. Free terms match name,
-    /// description or path; prefixed terms (`name:`, `desc:`, `path:`,
-    /// `agent:`) restrict the match to a single field.
+    /// One whitespace-separated search token. Free terms match the Skill
+    /// **name** only (fuzzy substring, case/diacritic-insensitive);
+    /// prefixed terms (`name:`, `desc:`, `path:`, `agent:`) restrict the
+    /// match to a single field.
     struct SearchTerm: Hashable, Sendable {
         enum Field: String {
             case name
@@ -121,9 +122,8 @@ public struct SkillQuery: Hashable, Sendable {
             let key = Self.searchKey(term.term)
             switch term.field {
             case nil:
+                // Free terms search the Skill name only, fuzzy.
                 return Self.searchKey(snapshot.name).contains(key)
-                    || Self.searchKey(Self.effectiveDescription(for: snapshot)).contains(key)
-                    || Self.searchKey(snapshot.path).contains(key)
             case .name:
                 return Self.searchKey(snapshot.name).contains(key)
             case .description:

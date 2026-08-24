@@ -119,7 +119,10 @@ final class SkillQueryTests: XCTestCase {
         XCTAssertEqual(beta.map(\.path), ["/beta/only"])
     }
 
-    func testSearchIsCaseInsensitiveAcrossNameAndEffectiveDescription() {
+    /// Free terms fuzzy-match the Skill name only: case- and
+    /// diacritic-insensitive substring. Descriptions and paths are no
+    /// longer searched by plain terms.
+    func testFreeTermsFuzzyMatchNameOnly() {
         let snapshots = [
             snapshot(path: "/name", name: "Release Helper"),
             snapshot(path: "/custom", name: "Custom", localDescription: "CUSTOM summary"),
@@ -127,33 +130,42 @@ final class SkillQueryTests: XCTestCase {
             snapshot(path: "/remote", name: "Remote"),
         ]
 
+        // Substring match on the name, case-insensitive.
         XCTAssertEqual(
             SkillQuery(searchText: "rElEaSe")
                 .apply(to: snapshots, rootsByID: rootsByID).map(\.path),
             ["/name"]
         )
         XCTAssertEqual(
+            SkillQuery(searchText: "help")
+                .apply(to: snapshots, rootsByID: rootsByID).map(\.path),
+            ["/name"]
+        )
+        // A description-only term finds nothing as a free term…
+        XCTAssertTrue(
             SkillQuery(searchText: "SUMMARY")
-                .apply(to: snapshots, rootsByID: rootsByID).map(\.path),
-            ["/custom"]
+                .apply(to: snapshots, rootsByID: rootsByID).isEmpty
         )
-        XCTAssertEqual(
+        XCTAssertTrue(
             SkillQuery(searchText: "documentation")
-                .apply(to: snapshots, rootsByID: rootsByID).map(\.path),
-            ["/local"]
+                .apply(to: snapshots, rootsByID: rootsByID).isEmpty
         )
-        // Remote search test removed (enrichment removed)
     }
 
-    func testEffectiveDescriptionSearchUsesLocalDescription() {
+    /// Free terms never search descriptions; the `desc:` prefix still does.
+    func testDescriptionOnlyMatchedWithPrefix() {
         let skill = snapshot(
             path: "/priority",
             name: "Priority",
             localDescription: "Hidden local text"
         )
 
-        XCTAssertEqual(
+        XCTAssertTrue(
             SkillQuery(searchText: "hidden")
+                .apply(to: [skill], rootsByID: rootsByID).isEmpty
+        )
+        XCTAssertEqual(
+            SkillQuery(searchText: "desc:hidden")
                 .apply(to: [skill], rootsByID: rootsByID).map(\.path),
             [skill.path]
         )
@@ -163,14 +175,19 @@ final class SkillQueryTests: XCTestCase {
         )
     }
 
-    func testSearchMatchesPathForFreeTerms() {
+    /// Free terms never search paths; the `path:` prefix still does.
+    func testPathOnlyMatchedWithPrefix() {
         let snapshots = [
             snapshot(path: "/Users/tester/.codex/skills/release", name: "Unrelated Name"),
             snapshot(path: "/plain/folder", name: "codex elsewhere"),
         ]
 
-        XCTAssertEqual(
+        XCTAssertTrue(
             SkillQuery(searchText: ".codex/skills")
+                .apply(to: snapshots, rootsByID: rootsByID).isEmpty
+        )
+        XCTAssertEqual(
+            SkillQuery(searchText: "path:.codex/skills")
                 .apply(to: snapshots, rootsByID: rootsByID).map(\.path),
             ["/Users/tester/.codex/skills/release"]
         )

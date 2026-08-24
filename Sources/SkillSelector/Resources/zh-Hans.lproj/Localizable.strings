@@ -56,7 +56,7 @@
 "Authorize" = "授权";
 "Legacy Agents" = "旧版 Agent";
 "Legacy Agent Hint" = "在检测到 Skill 或在此启用前保持隐藏。";
-"Search Help" = "普通词匹配名称、描述和路径；用 name:、desc:、path:、agent: 前缀可限定单个字段。";
+"Search Help" = "普通词按 Skill 名称模糊匹配；用 name:、desc:、path:、agent: 前缀可限定单个字段。";
 "SkillSelector" = "SkillSelector";
 "Edit Custom Agent" = "编辑自定义 Agent";
 "Agent Name" = "Agent 名称";
