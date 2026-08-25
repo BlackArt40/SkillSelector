@@ -35,7 +35,9 @@ struct SkillSelection: Hashable, Identifiable {
 final class AppModel {
     private let refresher: IndexRefresher
     private let index: SkillIndex
-    private let bookmarks: BookmarkStore?
+    /// `fileprivate(set)` so the MCP extension (same module, other file)
+    /// can resolve leases in `reloadMcpServers()`.
+    private(set) var bookmarks: BookmarkStore?
     private(set) var registry: AgentRegistry
     private let builtInRegistry: AgentRegistry
     private let customAgentStore: any AgentDefinitionStoring
@@ -52,6 +54,13 @@ final class AppModel {
     /// content). They are not retried until the next refresh, when files
     /// may have changed — this keeps the schedule self-terminating.
     @ObservationIgnored private var fingerprintFailures: Set<String> = []
+    /// MCP servers parsed from authorized roots, refreshed with the index.
+    /// Written only by AppModel+Mcp.swift's `reloadMcpServers()`; treated
+    /// as read-only everywhere else.
+    var mcpServers: [McpServerDescriptor] = []
+    /// Last on-demand probe result per server id (see AppModel+Mcp.swift).
+    /// Written only by the probe methods in AppModel+Mcp.swift.
+    var mcpProbeStatuses: [String: McpProbeStatus] = [:]
 
     var refreshState: RefreshState = .idle
     var selection: SkillSelection?
@@ -650,6 +659,7 @@ final class AppModel {
            !updatedSnapshots.contains(where: { $0.path == selection.path }) {
             self.selection = nil
         }
+        reloadMcpServers()
         scheduleFingerprintBackfillIfNeeded()
     }
 }

@@ -75,6 +75,35 @@ final class BrowserSidebarTests: XCTestCase {
         )
     }
 
+    // An Agent wired only through MCP configs (no Skills on disk) still
+    // appears in the sidebar: its servers are indexed config declarations.
+    func testAgentsWithOnlyMcpServersRemainVisible() {
+        let definitions = BuiltInAgentRegistry.make().definitions
+        let mcpServers = [
+            McpServerDescriptor(
+                name: "context7",
+                agentID: "codex",
+                transport: .stdio,
+                command: "npx",
+                arguments: [],
+                url: nil,
+                configFile: "/tmp/config.toml",
+                projectRootID: nil
+            )
+        ]
+
+        let agentIDs = BrowserSidebar.detectedAgentIDs(from: [], hasAuthorization: true)
+            .union(BrowserSidebar.mcpAgentIDs(from: mcpServers))
+        XCTAssertEqual(agentIDs, ["codex"])
+        XCTAssertEqual(
+            BrowserSidebar.visibleAgentDefinitions(
+                definitions: definitions,
+                detectedAgentIDs: agentIDs
+            ).map(\.id),
+            ["codex"]
+        )
+    }
+
     func testDestinationFallsBackToAllOnlyWhenBrowsedRootIsRemoved() {
         // Removing the browsed system or project root falls back to All.
         XCTAssertEqual(

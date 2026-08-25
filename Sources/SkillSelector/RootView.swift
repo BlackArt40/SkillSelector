@@ -18,6 +18,10 @@ struct RootView: View {
     @State private var suppressingHistory = false
     /// Seeds the history stack bottom once with the initial destination.
     @State private var didSeedHistory = false
+    /// Selected MCP server id for the MCP detail pane.
+    @State private var mcpSelection: String?
+    /// True while a probe-all pass is in flight (drives list progress).
+    @State private var mcpProbingAll = false
 
     init(initialDestination: BrowserDestination = .all) {
         _destination = State(initialValue: initialDestination)
@@ -44,7 +48,7 @@ struct RootView: View {
         let detectedAgentIDs = BrowserSidebar.detectedAgentIDs(
             from: model.snapshots,
             hasAuthorization: model.hasAuthorization
-        )
+        ).union(BrowserSidebar.mcpAgentIDs(from: model.mcpServers))
         let selectedSkill = model.selection.flatMap { selection in
             model.snapshots.first { $0.path == selection.path }
         }
@@ -92,6 +96,21 @@ struct RootView: View {
                         onSelect: { path in selectSkill(path) }
                     )
                     .frame(width: 400)
+                } else if currentDestination == .mcp {
+                    McpListView(
+                        servers: model.mcpServers,
+                        statuses: model.mcpProbeStatuses,
+                        selection: mcpSelection,
+                        agentNamesByID: agentNamesByID,
+                        isProbing: mcpProbingAll,
+                        onSelect: { server in
+                            mcpSelection = server.id
+                            model.recordNavigation(.sidebar(.mcp))
+                        },
+                        onProbeAll: { probeAllMcp() },
+                        onRevealConfig: { server in model.revealMcpConfigFile(server) }
+                    )
+                    .frame(width: 400)
                 } else {
                     SkillListView(
                         selection: model.selection,
@@ -115,14 +134,48 @@ struct RootView: View {
                     .frame(width: 400)
                 }
 
-                SkillDetailView(
-                    skill: selectedSkill,
-                    rootsByID: model.rootsByID,
-                    agentNamesByID: agentNamesByID,
-                    onRevealInFinder: { skill in reveal(skill) },
-                    onOpenInEditor: { skill in openInEditor(skill) }
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if currentDestination == .mcp {
+                    McpDetailView(
+                        server: model.mcpServers.first { $0.id == mcpSelection },
+                        status: mcpSelection.flatMap { id in model.mcpProbeStatuses[id] } ?? .unknown,
+                        agentNamesByID: agentNamesByID,
+                        onProbe: {
+                            if let id = mcpSelection {
+                                Task { await model.probeMcpServer(id: id) }
+                            }
+                        },
+                        onRevealConfig: { server in model.revealMcpConfigFile(server) }
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let agentID = currentDestination.agentID {
+                    // Agent detail: Skill and MCP stacked vertically.
+                    AgentDetailView(
+                        skill: selectedSkill,
+                        agentID: agentID,
+                        rootsByID: model.rootsByID,
+                        agentNamesByID: agentNamesByID,
+                        mcpServers: model.mcpServers,
+                        mcpStatuses: model.mcpProbeStatuses,
+                        onRevealInFinder: { skill in reveal(skill) },
+                        onOpenInEditor: { skill in openInEditor(skill) },
+                        onSelectMcp: { server in
+                            mcpSelection = server.id
+                            destination = .mcp
+                        },
+                        onRevealConfig: { server in model.revealMcpConfigFile(server) },
+                        onProbeAll: { probeAgentMcp(agentID: agentID) }
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    SkillDetailView(
+                        skill: selectedSkill,
+                        rootsByID: model.rootsByID,
+                        agentNamesByID: agentNamesByID,
+                        onRevealInFinder: { skill in reveal(skill) },
+                        onOpenInEditor: { skill in openInEditor(skill) }
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
         }
         .frame(minWidth: 1080, minHeight: 700)
@@ -321,6 +374,7 @@ struct RootView: View {
         counts[.global] = SkillQuery(scope: .global).apply(to: model.snapshots, rootsByID: model.rootsByID).count
         counts[.duplicates] = DuplicateSkillGrouper.memberCount(in: model.duplicateGroups)
         counts[.links] = model.snapshots.filter { $0.resolvedTarget != nil }.count
+        counts[.mcp] = model.mcpServers.count
         for root in model.authorizedRoots {
             switch root.kind {
             case .home, .system:
@@ -332,8 +386,12 @@ struct RootView: View {
             }
         }
         for definition in model.agentDefinitions {
-            counts[.agent(id: definition.id)] = SkillQuery(scope: .all, agentID: definition.id)
+            let skillCount = SkillQuery(scope: .all, agentID: definition.id)
                 .apply(to: model.snapshots, rootsByID: model.rootsByID).count
+            let mcpCount = model.mcpServers.filter { $0.agentID == definition.id }.count
+            // An Agent detected only through MCP (no Skills on disk) still
+            // shows: the count reflects whatever it owns that is visible.
+            counts[.agent(id: definition.id)] = skillCount > 0 ? skillCount : mcpCount
         }
         return counts
     }
@@ -341,6 +399,32 @@ struct RootView: View {
     private func clearFilters() {
         destination = .all
         searchText = ""
+    }
+
+    /// One-shot probe of every MCP server, driven by the MCP list header.
+    /// Marks the pass in flight for the list, runs it, and clears the flag.
+    private func probeAllMcp() {
+        guard !mcpProbingAll else { return }
+        mcpProbingAll = true
+        Task {
+            await model.probeAllMcpServers()
+            mcpProbingAll = false
+        }
+    }
+
+    /// One-shot probe of one Agent's MCP servers (Agent detail half).
+    private func probeAgentMcp(agentID: String) {
+        guard !mcpProbingAll else { return }
+        mcpProbingAll = true
+        Task {
+            let agents = model.mcpServers.filter { $0.agentID == agentID }
+            for server in agents {
+                model.mcpProbeStatuses[server.id] = .probing
+                let status = await McpProber().probe(server)
+                model.mcpProbeStatuses[server.id] = status
+            }
+            mcpProbingAll = false
+        }
     }
 
     // MARK: Navigation
@@ -376,6 +460,7 @@ struct RootView: View {
             self.destination = destination
             searchText = ""
             model.selectOnly(nil)
+            if destination != .mcp { mcpSelection = nil }
         } else if let query = entry.searchQuery {
             searchText = query
             model.selectOnly(nil)
@@ -391,6 +476,7 @@ struct RootView: View {
         destination = .all
         searchText = ""
         model.selectOnly(nil)
+        mcpSelection = nil
         suppressingHistory = false
     }
 
@@ -491,6 +577,7 @@ extension BrowserDestination {
         case .global: L10n.string("Global Skills")
         case .duplicates: L10n.string("Duplicate Skills")
         case .links: L10n.string("Symbolic Links")
+        case .mcp: L10n.string("MCP")
         case .system(let rootID), .project(let rootID):
             rootsByID[rootID]?.displayName ?? rootID
         case .agent(let id):

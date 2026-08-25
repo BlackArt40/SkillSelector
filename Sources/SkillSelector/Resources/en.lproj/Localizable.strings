@@ -186,3 +186,30 @@
 
 /* Re-authorization banner */
 "Authorization Lost Banner" = "Some directories are no longer accessible. Re-authorize to keep scanning them.";
+
+/* MCP detection */
+"MCP" = "MCP";
+"Probe All MCP" = "Probe All";
+"Probe MCP" = "Probe";
+"Probing…" = "Probing…";
+"Probe Hint" = "Probing performs the real MCP initialize handshake. stdio servers are launched and then terminated; http/sse endpoints receive an initialize POST.";
+"Running" = "Running";
+"Not Running" = "Not Running";
+"Not Probed" = "Not probed";
+"Failed" = "Failed";
+"Shared MCP Server" = "Shared (project .mcp.json)";
+"No MCP Servers" = "No MCP Servers";
+"No MCP Servers Description" = "Authorize a home or project directory and configure MCP servers for a supported Agent; they appear here on the next scan.";
+"Select an MCP Server" = "Select an MCP Server";
+"Select an MCP Server Description" = "Choose a server from the list to see its transport, command and probe status.";
+"Configuration" = "Configuration";
+"Transport" = "Transport";
+"Command" = "Command";
+"Arguments" = "Arguments";
+"Endpoint" = "Endpoint";
+"Scope" = "Scope";
+"Project" = "Project";
+"Global" = "Global";
+"Reveal MCP Config" = "Reveal Config File in Finder";
+
+"Status" = "Status";

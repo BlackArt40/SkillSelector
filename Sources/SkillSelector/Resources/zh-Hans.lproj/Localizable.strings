@@ -186,3 +186,30 @@
 
 /* Re-authorization banner */
 "Authorization Lost Banner" = "部分目录已无法访问，请重新授权以继续扫描。";
+
+/* MCP 检测 */
+"MCP" = "MCP";
+"Probe All MCP" = "全部检测";
+"Probe MCP" = "检测";
+"Probing…" = "检测中…";
+"Probe Hint" = "检测执行真实的 MCP initialize 握手：stdio 服务器会被启动再终止，http/sse 端点会收到 initialize POST。";
+"Running" = "运行中";
+"Not Running" = "未运行";
+"Not Probed" = "未检测";
+"Failed" = "失败";
+"Shared MCP Server" = "共享（项目 .mcp.json）";
+"No MCP Servers" = "没有 MCP 服务器";
+"No MCP Servers Description" = "授权主目录或项目目录，并为一个支持的 Agent 配置 MCP 服务器；下次扫描后它们会出现在这里。";
+"Select an MCP Server" = "选择一个 MCP 服务器";
+"Select an MCP Server Description" = "从列表中选择服务器，查看其传输方式、命令与检测状态。";
+"Configuration" = "配置";
+"Transport" = "传输方式";
+"Command" = "命令";
+"Arguments" = "参数";
+"Endpoint" = "端点";
+"Scope" = "作用域";
+"Project" = "项目";
+"Global" = "全局";
+"Reveal MCP Config" = "在 Finder 中显示配置文件";
+
+"Status" = "状态";

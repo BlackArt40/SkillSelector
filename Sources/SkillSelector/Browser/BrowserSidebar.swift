@@ -6,6 +6,7 @@ enum BrowserDestination: Hashable {
     case global
     case duplicates
     case links
+    case mcp
     case system(rootID: String)
     case project(rootID: String)
     case agent(id: String)
@@ -13,6 +14,8 @@ enum BrowserDestination: Hashable {
     var queryScope: SkillQuery.Scope {
         switch self {
         case .all, .agent, .duplicates, .links:
+            .all
+        case .mcp:
             .all
         case .global:
             .global
@@ -93,6 +96,13 @@ struct BrowserSidebar: View {
     ) -> Set<String> {
         guard hasAuthorization else { return [] }
         return Set(snapshots.flatMap(\.agentIDs))
+    }
+
+    /// Agent IDs that declared MCP servers in the scanned configs. A sidebar
+    /// Agent row appears when the Agent is detected from either Skills or
+    /// MCP — a Codex that only wires MCP servers still gets a row.
+    static func mcpAgentIDs(from mcpServers: [McpServerDescriptor]) -> Set<String> {
+        Set(mcpServers.compactMap(\.agentID))
     }
 
     /// Legacy agents stay hidden until detected or manually enabled; the
@@ -188,6 +198,14 @@ struct BrowserSidebar: View {
                 isActive: destination == .links
             ) {
                 destination = .links
+            }
+            SidebarItem(
+                title: L10n.string("MCP"),
+                glyph: Image(systemName: "rectangle.connected.to.line.below"),
+                count: counts[.mcp],
+                isActive: destination == .mcp
+            ) {
+                destination = .mcp
             }
         }
     }
