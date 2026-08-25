@@ -49,10 +49,10 @@ Requires macOS 14 Sonoma or later; Universal 2 (Apple Silicon and Intel).
 2. Verify integrity (keep both files in the same directory):
 
    ```zsh
-   shasum -a 256 -c SkillSelector-1.3.4.dmg.sha256
+   shasum -a 256 -c SkillSelector-1.4.1.dmg.sha256
    ```
 
-   It must print `SkillSelector-1.3.4.dmg: OK`. If it doesn't, don't install it.
+   It must print `SkillSelector-1.4.1.dmg: OK`. If it doesn't, don't install it.
 
 3. Mount the `.dmg` and drag `SkillSelector.app` to Applications
 4. Right-click the app → Open → confirm Open
@@ -74,10 +74,10 @@ If that's not acceptable, build from source — it goes through the same packagi
 
 ```zsh
 swift build
-zsh Scripts/package-dmg.sh 1.3.4
+zsh Scripts/package-dmg.sh 1.4.1
 ```
 
-Produces `dist/SkillSelector.app`, `dist/SkillSelector.dmg`, `dist/SkillSelector-1.3.4.dmg`, and a matching `.sha256`.
+Produces `dist/SkillSelector.app`, `dist/SkillSelector.dmg`, `dist/SkillSelector-1.4.1.dmg`, and a matching `.sha256`.
 
 The only third-party dependency is Yams (frontmatter parsing). Run the tests with `swift test`; CI runs them on every PR and push.
 
