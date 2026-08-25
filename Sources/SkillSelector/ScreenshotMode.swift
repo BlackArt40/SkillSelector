@@ -87,6 +87,15 @@ enum ScreenshotMode {
         capture(duplicates, name: "duplicates-\(languageTag).png")
         duplicates.orderOut(nil)
 
+        // 2b. MCP page, hosted full-size — the new detection surface.
+        let mcp = hostedWindow(
+            RootView(initialDestination: .mcp).environment(model),
+            size: NSSize(width: 1440, height: 900)
+        )
+        await settle()
+        capture(mcp, name: "mcp-\(languageTag).png")
+        mcp.orderOut(nil)
+
         // 3. Settings window (directories tab), titled so it can host sheets.
         let settings = titledHostedWindow(
             SettingsView(initialTab: .directories).environment(model)
@@ -317,7 +326,48 @@ private enum FixtureBuilder {
             body: shortBody("deploy-helper"),
             entryFilename: "AGENT.md"
         )
+        // MCP fixtures: a Codex TOML and a Claude JSON, so the MCP entry —
+        // sidebar count, list rows, and the Agent detail's MCP half — shows
+        // real content in the captures.
+        try writeMcpCodexToml(at: home.appending(path: ".codex/config.toml"))
+        try writeMcpClaudeJson(at: home.appending(path: ".claude.json"))
         return (home, project)
+    }
+
+    private static func writeMcpCodexToml(at url: URL) throws {
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try """
+        [mcp_servers.context7]
+        command = "npx"
+        args = ["-y", "@upstash/context7-mcp"]
+
+        [mcp_servers.server-health]
+        url = "https://example.com/mcp"
+        """.write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    private static func writeMcpClaudeJson(at url: URL) throws {
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try """
+        {
+          "mcpServers": {
+            "filesystem": {
+              "command": "npx",
+              "args": ["-y", "@modelcontextprotocol/server-filesystem", "/Users/alice/Projects/demo-webapp"]
+            },
+            "github": {
+              "type": "http",
+              "url": "https://api.githubcopilot.com/mcp/"
+            }
+          }
+        }
+        """.write(to: url, atomically: true, encoding: .utf8)
     }
 
     private static func writeSkill(

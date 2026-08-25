@@ -16,6 +16,7 @@ macOS 原生应用，管理本机的 Agent Skill：浏览、搜索、查看重�
 - 不强制授权：首次启动可以直接浏览空状态，点授权按钮再开始扫描；之后启动自动扫描，也可以只添加项目文件夹
 - 侧边栏的「重复 Skill」按内容指纹（仅 SKILL.md 正文）把散落各 Agent 的相同副本分组，可以整组标记「已忽略」，重启后保持；授权失效的目录会出现在顶部横幅和「需要重新授权」，点一下就能重新授权
 - 侧边栏的「符号链接」列出所有软链接安装（源 → 目标），目标失效时高亮警告
+- 侧边栏的「MCP」检测 Agent 配置里的 MCP 服务器（Codex TOML、Cursor/Claude 等的 JSON、项目 `.mcp.json`）；点「检测」会执行真实的 MCP initialize 握手——stdio 服务器启动后判活再回收，http/sse 发初始化请求，只读、按需触发、不常驻
 - 项目 / 系统目录入口在有数据时才显示；「全部 Skill」「全局 Skill」「重复」「符号链接」「Agents」始终可见
 - 导入新目录只扫描该目录，Skill 列表立即出现，不卡在等待里
 - 诊断报告可以在应用内直接查看（与导出同样的脱敏），也可以导出 JSON
@@ -24,6 +25,8 @@ macOS 原生应用，管理本机的 Agent Skill：浏览、搜索、查看重�
 - 界面为英文和简体中文，跟随系统语言
 
 ![重复 Skill（简体中文）](screenshots/duplicates-zh.png)
+
+![MCP 检测（简体中文）](screenshots/mcp-zh.png)
 
 ![自定义 Agent 编辑器（简体中文）](screenshots/agent-editor-zh.png)
 

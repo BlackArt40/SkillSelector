@@ -16,6 +16,7 @@ Also:
 - Authorization is never forced: the app opens to an empty state you can browse, and a prominent button starts the scan; later launches auto-scan, or you can add just project folders
 - The sidebar's "Duplicate Skills" groups content-identical copies by body-only fingerprint (SKILL.md, ignoring frontmatter) — mark a whole group ignored and the choice survives restarts; directories whose authorization broke land in a top banner and "Needs re-authorization" with a one-click fix
 - The sidebar's "Symbolic Links" lists every link installation (source → target) and highlights broken targets
+- The sidebar's "MCP" detects MCP servers declared in each Agent's config (Codex TOML, Cursor/Claude JSON, project `.mcp.json`); "Probe" runs the real MCP initialize handshake — stdio servers are launched, judged, then reaped, http/sse get an initialize request. Read-only, on demand, never resident
 - Project / system-directory entries appear only when they hold Skills; "All Skills", "Global Skills", "Duplicates", "Symbolic Links" and "Agents" are always visible
 - Importing a folder scans that folder only — the Skill list appears right away instead of after a wait
 - The diagnostics report can be viewed in-app (redacted exactly like the export) or exported as JSON
@@ -24,6 +25,8 @@ Also:
 - English and Simplified Chinese, following the system language
 
 ![Duplicate Skills (English)](screenshots/duplicates-en.png)
+
+![MCP detection (English)](screenshots/mcp-en.png)
 
 ![Custom Agent editor (English)](screenshots/agent-editor-en.png)
 
