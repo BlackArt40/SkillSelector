@@ -7,6 +7,13 @@ import Foundation
 public struct McpScanner: Sendable {
     public init() {}
 
+    /// Upper bound for a single MCP config file read. Mirrors the entry-file
+    /// cap the Skill scanner applies (`SkillDocumentReader.maximumRenderBytes`,
+    /// audit R3/F-01): a multi-GB `.mcp.json`/`config.toml` inside an
+    /// authorized root must not be slurped into memory during a scan (local
+    /// DoS). Files over the limit are skipped, exactly like parse failures.
+    public static let maximumConfigFileBytes = 1_048_576
+
     /// Scans the given authorized roots.
     ///
     /// - Parameter homeRoot: the authorized `.home` root (or a system root
@@ -56,7 +63,16 @@ public struct McpScanner: Sendable {
         agentID: String,
         projectRootID: String?
     ) -> [McpServerDescriptor] {
-        guard let data = try? Data(contentsOf: fileURL) else { return [] }
+        // Size-check first so an oversized config is rejected before any
+        // read (audit R3/F-01 parity): the stat and the read are two steps,
+        // but a config that grows in between is bounded by the post-read
+        // guard below — either way a huge file never reaches the parser.
+        let fileSize = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize
+        guard let fileSize, fileSize <= Self.maximumConfigFileBytes,
+              let data = try? Data(contentsOf: fileURL),
+              data.count <= Self.maximumConfigFileBytes else {
+            return []
+        }
         let parsed: [ParsedMcpServer]
         do {
             parsed = try McpConfigParser.parse(data, format: format)

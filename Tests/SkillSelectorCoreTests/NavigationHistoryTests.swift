@@ -110,6 +110,27 @@ final class NavigationHistoryTests: XCTestCase {
         XCTAssertEqual(model.backEntries.last, .sidebar(.project(rootID: "p1")))
     }
 
+    /// A very long session must not grow the back stack without bound: the
+    /// stack is capped while the bottom seed (the launch default view) is
+    /// preserved, so back still bottoms out on the default destination.
+    func testBackStackIsCappedWhilePreservingTheSeed() throws {
+        let model = try makeModel()
+        model.recordNavigation(.sidebar(.all)) // seed (stack bottom)
+        for index in 1...250 {
+            model.recordNavigation(.sidebar(.project(rootID: "p\(index)")))
+        }
+
+        XCTAssertEqual(model.backEntries.count, 200, "stack must be capped")
+        XCTAssertEqual(model.backEntries.first?.sidebarDestination, .all)
+        XCTAssertEqual(model.backEntries.last?.sidebarDestination, .project(rootID: "p250"))
+        // Traversal still bottoms out at the seed (goBack needs ≥2 entries,
+        // so stop before the seed is the only element left).
+        while model.backEntries.count > 1 {
+            _ = model.goBack()
+        }
+        XCTAssertEqual(model.backEntries.first?.sidebarDestination, .all)
+    }
+
     // MARK: Fixtures
 
     private func makeModel(defaults: UserDefaults? = nil) throws -> AppModel {

@@ -121,16 +121,17 @@ public struct McpProber: Sendable {
         // running" is not the right gate for success.
         while true {
             if let text = collector.snapshot {
-                if Self.responseContainsInitializeResult(text) {
+                switch Self.classifyReply(text) {
+                case .result:
                     return .running
-                }
-                if Self.responseContainsInitializeError(text) {
+                case .error:
                     return .failed("server returned initialize error")
-                }
-                if !process.isRunning {
-                    // Server answered something that was neither a result nor
-                    // an error, then exited: it never accepted the handshake.
-                    return .notRunning
+                case .unknown:
+                    if !process.isRunning {
+                        // Server answered something that was neither a result nor
+                        // an error, then exited: it never accepted the handshake.
+                        return .notRunning
+                    }
                 }
             } else if Date() > deadline {
                 return .notRunning
@@ -141,16 +142,29 @@ public struct McpProber: Sendable {
         }
     }
 
-    private static func responseContainsInitializeResult(_ text: String) -> Bool {
-        text.split(separator: "\n").contains { line in
-            line.contains("\"id\":1") && line.contains("\"result\"")
-        }
+    /// Classifies a collected stdio reply as a JSON-RPC `initialize` result,
+    /// an error, or something unrecognized. Parses each newline-delimited
+    /// JSON object instead of matching substrings, so a chatty server that
+    /// merely echoes "result"-looking text cannot fake a `.running` verdict.
+    private enum JSONRPCReply {
+        case result
+        case error
+        case unknown
     }
 
-    private static func responseContainsInitializeError(_ text: String) -> Bool {
-        text.split(separator: "\n").contains { line in
-            line.contains("\"id\":1") && line.contains("\"error\"")
+    private static func classifyReply(_ text: String) -> JSONRPCReply {
+        for line in text.split(separator: "\n") {
+            guard let data = line.data(using: .utf8),
+                  let object = try? JSONSerialization.jsonObject(with: data),
+                  let reply = object as? [String: Any],
+                  reply["jsonrpc"] as? String == "2.0",
+                  let id = reply["id"] as? Int, id == 1 else {
+                continue
+            }
+            if reply["result"] != nil { return .result }
+            if reply["error"] != nil { return .error }
         }
+        return .unknown
     }
 
     private static func initializePayload() -> String {
@@ -199,6 +213,12 @@ public struct McpProber: Sendable {
         guard let urlString = server.url, let url = URL(string: urlString) else {
             return .failed("http/sse server missing url")
         }
+        guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
+            // Only http/https are probeable transports; anything else (file:,
+            // custom schemes) cannot complete an MCP handshake and must not be
+            // handed to URLSession as a side effect.
+            return .failed("unsupported url scheme: \(urlString)")
+        }
         let session = URLSession(configuration: .ephemeral)
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -222,14 +242,21 @@ public struct McpProber: Sendable {
 }
 
 /// In-flight stdout accumulation for one stdio probe. The readability
-/// handler appends serially; the polling task reads snapshots.
+/// handler appends serially; the polling task reads snapshots. The buffer
+/// is capped so a chatty or broken server cannot grow it without bound
+/// inside the handshake window (local DoS guard).
 private final class OutputCollector: @unchecked Sendable {
+    static let maximumBufferedBytes = 256 * 1024
+
     private let lock = NSLock()
     private var buffer = Data()
 
     func append(_ data: Data) {
         lock.lock()
-        buffer.append(data)
+        if buffer.count < Self.maximumBufferedBytes {
+            let remaining = Self.maximumBufferedBytes - buffer.count
+            buffer.append(data.prefix(remaining))
+        }
         lock.unlock()
     }
 

@@ -281,6 +281,30 @@ final class McpScannerTests: XCTestCase {
         XCTAssertNil(McpScanner.resolve(globalPath: "no-tilde-prefix", relativeTo: home))
         XCTAssertNotNil(McpScanner.resolve(globalPath: "~/.codex/config.toml", relativeTo: home))
     }
+
+    /// A config file beyond the read bound must be skipped entirely instead
+    /// of being slurped into memory during a scan (audit R3/F-01 parity with
+    /// the Skill entry cap).
+    func testOversizedConfigFileIsSkipped() throws {
+        let home = tempRoot.appending(path: "home")
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        let codexDir = home.appending(path: ".codex")
+        try FileManager.default.createDirectory(at: codexDir, withIntermediateDirectories: true)
+        let oversized = String(
+            repeating: "# padding line\n",
+            count: McpScanner.maximumConfigFileBytes / 16 + 1
+        )
+        try oversized.write(
+            to: codexDir.appending(path: "config.toml"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let homeSnapshot = AuthorizedRootSnapshot(id: "home", url: home, kind: .home)
+        let servers = McpScanner().scan(homeRoot: homeSnapshot, projectRoots: [])
+
+        XCTAssertTrue(servers.isEmpty, "oversized config must be skipped, not read whole")
+    }
 }
 
 final class McpProberTests: XCTestCase {
@@ -392,5 +416,68 @@ final class McpProberTests: XCTestCase {
         guard case .failed = status else {
             return XCTFail("expected .failed, got \(status)")
         }
+    }
+
+    /// A server that merely echoes "result"-looking text (not a valid
+    /// JSON-RPC initialize reply) must not fake a `.running` verdict — the
+    /// verdict is decided by parsing the reply, not by substring matching.
+    func testStdioProbeRejectsEchoThatMentionsResult() async throws {
+        let descriptor = McpServerDescriptor(
+            name: "fake-echo",
+            agentID: "test",
+            transport: .stdio,
+            command: "/bin/echo",
+            arguments: [#"plain text with "id":1 and "result" inside"#],
+            url: nil,
+            configFile: "/tmp/fake",
+            projectRootID: nil
+        )
+
+        let status = await McpProber(handshakeTimeout: 2).probe(descriptor)
+
+        XCTAssertEqual(status, .notRunning)
+    }
+
+    /// A real JSON-RPC `initialize` error reply (id 1, error member) must
+    /// surface as `.failed`, not `.running` or `.notRunning`.
+    func testStdioProbeFailsOnInitializeError() async throws {
+        let descriptor = McpServerDescriptor(
+            name: "error-server",
+            agentID: "test",
+            transport: .stdio,
+            command: "/bin/echo",
+            arguments: [#"{"jsonrpc":"2.0","id":1,"error":{"code":-32601,"message":"Method not found"}}"#],
+            url: nil,
+            configFile: "/tmp/fake",
+            projectRootID: nil
+        )
+
+        let status = await McpProber(handshakeTimeout: 2).probe(descriptor)
+
+        guard case .failed = status else {
+            return XCTFail("expected .failed, got \(status)")
+        }
+    }
+
+    /// Only http/https endpoints are probeable; a file:/custom-scheme URL
+    /// must fail fast instead of being handed to URLSession.
+    func testHttpProbeRejectsUnsupportedScheme() async {
+        let descriptor = McpServerDescriptor(
+            name: "file-scheme",
+            agentID: "test",
+            transport: .http,
+            command: nil,
+            arguments: [],
+            url: "file:///tmp/fake-endpoint",
+            configFile: "/tmp/fake",
+            projectRootID: nil
+        )
+
+        let status = await McpProber(handshakeTimeout: 1).probe(descriptor)
+
+        guard case .failed(let message) = status else {
+            return XCTFail("expected .failed, got \(status)")
+        }
+        XCTAssertTrue(message.contains("scheme"), "failure should cite the scheme, got: \(message)")
     }
 }

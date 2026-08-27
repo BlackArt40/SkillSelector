@@ -74,6 +74,12 @@ public struct SkillScanner: Sendable {
         ".parcel-cache",
     ]
 
+    /// Maximum directory nesting the project walk recurses into. A
+    /// pathological tree (thousands of nested directories) must terminate
+    /// with a bounded result rather than overflow the stack (local DoS
+    /// guard); typical skill trees are a handful of levels deep.
+    static let maximumProjectWalkDepth = 256
+
     public func scan(_ roots: [ScanRoot]) async -> ScanReport {
         await scan(roots, cache: .empty)
     }
@@ -239,6 +245,11 @@ public struct SkillScanner: Sendable {
         cache: SkillScanCache,
         installations: inout [ScannedSkill]
     ) throws {
+        guard relativeComponents.count <= Self.maximumProjectWalkDepth else {
+            // Depth guard (audit R3/F-01 parity): stop descending beyond the
+            // bound so a pathological nesting cannot exhaust the stack.
+            return
+        }
         if !relativeComponents.isEmpty,
            let candidate = makeProjectCandidate(
                installationURL: directory,

@@ -351,6 +351,29 @@ final class SkillScannerTests: XCTestCase {
         XCTAssertEqual(scanned.document.name, "boundary")
         XCTAssertFalse(scanned.document.issues.contains { $0.message.contains("read limit") })
     }
+
+    /// A pathological nesting deeper than the walk bound must terminate
+    /// with a bounded result instead of overflowing the stack; skills
+    /// within the bound still scan normally.
+    func testProjectWalkTerminatesOnPathologicalDepth() async throws {
+        let fixture = try ScanFixture()
+        try fixture.writeSkill(at: ".cursor/skills/shallow", name: "shallow")
+
+        // A chain of empty directories far beyond the walk bound (no skills
+        // inside — the recursion must simply stop descending). Single-char
+        // names keep the full path under PATH_MAX.
+        let alphabet = Array("abcdefghijklmnopqrstuvwxyz")
+        var deep = fixture.url
+        for index in 0...(SkillScanner.maximumProjectWalkDepth + 50) {
+            deep = deep.appending(path: String(alphabet[index % alphabet.count]))
+        }
+        try FileManager.default.createDirectory(at: deep, withIntermediateDirectories: true)
+
+        let report = await SkillScanner().scan([fixture.projectRoot])
+
+        XCTAssertEqual(report.installations.map(\.document.name), ["shallow"])
+        XCTAssertEqual(report.roots.first?.availability, .available)
+    }
 }
 
 private final class ScanFixture: @unchecked Sendable {

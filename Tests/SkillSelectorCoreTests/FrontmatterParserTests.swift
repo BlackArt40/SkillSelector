@@ -132,4 +132,26 @@ final class FrontmatterParserTests: XCTestCase {
         XCTAssertEqual(parsed.name, "ok")
         XCTAssertTrue(parsed.issues.isEmpty)
     }
+
+    /// A UTF-8 BOM (Windows-editor artifact) must not hide the opening "---"
+    /// boundary: frontmatter detection, body extraction and the body helper
+    /// all drop the marker.
+    func testUTF8BOMDoesNotBreakFrontmatterDetection() {
+        let text = "\u{FEFF}---\nname: bom-skill\ndescription: BOM\n---\n# BOM Title\n\nBody text."
+
+        let parsed = FrontmatterParser.parse(text)
+
+        XCTAssertEqual(parsed.name, "bom-skill")
+        XCTAssertEqual(parsed.description, "BOM")
+        XCTAssertEqual(parsed.title, "BOM Title")
+        XCTAssertTrue(parsed.issues.isEmpty, "BOM must not produce parse issues")
+        XCTAssertEqual(FrontmatterParser.bodyLines(from: text).first, "# BOM Title")
+    }
+
+    /// BOM tolerance must not change documents that already start clean.
+    func testBOMFreeDocumentParsesIdentically() {
+        let clean = "---\nname: clean\ndescription: fine\n---\n# Clean"
+        XCTAssertEqual(FrontmatterParser.parse(clean).name, "clean")
+        XCTAssertEqual(FrontmatterParser.bodyLines(from: clean).first, "# Clean")
+    }
 }

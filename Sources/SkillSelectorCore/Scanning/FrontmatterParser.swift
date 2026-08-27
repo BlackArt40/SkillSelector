@@ -62,7 +62,12 @@ public enum FrontmatterParser {
     }
 
     private static func normalizedLines(_ text: String) -> [String] {
-        text
+        // A UTF-8 BOM (U+FEFF) at the start is a byte-order artifact from
+        // Windows editors, not part of the first line: "---" must still be
+        // recognized as the frontmatter boundary, and the body must not leak
+        // the marker into the rendered title/paragraph.
+        let text = text.first == "\u{FEFF}" ? String(text.dropFirst()) : text
+        return text
             .replacingOccurrences(of: "\r\n", with: "\n")
             .replacingOccurrences(of: "\r", with: "\n")
             .components(separatedBy: "\n")

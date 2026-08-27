@@ -574,6 +574,10 @@ final class AppModel {
     private static let autoScanHomeDefaultsKey = "SkillSelector.autoScanHome"
     private static let manuallyEnabledAgentsDefaultsKey = "SkillSelector.manuallyEnabledAgents"
     private static let rootNameDefaultsKeyPrefix = "SkillSelector.rootName."
+    /// Soft cap on the back stack: the stack bottom (the launch default
+    /// seed) is preserved while older entries above it are dropped, so a
+    /// very long session cannot grow history without bound.
+    private static let maximumBackEntries = 200
 
     private func reloadAgentDefinitions() throws {
         customAgentDefinitions = try customAgentStore.definitions()
@@ -682,6 +686,11 @@ extension AppModel {
         }
         backEntries.append(entry)
         forwardEntries = []
+        if backEntries.count > Self.maximumBackEntries {
+            // Keep the stack bottom (the launch default seed) and drop the
+            // oldest entry above it.
+            backEntries.remove(at: 1)
+        }
     }
 
     /// Pops the current state onto the forward stack and returns the state
