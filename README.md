@@ -9,7 +9,7 @@ macOS 原生应用，管理本机的 Agent Skill：浏览、搜索、查看重�
 
 ## 它能做什么
 
-主界面是三栏浏览器：侧边栏按范围和 Agent 分组，中间是可搜索、可排序的 Skill 列表，右侧显示选中 Skill 的详情——简介、frontmatter、渲染后的 Markdown 文档、关联的 Agents 和安装位置。搜索时普通词按 Skill 名称模糊匹配；给词加上 `name:`、`desc:`、`path:`、`agent:` 前缀就只搜对应字段，比如 `agent:cursor path:.agents`。右上角有前进 / 后退（⌘[ / ⌘]），侧边栏切换、打开详情、搜索各记一步历史。
+主界面是三栏浏览器：侧边栏按范围和 Agent 分组，中间是可搜索、可排序的 Skill 列表，右侧显示选中 Skill 的详情——简介、frontmatter、渲染后的 Markdown 文档、关联的 Agents 和安装位置。搜索时普通词按 Skill 名称模糊匹配；给词加上 `name:`、`desc:`、`path:`、`agent:` 前缀就只搜对应字段，比如 `agent:cursor path:.agents`。右上角有前进 / 后退（⌘[ / ⌘]），菜单栏「前往」也有同样的前进 / 后退，按 ⌘F 聚焦搜索框；侧边栏切换、打开详情、搜索各记一步历史。中列右缘可以拖拽调整宽度，应用是单窗口（菜单里没有"新建窗口"）。
 
 另外：
 
@@ -18,6 +18,7 @@ macOS 原生应用，管理本机的 Agent Skill：浏览、搜索、查看重�
 - 侧边栏的「符号链接」列出所有软链接安装（源 → 目标），目标失效时高亮警告
 - 侧边栏的「MCP」检测 Agent 配置里的 MCP 服务器（Codex TOML、Cursor/Claude 等的 JSON、项目 `.mcp.json`）；点「检测」会执行真实的 MCP initialize 握手——stdio 服务器启动后判活再回收，http/sse 发初始化请求，只读、按需触发、不常驻
 - 项目 / 系统目录入口在有数据时才显示；「全部 Skill」「全局 Skill」「重复」「符号链接」「Agents」始终可见
+- 侧边栏的 Agent 行显示对应品牌图标（Claude Code、Codex、Cursor 等），没有图标的显示首字母徽章
 - 导入新目录只扫描该目录，Skill 列表立即出现，不卡在等待里
 - 诊断报告可以在应用内直接查看（与导出同样的脱敏），也可以导出 JSON
 - SKILL.md 只读：在 Finder 里显示，或用默认编辑器打开；应用内不做复制、移动、删除或创建链接

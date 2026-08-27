@@ -9,7 +9,7 @@ A native macOS app for managing Agent Skills on your machine: browse, search, re
 
 ## What it does
 
-The main window is a three-column browser: a sidebar grouped by scope and Agent, a searchable, sortable list of Skills, and a detail pane showing the selected Skill's description, frontmatter, rendered Markdown document, associated Agents, and install locations. In search, a plain term fuzzy-matches the Skill name; prefix it with `name:`, `desc:`, `path:`, or `agent:` to search one field only — for example `agent:cursor path:.agents`. Back/forward (⌘[ / ⌘]) sit in the title bar; sidebar switches, detail openings and each search session record one history step.
+The main window is a three-column browser: a sidebar grouped by scope and Agent, a searchable, sortable list of Skills, and a detail pane showing the selected Skill's description, frontmatter, rendered Markdown document, associated Agents, and install locations. In search, a plain term fuzzy-matches the Skill name; prefix it with `name:`, `desc:`, `path:`, or `agent:` to search one field only — for example `agent:cursor path:.agents`. Back/forward (⌘[ / ⌘]) sit in the title bar and in the menu bar's Go menu; ⌘F focuses the search field; sidebar switches, detail openings and each search session record one history step. The middle column's right edge is draggable to resize it, and the app is single-window (no "New Window" menu item).
 
 Also:
 
@@ -18,6 +18,7 @@ Also:
 - The sidebar's "Symbolic Links" lists every link installation (source → target) and highlights broken targets
 - The sidebar's "MCP" detects MCP servers declared in each Agent's config (Codex TOML, Cursor/Claude JSON, project `.mcp.json`); "Probe" runs the real MCP initialize handshake — stdio servers are launched, judged, then reaped, http/sse get an initialize request. Read-only, on demand, never resident
 - Project / system-directory entries appear only when they hold Skills; "All Skills", "Global Skills", "Duplicates", "Symbolic Links" and "Agents" are always visible
+- Agent rows in the sidebar show the matching brand mark (Claude Code, Codex, Cursor, …) or a letter monogram when no mark ships
 - Importing a folder scans that folder only — the Skill list appears right away instead of after a wait
 - The diagnostics report can be viewed in-app (redacted exactly like the export) or exported as JSON
 - SKILL.md files stay read-only — reveal in Finder or open in your default editor; the app performs no copy, move, delete, or link operations
