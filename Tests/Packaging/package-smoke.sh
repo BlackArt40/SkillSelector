@@ -25,11 +25,13 @@ lipo "$APP/Contents/MacOS/SkillSelector" -verify_arch arm64 x86_64
 # `--deep` is deprecated for signing but is the correct flag for verification:
 # it walks nested code, which package-dmg.sh now signs explicitly.
 codesign --verify --deep --strict "$APP"
-codesign -d --entitlements :- "$APP" 2>&1 | grep -q 'com.apple.security.app-sandbox'
+# grep without -q: consume the entire stream so codesign never hits SIGPIPE
+# from a pipe closed early under `set -euo pipefail`.
+codesign -d --entitlements :- "$APP" 2>&1 | grep 'com.apple.security.app-sandbox' >/dev/null
 
 # The README tells users this build is ad-hoc signed. Assert that stays true so
 # the disclosure never silently drifts from the artifact.
-codesign -dvv "$APP" 2>&1 | grep -q '^Signature=adhoc$'
+codesign -dvv "$APP" 2>&1 | grep '^Signature=adhoc$' >/dev/null
 
 plutil -lint "$INFO_PLIST"
 test "$(plutil -extract CFBundleShortVersionString raw "$INFO_PLIST")" = "$VERSION"
