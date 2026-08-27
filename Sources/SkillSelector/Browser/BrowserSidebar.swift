@@ -294,7 +294,7 @@ struct BrowserSidebar: View {
                 ForEach(agents) { agent in
                     SidebarItem(
                         title: agent.displayName,
-                        glyph: AgentMonoView(name: agent.displayName),
+                        glyph: AgentIconView(agentID: agent.id, displayName: agent.displayName),
                         count: counts[.agent(id: agent.id)],
                         isActive: destination == .agent(id: agent.id)
                     ) {

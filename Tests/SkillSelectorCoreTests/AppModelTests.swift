@@ -326,6 +326,56 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(store.values.isEmpty)
     }
 
+    // MARK: MCP probing
+
+    /// Probe-scope: only the requested Agent's servers are probed, and the
+    /// pass leaves no server in the transient `.probing` state.
+    func testProbeMcpServersOnlyProbesRequestedAgent() async throws {
+        let model = makeModel()
+        model.mcpServers = [
+            probeServer(name: "a1", agentID: "agent-a"),
+            probeServer(name: "b1", agentID: "agent-b"),
+        ]
+        let a1 = try XCTUnwrap(model.mcpServers.first { $0.name == "a1" })
+        let b1 = try XCTUnwrap(model.mcpServers.first { $0.name == "b1" })
+
+        await model.probeMcpServers(agentID: "agent-a")
+
+        // Only agent-a's server was touched, and it resolved out of `.probing`.
+        XCTAssertNotNil(model.mcpProbeStatuses[a1.id])
+        XCTAssertNil(model.mcpProbeStatuses[b1.id], "other agents' servers must stay untouched")
+        XCTAssertTrue(model.mcpProbeStatuses[a1.id]?.isResolved ?? false)
+    }
+
+    /// The all-servers pass folds exactly one verdict per id.
+    func testProbeAllMcpServersResolvesEveryServer() async throws {
+        let model = makeModel()
+        model.mcpServers = [
+            probeServer(name: "a1", agentID: "agent-a"),
+            probeServer(name: "b1", agentID: "agent-b"),
+        ]
+
+        await model.probeAllMcpServers()
+
+        XCTAssertEqual(model.mcpProbeStatuses.count, 2)
+        XCTAssertTrue(model.mcpProbeStatuses.values.allSatisfy(\.isResolved))
+    }
+
+    /// Missing-command stdio servers fail fast with a `.failed` verdict —
+    /// the filtered probe pass does not depend on a real server existing.
+    private func probeServer(name: String, agentID: String) -> McpServerDescriptor {
+        McpServerDescriptor(
+            name: name,
+            agentID: agentID,
+            transport: .stdio,
+            command: nil,
+            arguments: [],
+            url: nil,
+            configFile: "/tmp/fake",
+            projectRootID: nil
+        )
+    }
+
     private func makeValidationModel() throws -> (AppModel, RecordingAgentDefinitionStore) {
         let suite = "AppModelValidationTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!

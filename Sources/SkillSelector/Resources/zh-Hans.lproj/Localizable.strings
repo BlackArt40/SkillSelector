@@ -162,6 +162,7 @@
 /* Pattern dry run */
 
 /* Navigation */
+"Go" = "前往";
 "Go Back" = "返回";
 "Go Forward" = "前进";
 "Open in Default Editor" = "用默认编辑器打开";

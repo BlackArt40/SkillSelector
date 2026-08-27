@@ -162,6 +162,7 @@
 /* Pattern dry run */
 
 /* Navigation */
+"Go" = "Go";
 "Go Back" = "Go Back";
 "Go Forward" = "Go Forward";
 "Open in Default Editor" = "Open in Default Editor";

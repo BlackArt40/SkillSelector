@@ -2,17 +2,26 @@ import AppKit
 import SkillSelectorCore
 import SwiftUI
 
-/// The main browser window, laid out as the design's three fixed columns
-/// (240 / 400 / flexible) with a titlebar toolbar hosting back/forward,
-/// search and the appearance toggle.
+/// The main browser window, laid out as the design's three columns
+/// (240 / 400-default / flexible). The middle list column is user-resizable
+/// via the drag handle, and a titlebar toolbar hosts back/forward, search
+/// and the appearance toggle.
 struct RootView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openSettings) private var openSettings
     @AppStorage(ThemePreference.storageKey) private var themeMode = "system"
     @State private var destination: BrowserDestination
     @State private var searchText = ""
     @State private var sort: SkillQuery.Sort = .default
     @State private var openError: String?
     @FocusState private var searchFocused: Bool
+    /// Searchable middle-column width, adjustable by dragging the resizer.
+    @State private var listColumnWidth: CGFloat = 400
+    /// Local event monitor resigning the toolbar search field on outside
+    /// clicks (AppKit focus; see `installSearchFocusMonitors`).
+    @State private var searchFocusMonitor: Any?
+    /// Notification observers removed with the monitor.
+    @State private var searchFocusObservers: [NSObjectProtocol] = []
     /// Suppresses history recording while a back/forward navigation is
     /// restoring state — the restore is not a new action.
     @State private var suppressingHistory = false
@@ -86,7 +95,7 @@ struct RootView: View {
                         },
                         onSelect: { path in selectSkill(path) }
                     )
-                    .frame(width: 400)
+                    .frame(width: listColumnWidth)
                 } else if currentDestination == .links {
                     SymlinkListView(
                         links: symlinkSkills,
@@ -95,7 +104,7 @@ struct RootView: View {
                         onRevealInFinder: { skill in reveal(skill) },
                         onSelect: { path in selectSkill(path) }
                     )
-                    .frame(width: 400)
+                    .frame(width: listColumnWidth)
                 } else if currentDestination == .mcp {
                     McpListView(
                         servers: model.mcpServers,
@@ -110,7 +119,7 @@ struct RootView: View {
                         onProbeAll: { probeAllMcp() },
                         onRevealConfig: { server in model.revealMcpConfigFile(server) }
                     )
-                    .frame(width: 400)
+                    .frame(width: listColumnWidth)
                 } else {
                     SkillListView(
                         selection: model.selection,
@@ -131,8 +140,9 @@ struct RootView: View {
                         onPrimarySelect: { path in selectSkill(path) },
                         onArrowSelect: { path in model.selectOnly(path) }
                     )
-                    .frame(width: 400)
+                    .frame(width: listColumnWidth)
                 }
+                ColumnResizer(width: $listColumnWidth, range: 300...620)
 
                 if currentDestination == .mcp {
                     McpDetailView(
@@ -180,37 +190,16 @@ struct RootView: View {
         }
         .frame(minWidth: 1080, minHeight: 700)
         .navigationTitle(currentDestination.title(rootsByID: model.rootsByID, definitions: model.agentDefinitions))
-        .background {
-            // Hidden ⌘F trigger: focuses the search field from anywhere in
-            // the window without cross-scene focus plumbing.
-            Button(L10n.string("Search Skills")) {
-                searchFocused = true
-            }
-            .keyboardShortcut("f", modifiers: .command)
-            .opacity(0)
-            .accessibilityHidden(true)
-            // ⌘[ / ⌘] macOS-standard navigation shortcuts. Kept on hidden
-            // buttons so they fire even when the toolbar buttons are
-            // disabled at a stack edge.
-            Button(L10n.string("Go Back")) {
-                goBack()
-            }
-            .keyboardShortcut("[", modifiers: .command)
-            .opacity(0)
-            .accessibilityHidden(true)
-            Button(L10n.string("Go Forward")) {
-                goForward()
-            }
-            .keyboardShortcut("]", modifiers: .command)
-            .opacity(0)
-            .accessibilityHidden(true)
-        }
         .onAppear {
+            installSearchFocusMonitors()
             // The stack bottom is the launch default destination; seed it
             // once so back can traverse all the way to it.
             guard !didSeedHistory else { return }
             didSeedHistory = true
             model.recordNavigation(.sidebar(destination))
+        }
+        .onDisappear {
+            removeSearchFocusMonitors()
         }
         .onChange(of: destination) { _, newValue in
             guard !suppressingHistory else { return }
@@ -233,6 +222,29 @@ struct RootView: View {
             if case .search = model.backEntries.last {
                 model.recordNavigation(.search(newValue))
             }
+        }
+        // ⌘F / ⌘[ / ⌘] arrive from WindowCommands' menu bar items; the view
+        // applies them with the same restore logic as the toolbar buttons.
+        .onReceive(NotificationCenter.default.publisher(for: .performGoBack)) { _ in
+            goBack()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .performGoForward)) { _ in
+            goForward()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .focusSearchField)) { _ in
+            searchFocused = true
+            // macOS quirk: programmatic @FocusState focus is unreliable for
+            // a field inside ToolbarItemGroup, so fall back to the responder
+            // chain to land keyboard focus in the host NSTextField.
+            DispatchQueue.main.async {
+                focusToolbarSearchField()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .searchFocusStarted)) { _ in
+            searchFocused = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .searchFocusDismissed)) { _ in
+            searchFocused = false
         }
         .languageReloading()
         .themedAppearance()
@@ -417,12 +429,7 @@ struct RootView: View {
         guard !mcpProbingAll else { return }
         mcpProbingAll = true
         Task {
-            let agents = model.mcpServers.filter { $0.agentID == agentID }
-            for server in agents {
-                model.mcpProbeStatuses[server.id] = .probing
-                let status = await McpProber().probe(server)
-                model.mcpProbeStatuses[server.id] = status
-            }
+            await model.probeMcpServers(agentID: agentID)
             mcpProbingAll = false
         }
     }
@@ -562,9 +569,96 @@ struct RootView: View {
     /// Opens the Settings scene on the directories pane — used by the
     /// re-authorization banner.
     private func openSettingsDirectories() {
-        NSApp.activate(ignoringOtherApps: true)
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        openSettings()
         NotificationCenter.default.post(name: .openSettingsTab, object: SettingsTab.directories)
+    }
+
+    /// Lands keyboard focus in the toolbar search field via the responder
+    /// chain. SwiftUI's toolbar fields ignore programmatic FocusState on
+    /// some macOS versions; the host NSTextField is made first responder
+    /// directly, with any current text selected (⌘F convention).
+    private func focusToolbarSearchField() {
+        let window = NSApp.keyWindow
+            ?? NSApp.mainWindow
+            ?? NSApp.windows.first { $0.isVisible }
+        guard let window, let field = Self.searchField(in: window) else { return }
+        window.makeFirstResponder(field)
+        field.currentEditor()?.selectAll(nil)
+    }
+
+    /// Installs the AppKit-side focus bookkeeping for the toolbar search
+    /// field. FocusState alone cannot move focus into SwiftUI toolbar
+    /// fields, so the AppKit responder chain drives the focus — but then
+    /// SwiftUI never sees the field as focused, so a local event monitor
+    /// mirrors clicks: an outside click resigns the editor and dismisses
+    /// the search session; a click on the field (re)activates it. The ⌘F
+    /// path stays in `focusSearchField`.
+    private func installSearchFocusMonitors() {
+        guard searchFocusMonitor == nil else { return }
+        let center = NotificationCenter.default
+        searchFocusMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.leftMouseDown]
+        ) { event in
+            guard let window = event.window, window === NSApp.keyWindow,
+                  let field = Self.searchField(in: window) else { return event }
+            let clickInScreen = window.convertPoint(toScreen: event.locationInWindow)
+            let fieldRect = field.convert(field.bounds, to: nil).insetBy(dx: -8, dy: -8)
+            let isEditing = field.currentEditor() != nil || window.firstResponder === field
+            if fieldRect.contains(clickInScreen) {
+                // Click inside the field: keep caret, or re-activate editing
+                // when the field was dismissed by an earlier outside click.
+                if !isEditing {
+                    window.makeFirstResponder(field)
+                    center.post(name: .searchFocusStarted, object: nil)
+                }
+            } else if isEditing {
+                // Click anywhere else in the window resigns the field.
+                window.makeFirstResponder(nil)
+                center.post(name: .searchFocusDismissed, object: nil)
+            }
+            return event
+        }
+        // Switching to another app should also end the search session.
+        let observer = center.addObserver(
+            forName: NSWindow.didResignKeyNotification,
+            object: nil,
+            queue: .main
+        ) { note in
+            guard let window = note.object as? NSWindow,
+                  let field = Self.searchField(in: window),
+                  field.currentEditor() != nil || window.firstResponder === field else { return }
+            center.post(name: .searchFocusDismissed, object: nil)
+        }
+        searchFocusObservers = [observer]
+    }
+
+    private func removeSearchFocusMonitors() {
+        if let monitor = searchFocusMonitor {
+            NSEvent.removeMonitor(monitor)
+            searchFocusMonitor = nil
+        }
+        searchFocusObservers.forEach(NotificationCenter.default.removeObserver)
+        searchFocusObservers = []
+    }
+
+    /// Finds the toolbar search field on a window — the host NSTextField is
+    /// nested inside the toolbar item's NSHostingView.
+    private static func searchField(in window: NSWindow) -> NSTextField? {
+        guard let toolbar = window.toolbar else { return nil }
+        for item in toolbar.items {
+            if let field = searchField(in: item.view) { return field }
+        }
+        return nil
+    }
+
+    /// Recursively finds the NSTextField inside a toolbar item's host view.
+    private static func searchField(in view: NSView?) -> NSTextField? {
+        guard let view else { return nil }
+        if let field = view as? NSTextField { return field }
+        for subview in view.subviews {
+            if let field = searchField(in: subview) { return field }
+        }
+        return nil
     }
 }
 

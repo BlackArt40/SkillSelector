@@ -32,7 +32,11 @@ let package = Package(
         .executableTarget(
             name: "SkillSelector",
             dependencies: ["SkillSelectorCore"],
-            resources: [.process("Resources")]
+            resources: [
+                .process("Resources"),
+                // SVG bundle: agent brand marks, loaded as template images.
+                .copy("AgentIcons"),
+            ]
         ),
     ] + testTargets
 )

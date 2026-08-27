@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Shared controls styled from design/screens/browser.html and settings.html:
@@ -227,5 +228,48 @@ struct ThemeSwitch: View {
         .accessibilityLabel(accessibilityLabel)
         .accessibilityValue(isOn ? "on" : "off")
         .accessibilityAddTraits(isOn ? [.isSelected] : [])
+    }
+}
+
+/// Column separator, always visible (same language as the sidebar's trailing
+/// divider) so the list column reads against the detail pane in both light
+/// and dark appearances; the line brightens on hover to hint at dragging.
+struct ColumnResizer: View {
+    @Binding var width: CGFloat
+    let range: ClosedRange<CGFloat>
+    @State private var dragStart: CGFloat?
+    @State private var showingHandle = false
+
+    var body: some View {
+        Rectangle()
+            .fill(Color.clear)
+            .contentShape(Rectangle())
+            .frame(width: 6)
+            .overlay(alignment: .center) {
+                Rectangle()
+                    .fill(showingHandle ? AppTheme.border : AppTheme.borderSoft)
+                    .frame(width: 1)
+                    .padding(.vertical, 6)
+            }
+            .onHover { hovering in
+                guard hovering != showingHandle else { return }
+                showingHandle = hovering
+                // set() replaces the cursor outright — no push/pop stack, so
+                // hover events racing the strip's movement cannot unbalance it.
+                (hovering ? NSCursor.resizeLeftRight : NSCursor.arrow).set()
+            }
+            .gesture(
+                // .global measures the drag translation in window space, not
+                // the strip's own (moving) local space — otherwise changing
+                // width shifts the strip under the cursor and re-anchors the
+                // translation, producing the tell-tale lag/jitter.
+                DragGesture(minimumDistance: 2, coordinateSpace: .global)
+                    .onChanged { value in
+                        if dragStart == nil { dragStart = width }
+                        guard let start = dragStart else { return }
+                        width = min(max(range.lowerBound, start + value.translation.width), range.upperBound)
+                    }
+                    .onEnded { _ in dragStart = nil }
+            )
     }
 }

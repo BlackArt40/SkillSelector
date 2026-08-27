@@ -44,15 +44,41 @@ extension AppModel {
     }
 
     /// One-shot probe of every current server. User-initiated only — never
-    /// scheduled. Each server gets `.probing` while in flight, then its
-    /// verdict; the map is complete when the call returns.
+    /// scheduled. Statuses start at `.probing` so the list paints the spin
+    /// before any verdict lands.
     func probeAllMcpServers() async {
-        for server in mcpServers {
+        await probeServers(mcpServers)
+    }
+
+    /// One-shot probe of one Agent's MCP servers (Agent detail half).
+    func probeMcpServers(agentID: String) async {
+        let agents = mcpServers.filter { $0.agentID == agentID }
+        await probeServers(agents)
+    }
+
+    /// Shared probe pass: marks every server `.probing`, then runs the real
+    /// handshakes concurrently and folds each verdict in as it lands. Probe
+    /// processes are throwaway, so parallel probing is safe — each server's
+    /// child is started, answered, and force-terminated independently.
+    private func probeServers(_ servers: [McpServerDescriptor]) async {
+        for server in servers {
             mcpProbeStatuses[server.id] = .probing
-            // Let the UI paint the spinning row before the probe starts.
-            try? await Task.sleep(nanoseconds: 50_000_000)
-            let status = await McpProber().probe(server)
-            mcpProbeStatuses[server.id] = status
+        }
+        // Give the UI a frame to paint the spinning rows before verdicts
+        // start landing.
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        await withTaskGroup(of: Void.self) { group in
+            for server in servers {
+                group.addTask { [server] in
+                    // Keep the original per-probe delay: each row shows its
+                    // spinner before being swapped to the verdict.
+                    try? await Task.sleep(nanoseconds: 50_000_000)
+                    let status = await McpProber().probe(server)
+                    await MainActor.run {
+                        self.mcpProbeStatuses[server.id] = status
+                    }
+                }
+            }
         }
     }
 

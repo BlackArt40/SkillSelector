@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Brand components drawn from design/assets/logo.svg and app-icon.svg.
@@ -163,6 +164,50 @@ struct AgentMonoView: View {
             return String(words[0].prefix(1) + words[1].prefix(1)).uppercased()
         }
         return String(name.prefix(2)).uppercased()
+    }
+}
+
+/// Bundled per-Agent brand marks, looked up by agent id in `AgentIcons/`.
+/// The SVGs are single-path monochrome (simple-icons, CC0), so their images
+/// load as templates and tint with the surrounding foreground style —
+/// legible in both light and dark appearances.
+enum AgentBrandIcon {
+    /// The bundled brand mark for an agent id, if one is shipped.
+    static func image(for agentID: String) -> NSImage? {
+        guard let url = Bundle.module.url(
+            forResource: agentID,
+            withExtension: "svg",
+            subdirectory: "AgentIcons"
+        ), let image = NSImage(contentsOf: url) else { return nil }
+        image.isTemplate = true
+        return image
+    }
+
+    /// Whether a brand mark ships for this agent id (test seam).
+    static func hasIcon(for agentID: String) -> Bool {
+        image(for: agentID) != nil
+    }
+}
+
+/// Agent avatar in the browser sidebar: the bundled brand mark when one
+/// exists, the letter monogram otherwise.
+struct AgentIconView: View {
+    let agentID: String
+    let displayName: String
+    var size: CGFloat = 18
+
+    var body: some View {
+        if let image = AgentBrandIcon.image(for: agentID) {
+            Image(nsImage: image)
+                .resizable()
+                .renderingMode(.template)
+                .interpolation(.high)
+                .scaledToFit()
+                .frame(width: size, height: size)
+                .accessibilityHidden(true)
+        } else {
+            AgentMonoView(name: displayName, size: size)
+        }
     }
 }
 
