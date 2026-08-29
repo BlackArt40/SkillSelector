@@ -29,6 +29,11 @@ codesign --verify --deep --strict "$APP"
 # from a pipe closed early under `set -euo pipefail`.
 codesign -d --entitlements :- "$APP" 2>&1 | grep 'com.apple.security.app-sandbox' >/dev/null
 
+# The read-only catalog fetches GitHub on demand — the sandbox must grant
+# outbound network client access, and nothing beyond it (no server, no
+# arbitrary file writes).
+codesign -d --entitlements :- "$APP" 2>&1 | grep 'com.apple.security.network.client' >/dev/null
+
 # The README tells users this build is ad-hoc signed. Assert that stays true so
 # the disclosure never silently drifts from the artifact.
 codesign -dvv "$APP" 2>&1 | grep '^Signature=adhoc$' >/dev/null

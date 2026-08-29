@@ -267,3 +267,27 @@
 "Reveal MCP Config" = "Reveal Config File in Finder";
 
 "Status" = "Status";
+
+/* Catalog */
+"Catalog" = "Catalog";
+"Refresh Catalog" = "Refresh Catalog";
+"Catalog Loading" = "Loading catalog…";
+"Catalog Failed" = "Unable to Load Catalog";
+"Catalog Truncated" = "This listing may be incomplete — the source repository was too large to list fully.";
+"Catalog Failure Rate Limited" = "GitHub's anonymous rate limit is exhausted. Try again later.";
+"Catalog Failure Network" = "The network is unavailable or the service did not respond.";
+"Catalog Failure Invalid Response" = "The response could not be parsed.";
+"Catalog Failure HTTP" = "The server returned an error (HTTP %ld).";
+"Retry" = "Retry";
+"No Catalog Skills" = "No Skills in the Catalog";
+"No Catalog Skills Description" = "Declared marketplace sources are fetched on demand when you open the Catalog. The app browses them read-only — installation stays with the ecosystem's own tooling.";
+"Catalog Remote Badge" = "Remote";
+"Catalog Content" = "Skill Document";
+"Catalog Document Loading" = "Loading skill document…";
+"Catalog Document Failed" = "Unable to Load Skill Document";
+"Open in GitHub" = "Open on GitHub";
+"Copy Link" = "Copy Link";
+"Link Copied" = "Copied";
+"Source" = "Source";
+"Select a Catalog Skill" = "Select a Catalog Skill";
+"Select a Catalog Skill Description" = "Pick a skill from the catalog to read its document. Nothing is installed — the app is a read-only board.";

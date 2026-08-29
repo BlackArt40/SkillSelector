@@ -8,13 +8,14 @@ enum BrowserDestination: Hashable {
     case links
     case rules
     case mcp
+    case catalog
     case system(rootID: String)
     case project(rootID: String)
     case agent(id: String)
 
     var queryScope: SkillQuery.Scope {
         switch self {
-        case .all, .agent, .duplicates, .links, .rules, .mcp:
+        case .all, .agent, .duplicates, .links, .rules, .mcp, .catalog:
             .all
         case .global:
             .global
@@ -213,6 +214,14 @@ struct BrowserSidebar: View {
                 isActive: destination == .mcp
             ) {
                 destination = .mcp
+            }
+            SidebarItem(
+                title: L10n.string("Catalog"),
+                glyph: Image(systemName: "sparkles"),
+                count: counts[.catalog],
+                isActive: destination == .catalog
+            ) {
+                destination = .catalog
             }
         }
     }

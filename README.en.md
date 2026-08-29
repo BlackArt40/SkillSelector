@@ -17,6 +17,10 @@ Also:
 - The sidebar's "Duplicate Skills" groups content-identical copies by body-only fingerprint (SKILL.md, ignoring frontmatter) — mark a whole group ignored and the choice survives restarts; directories whose authorization broke land in a top banner and "Needs re-authorization" with a one-click fix
 - The sidebar's "Symbolic Links" lists every link installation (source → target) and highlights broken targets
 - The sidebar's "MCP" detects MCP servers declared in each Agent's config (Codex TOML, Cursor/Claude JSON, project `.mcp.json`); "Probe" runs the real MCP initialize handshake — stdio servers are launched, judged, then reaped, http/sse get an initialize request. Read-only, on demand, never resident
+- The sidebar's "Rules" lists each Agent's instruction files (`CLAUDE.md`, `AGENTS.md`, `.cursorrules`, plus directory sources like `.cursor/rules`, `.claude/rules`, `.roo/rules` and the GEMINI.md hierarchy) with rendered Markdown details; equally read-only
+- Beyond exact duplicates there's **near-duplicate** grouping (MinHash similarity fingerprints) and a **compare sheet**: view two copies' frontmatter, body and child files side by side
+- Refresh history (what was added / changed / removed) is kept locally and always reviewable
+- The sidebar's "Catalog" fetches declared GitHub sources (e.g. `anthropics/skills`) on demand to show what the ecosystem offers — browsing only: open on GitHub or copy the link; installation stays with the ecosystem's tooling, nothing is installed in-app
 - Project / system-directory entries appear only when they hold Skills; "All Skills", "Global Skills", "Duplicates", "Symbolic Links" and "Agents" are always visible
 - Agent rows in the sidebar show the matching brand mark (Claude Code, Codex, Cursor, …) or a letter monogram when no mark ships
 - Importing a folder scans that folder only — the Skill list appears right away instead of after a wait
@@ -43,7 +47,7 @@ Roo Code is legacy compatibility and only appears once detected or enabled in Se
 
 ## Privacy
 
-Runs offline. No telemetry, no crash reporter, no file watcher, no bundled model. The index stores metadata only (paths, owning Agents, descriptions) and never copies Skill content; folder access goes through security-scoped bookmarks, and scans stick to the fixed paths declared in the registry.
+The local features run offline. No telemetry, no crash reporter, no file watcher, no bundled model. The only outbound traffic is the Catalog fetching its declared GitHub sources on demand (a request happens only when you open that section or hit refresh — never polled, never persisted). The index stores metadata only (paths, owning Agents, descriptions) and never copies Skill content; folder access goes through security-scoped bookmarks, and scans stick to the fixed paths declared in the registry.
 
 ## Install
 

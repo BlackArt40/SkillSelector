@@ -268,3 +268,27 @@
 "Reveal MCP Config" = "在 Finder 中显示配置文件";
 
 "Status" = "状态";
+
+/* 市场目录 */
+"Catalog" = "市场";
+"Refresh Catalog" = "刷新市场目录";
+"Catalog Loading" = "正在加载市场目录…";
+"Catalog Failed" = "无法加载市场目录";
+"Catalog Truncated" = "列表可能不完整——来源仓库过大，未能完整列出。";
+"Catalog Failure Rate Limited" = "GitHub 匿名访问限额已用尽，请稍后重试。";
+"Catalog Failure Network" = "网络不可用或服务无响应。";
+"Catalog Failure Invalid Response" = "响应格式无法解析。";
+"Catalog Failure HTTP" = "服务返回错误（HTTP %ld）。";
+"Retry" = "重试";
+"No Catalog Skills" = "目录中暂无 Skill";
+"No Catalog Skills Description" = "进入「市场」时才按需抓取声明来源的 Skill 列表；应用内仅浏览，安装交给生态工具与 Finder。";
+"Catalog Remote Badge" = "远程";
+"Catalog Content" = "Skill 文档";
+"Catalog Document Loading" = "正在加载 Skill 文档…";
+"Catalog Document Failed" = "无法加载 Skill 文档";
+"Open in GitHub" = "在 GitHub 打开";
+"Copy Link" = "复制链接";
+"Link Copied" = "已复制";
+"Source" = "来源";
+"Select a Catalog Skill" = "选择一个市场 Skill";
+"Select a Catalog Skill Description" = "从目录中选择一个 Skill 查看其文档。不会安装任何内容——应用是只读看板。";

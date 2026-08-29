@@ -31,6 +31,8 @@ struct RootView: View {
     @State private var mcpSelection: String?
     /// Selected rules file id for the Rules detail pane.
     @State private var rulesSelection: String?
+    /// Selected catalog skill id for the Catalog detail pane.
+    @State private var catalogSelection: String?
     /// True while a probe-all pass is in flight (drives list progress).
     @State private var mcpProbingAll = false
     /// True while the refresh history popover is presented.
@@ -142,6 +144,16 @@ struct RootView: View {
                         onRevealConfig: { server in model.revealMcpConfigFile(server) }
                     )
                     .frame(width: listColumnWidth)
+                } else if currentDestination == .catalog {
+                    CatalogListView(
+                        state: model.catalogState,
+                        selection: catalogSelection,
+                        sourceNamesByID: catalogSourceNames,
+                        onSelect: { skill in selectCatalog(skill) },
+                        onRefresh: { Task { await model.refreshCatalog() } }
+                    )
+                    .task { await model.loadCatalogIfNeeded() }
+                    .frame(width: listColumnWidth)
                 } else {
                     SkillListView(
                         selection: model.selection,
@@ -185,6 +197,12 @@ struct RootView: View {
                             }
                         },
                         onRevealConfig: { server in model.revealMcpConfigFile(server) }
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if currentDestination == .catalog {
+                    CatalogDetailView(
+                        skill: catalogSkills.first { $0.id == catalogSelection },
+                        sourceNamesByID: catalogSourceNames
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if let agentID = currentDestination.agentID {
@@ -463,6 +481,10 @@ struct RootView: View {
         counts[.links] = model.snapshots.filter { $0.resolvedTarget != nil }.count
         counts[.rules] = model.rulesFiles.count
         counts[.mcp] = model.mcpServers.count
+        let catalogSkillCount = catalogSkills.count
+        if catalogSkillCount > 0 {
+            counts[.catalog] = catalogSkillCount
+        }
         for root in model.authorizedRoots {
             switch root.kind {
             case .home, .system:
@@ -545,6 +567,7 @@ struct RootView: View {
             model.selectOnly(nil)
             if destination != .mcp { mcpSelection = nil }
             if destination != .rules { rulesSelection = nil }
+            if destination != .catalog { catalogSelection = nil }
         } else if let query = entry.searchQuery {
             searchText = query
             model.selectOnly(nil)
@@ -562,6 +585,7 @@ struct RootView: View {
         model.selectOnly(nil)
         mcpSelection = nil
         rulesSelection = nil
+        catalogSelection = nil
         suppressingHistory = false
     }
 
@@ -583,8 +607,25 @@ struct RootView: View {
         }
     }
 
-    // MARK: Rules
+    // MARK: Catalog
 
+    /// Loaded catalog skills — the loaded state doubles as the memory
+    /// cache; empty until the first on-demand fetch lands.
+    private var catalogSkills: [CatalogSkill] {
+        if case .loaded(let skills, _) = model.catalogState { return skills }
+        return []
+    }
+
+    private var catalogSourceNames: [String: String] {
+        Dictionary(uniqueKeysWithValues: CatalogRegistry.sources.map { ($0.id, $0.displayName) })
+    }
+
+    /// Selecting a catalog skill shows its detail and records the sidebar
+    /// jump as a history step, mirroring the MCP flow.
+    private func selectCatalog(_ skill: CatalogSkill) {
+        catalogSelection = skill.id
+        model.recordNavigation(.sidebar(.catalog))
+    }
     /// Selecting a rules file shows its detail; the destination change is
     /// already recorded by the sidebar, so this mirrors the MCP flow's
     /// re-record of the sidebar step per selection.
@@ -777,6 +818,7 @@ extension BrowserDestination {
         case .links: L10n.string("Symbolic Links")
         case .rules: L10n.string("Rules")
         case .mcp: L10n.string("MCP")
+        case .catalog: L10n.string("Catalog")
         case .system(let rootID), .project(let rootID):
             rootsByID[rootID]?.displayName ?? rootID
         case .agent(let id):

@@ -72,6 +72,14 @@ final class AppModel {
     /// Last on-demand probe result per server id (see AppModel+Mcp.swift).
     /// Written only by the probe methods in AppModel+Mcp.swift.
     var mcpProbeStatuses: [String: McpProbeStatus] = [:]
+    /// Read-only marketplace catalog state (see AppModel+Catalog.swift).
+    /// Memory-only: fetched on demand from the declared sources, never
+    /// persisted, never polled. Written only by AppModel+Catalog.swift.
+    var catalogState: CatalogState = .idle
+    /// Catalog network boundary; injected for tests, immutable after init.
+    @ObservationIgnored let catalogFetcher: any CatalogFetching
+    /// In-flight catalog load; guards duplicate concurrent loads.
+    @ObservationIgnored var catalogLoadTask: Task<Void, Never>?
 
     var refreshState: RefreshState = .idle
     var selection: SkillSelection?
@@ -108,7 +116,8 @@ final class AppModel {
         customAgentStore: (any AgentDefinitionStoring)? = nil,
         refreshHistoryStore: (any RefreshHistoryStoring)? = nil,
         diagnosticStore: DiagnosticStore = .shared,
-        homeDirectory: URL = AppModel.realUserHomeDirectory()
+        homeDirectory: URL = AppModel.realUserHomeDirectory(),
+        catalogFetcher: (any CatalogFetching)? = nil
     ) {
         self.refresher = refresher
         self.index = index
@@ -118,6 +127,7 @@ final class AppModel {
         self.defaults = defaults
         self.diagnosticStore = diagnosticStore
         self.homeDirectory = homeDirectory
+        self.catalogFetcher = catalogFetcher ?? CatalogFetcher()
         let store = customAgentStore ?? UserDefaultsAgentDefinitionStore(defaults: defaults)
         self.customAgentStore = store
         self.refreshHistoryStore = refreshHistoryStore
