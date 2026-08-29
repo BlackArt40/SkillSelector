@@ -13,12 +13,28 @@ struct McpListView: View {
     var onProbeAll: (() -> Void)?
     var onRevealConfig: ((McpServerDescriptor) -> Void)?
 
+    /// In-column text filter (name, command, URL, or config path).
+    @State private var searchText = ""
+
+    private var displayedServers: [McpServerDescriptor] {
+        let term = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !term.isEmpty else { return servers }
+        return servers.filter { server in
+            [server.name, server.command, server.url, server.configFile, server.agentID]
+                .compactMap { $0 }
+                .contains { $0.localizedCaseInsensitiveContains(term) }
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             header
             Rectangle()
                 .fill(AppTheme.borderSoft)
                 .frame(height: 1)
+            if !servers.isEmpty {
+                ListSearchBar(placeholderKey: "Search Mcp Placeholder", text: $searchText)
+            }
             content
         }
         .background(AppTheme.background)
@@ -31,7 +47,7 @@ struct McpListView: View {
                 .font(AppTheme.display(17, weight: .semibold))
                 .foregroundStyle(AppTheme.foreground)
                 .lineLimit(1)
-            Text(verbatim: "\(servers.count)")
+            Text(verbatim: "\(displayedServers.count)")
                 .font(AppTheme.body(12))
                 .foregroundStyle(AppTheme.muted)
             Spacer(minLength: 8)
@@ -68,10 +84,12 @@ struct McpListView: View {
     private var content: some View {
         if servers.isEmpty {
             emptyState
+        } else if displayedServers.isEmpty {
+            NoResultsView()
         } else {
             ScrollView {
                 LazyVStack(spacing: 2) {
-                    ForEach(servers) { server in
+                    ForEach(displayedServers) { server in
                         McpServerRow(
                             server: server,
                             status: statuses[server.id] ?? .unknown,

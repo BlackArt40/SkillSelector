@@ -12,12 +12,24 @@ struct RulesListView: View {
     var onReveal: ((RulesFileDescriptor) -> Void)?
     var onOpen: ((RulesFileDescriptor) -> Void)?
 
+    /// In-column text filter (path contains the term).
+    @State private var searchText = ""
+
+    private var displayedFiles: [RulesFileDescriptor] {
+        let term = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !term.isEmpty else { return files }
+        return files.filter { $0.path.localizedCaseInsensitiveContains(term) }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             header
             Rectangle()
                 .fill(AppTheme.borderSoft)
                 .frame(height: 1)
+            if !files.isEmpty {
+                ListSearchBar(placeholderKey: "Search Paths Filenames Placeholder", text: $searchText)
+            }
             content
         }
         .background(AppTheme.background)
@@ -45,10 +57,12 @@ struct RulesListView: View {
     private var content: some View {
         if files.isEmpty {
             emptyState
+        } else if displayedFiles.isEmpty {
+            NoResultsView()
         } else {
             ScrollView {
                 LazyVStack(spacing: 2) {
-                    ForEach(files) { file in
+                    ForEach(displayedFiles) { file in
                         RulesFileRow(
                             file: file,
                             agentNamesByID: agentNamesByID,

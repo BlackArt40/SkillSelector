@@ -57,8 +57,10 @@ public struct SkillQuery: Hashable, Sendable {
             .sorted(by: comesBefore)
     }
 
-    /// One whitespace-separated search token. Free terms fuzzy-match the
-    /// Skill **name or body** (substring, case/diacritic-insensitive);
+    /// One whitespace-separated search token. Free terms match the
+    /// Skill **name, resolved description, or body** (substring,
+    /// case/diacritic-insensitive) — the same name-or-description
+    /// contract as the marketplace search, with the body on top;
     /// prefixed terms (`name:`, `desc:`, `path:`, `agent:`, `body:`)
     /// restrict the match to a single field. Body text comes from the
     /// caller's in-memory index (keyed by installation path, pre-folded);
@@ -135,8 +137,12 @@ public struct SkillQuery: Hashable, Sendable {
             let key = Self.searchKey(term.term)
             switch term.field {
             case nil:
-                // Free terms match the name or (when indexed) the body.
+                // Free terms match the name, the resolved description,
+                // or (when indexed) the body.
                 if Self.searchKey(snapshot.name).contains(key) { return true }
+                if Self.searchKey(Self.effectiveDescription(for: snapshot)).contains(key) {
+                    return true
+                }
                 guard let body = bodyTextsByPath[snapshot.path] else { return false }
                 return body.contains(key)
             case .name:

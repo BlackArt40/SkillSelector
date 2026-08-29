@@ -351,6 +351,48 @@ final class CatalogAppModelTests: XCTestCase {
         XCTAssertEqual(model.catalogFailedSourceIDs, ["broken/source"])
     }
 
+    func testMarketSearchMatching() {
+        let skill = page(["pdf"]).skills[0]
+        // Empty/whitespace queries match everything.
+        XCTAssertTrue(CatalogListView.matches(skill, description: nil, query: ""))
+        XCTAssertTrue(CatalogListView.matches(skill, description: nil, query: "  "))
+        // Name match is case-insensitive.
+        XCTAssertTrue(CatalogListView.matches(skill, description: nil, query: "PDF"))
+        XCTAssertTrue(CatalogListView.matches(skill, description: "Read and create PDF files.", query: "create pdf"))
+        // Description match only counts when the name doesn't.
+        XCTAssertFalse(CatalogListView.matches(skill, description: nil, query: "spreadsheets"))
+        XCTAssertTrue(CatalogListView.matches(
+            page(["xlsx"]).skills[0],
+            description: "Use this skill any time a spreadsheet file is the primary input.",
+            query: "spreadsheet"
+        ))
+    }
+
+    func testSearchMatchesNameAndDescriptionCaseInsensitively() {
+        let skill = CatalogSkill(
+            id: "s:pdf",
+            sourceID: "anthropics/skills",
+            name: "pdf",
+            skillPath: "skills/pdf/SKILL.md",
+            githubURL: URL(string: "https://github.com/anthropics/skills")!,
+            rawURL: URL(string: "https://raw.githubusercontent.com/anthropics/skills/main/skills/pdf/SKILL.md")!
+        )
+        XCTAssertTrue(CatalogListView.matches(skill, description: nil, query: ""))
+        XCTAssertTrue(CatalogListView.matches(skill, description: nil, query: "   "))
+        XCTAssertTrue(
+            CatalogListView.matches(skill, description: nil, query: "PDF"),
+            "name match is case-insensitive"
+        )
+        XCTAssertTrue(
+            CatalogListView.matches(skill, description: "Work with PDF files and forms.", query: "forms"),
+            "description match counts too"
+        )
+        XCTAssertFalse(
+            CatalogListView.matches(skill, description: "Work with PDF files and forms.", query: "spreadsheets"
+            )
+        )
+    }
+
     func testDocumentFetchDelegatesToFetcher() async throws {
         let fetcher = MockFetcher(
             pages: [:],

@@ -11,6 +11,9 @@ struct RootView: View {
     @Environment(\.openSettings) private var openSettings
     @AppStorage(ThemePreference.storageKey) private var themeMode = "system"
     @State private var destination: BrowserDestination
+    /// Ends in-column search editing when the user clicks outside the
+    /// field — SwiftUI keeps field focus on outside clicks otherwise.
+    @State private var editEndMonitor: Any?
     @State private var searchText = ""
     @State private var sort: SkillQuery.Sort = .default
     @State private var openError: String?
@@ -19,9 +22,7 @@ struct RootView: View {
     @State private var listColumnWidth: CGFloat = 400
     /// Local event monitor resigning the toolbar search field on outside
     /// clicks (AppKit focus; see `installSearchFocusMonitors`).
-    @State private var searchFocusMonitor: Any?
     /// Notification observers removed with the monitor.
-    @State private var searchFocusObservers: [NSObjectProtocol] = []
     /// Suppresses history recording while a back/forward navigation is
     /// restoring state — the restore is not a new action.
     @State private var suppressingHistory = false
@@ -154,11 +155,16 @@ struct RootView: View {
                     .task { await model.loadCatalogIfNeeded() }
                     .frame(width: listColumnWidth)
                 } else {
+                    let listTitle = currentDestination.title(
+                        rootsByID: model.rootsByID,
+                        definitions: model.agentDefinitions
+                    )
                     SkillListView(
                         selection: model.selection,
                         searchText: $searchText,
                         sort: $sort,
-                        title: currentDestination.title(rootsByID: model.rootsByID, definitions: model.agentDefinitions),
+                        searchFocused: $searchFocused,
+                        title: listTitle,
                         skills: filteredSkills,
                         allSkillCount: model.snapshots.count,
                         hasAuthorization: model.hasAuthorization,
@@ -238,7 +244,7 @@ struct RootView: View {
         .frame(minWidth: 1080, minHeight: 700)
         .navigationTitle(currentDestination.title(rootsByID: model.rootsByID, definitions: model.agentDefinitions))
         .onAppear {
-            installSearchFocusMonitors()
+            installEditingEndMonitor()
             // The stack bottom is the launch default destination; seed it
             // once so back can traverse all the way to it.
             guard !didSeedHistory else { return }
@@ -246,7 +252,10 @@ struct RootView: View {
             model.recordNavigation(.sidebar(destination))
         }
         .onDisappear {
-            removeSearchFocusMonitors()
+            if let monitor = editEndMonitor {
+                NSEvent.removeMonitor(monitor)
+                editEndMonitor = nil
+            }
         }
         .onChange(of: destination) { _, newValue in
             guard !suppressingHistory else { return }
@@ -279,19 +288,13 @@ struct RootView: View {
             goForward()
         }
         .onReceive(NotificationCenter.default.publisher(for: .focusSearchField)) { _ in
+            // The field lives in the list column now, so @FocusState works
+            // natively (the old workaround targeted toolbar-hosted fields).
             searchFocused = true
-            // macOS quirk: programmatic @FocusState focus is unreliable for
-            // a field inside ToolbarItemGroup, so fall back to the responder
-            // chain to land keyboard focus in the host NSTextField.
+            // ⌘F convention: select the existing query so typing replaces it.
             DispatchQueue.main.async {
-                focusToolbarSearchField()
+                (NSApp.keyWindow?.firstResponder as? NSTextView)?.selectAll(nil)
             }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .searchFocusStarted)) { _ in
-            searchFocused = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .searchFocusDismissed)) { _ in
-            searchFocused = false
         }
         .languageReloading()
         .themedAppearance()
@@ -313,7 +316,6 @@ struct RootView: View {
             ToolbarItemGroup(placement: .primaryAction) {
                 refreshButton
                 historyButton
-                searchField
                 themeToggle
             }
         }
@@ -370,28 +372,6 @@ struct RootView: View {
         .popover(isPresented: $isShowingRefreshHistory, arrowEdge: .bottom) {
             RefreshHistoryPopover(history: model.refreshHistory)
         }
-    }
-
-    /// `.search`: 240×30 rounded field with surface background.
-    private var searchField: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 13))
-                .foregroundStyle(AppTheme.meta)
-            TextField(L10n.string("Search Skills"), text: $searchText)
-                .textFieldStyle(.plain)
-                .font(AppTheme.body(13))
-                .focused($searchFocused)
-        }
-        .padding(.horizontal, 10)
-        .frame(width: 240, height: 30)
-        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 8))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(searchFocused ? AppTheme.accent : AppTheme.borderSoft, lineWidth: 1)
-        }
-        .accessibilityLabel(L10n.string("Search Skills"))
-        .help(L10n.string("Search Help"))
     }
 
     /// `.themeBtn`: moon in light mode, sun in dark mode; toggles between
@@ -710,104 +690,30 @@ struct RootView: View {
         return panel.runModal() == .OK ? panel.url?.standardizedFileURL : nil
     }
 
+    /// Clicking anywhere outside a focused search field ends its editing
+    /// (caret gone, keyboard detached) — AppKit used to do this for the
+    /// toolbar field via its own monitors; one window-level monitor now
+    /// covers every in-column field.
+    private func installEditingEndMonitor() {
+        guard editEndMonitor == nil else { return }
+        editEndMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.leftMouseDown]
+        ) { event in
+            guard let window = event.window,
+                  let editor = window.firstResponder as? NSTextView else { return event }
+            let editorFrame = editor.convert(editor.bounds, to: nil)
+            if !editorFrame.contains(event.locationInWindow) {
+                window.makeFirstResponder(nil)
+            }
+            return event
+        }
+    }
+
     /// Opens the Settings scene on the directories pane — used by the
     /// re-authorization banner.
     private func openSettingsDirectories() {
         openSettings()
         NotificationCenter.default.post(name: .openSettingsTab, object: SettingsTab.directories)
-    }
-
-    /// Lands keyboard focus in the toolbar search field via the responder
-    /// chain. SwiftUI's toolbar fields ignore programmatic FocusState on
-    /// some macOS versions; the host NSTextField is made first responder
-    /// directly, with any current text selected (⌘F convention).
-    private func focusToolbarSearchField() {
-        let window = NSApp.keyWindow
-            ?? NSApp.mainWindow
-            ?? NSApp.windows.first { $0.isVisible }
-        guard let window, let field = Self.searchField(in: window) else { return }
-        window.makeFirstResponder(field)
-        field.currentEditor()?.selectAll(nil)
-    }
-
-    /// Installs the AppKit-side focus bookkeeping for the toolbar search
-    /// field. FocusState alone cannot move focus into SwiftUI toolbar
-    /// fields, so the AppKit responder chain drives the focus — but then
-    /// SwiftUI never sees the field as focused, so a local event monitor
-    /// mirrors clicks: an outside click resigns the editor and dismisses
-    /// the search session; a click on the field (re)activates it. The ⌘F
-    /// path stays in `focusSearchField`.
-    private func installSearchFocusMonitors() {
-        guard searchFocusMonitor == nil else { return }
-        let center = NotificationCenter.default
-        searchFocusMonitor = NSEvent.addLocalMonitorForEvents(
-            matching: [.leftMouseDown]
-        ) { event in
-            guard let window = event.window, window === NSApp.keyWindow,
-                  let field = Self.searchField(in: window) else { return event }
-            let clickInScreen = window.convertPoint(toScreen: event.locationInWindow)
-            let fieldRect = field.convert(field.bounds, to: nil).insetBy(dx: -8, dy: -8)
-            let isEditing = field.currentEditor() != nil || window.firstResponder === field
-            if fieldRect.contains(clickInScreen) {
-                // Click inside the field: keep caret, or re-activate editing
-                // when the field was dismissed by an earlier outside click.
-                if !isEditing {
-                    window.makeFirstResponder(field)
-                    center.post(name: .searchFocusStarted, object: nil)
-                }
-            } else if isEditing {
-                // Click anywhere else in the window resigns the field.
-                window.makeFirstResponder(nil)
-                center.post(name: .searchFocusDismissed, object: nil)
-            }
-            return event
-        }
-        // Switching to another app should also end the search session.
-        let observer = center.addObserver(
-            forName: NSWindow.didResignKeyNotification,
-            object: nil,
-            queue: .main
-        ) { note in
-            // The queue is .main, so the AppKit isolation below holds;
-            // the unsafe annotation just proves it to the type checker.
-            nonisolated(unsafe) let note = note
-            MainActor.assumeIsolated {
-                guard let window = note.object as? NSWindow,
-                      let field = Self.searchField(in: window),
-                      field.currentEditor() != nil || window.firstResponder === field else { return }
-                center.post(name: .searchFocusDismissed, object: nil)
-            }
-        }
-        searchFocusObservers = [observer]
-    }
-
-    private func removeSearchFocusMonitors() {
-        if let monitor = searchFocusMonitor {
-            NSEvent.removeMonitor(monitor)
-            searchFocusMonitor = nil
-        }
-        searchFocusObservers.forEach(NotificationCenter.default.removeObserver)
-        searchFocusObservers = []
-    }
-
-    /// Finds the toolbar search field on a window — the host NSTextField is
-    /// nested inside the toolbar item's NSHostingView.
-    private static func searchField(in window: NSWindow) -> NSTextField? {
-        guard let toolbar = window.toolbar else { return nil }
-        for item in toolbar.items {
-            if let field = searchField(in: item.view) { return field }
-        }
-        return nil
-    }
-
-    /// Recursively finds the NSTextField inside a toolbar item's host view.
-    private static func searchField(in view: NSView?) -> NSTextField? {
-        guard let view else { return nil }
-        if let field = view as? NSTextField { return field }
-        for subview in view.subviews {
-            if let field = searchField(in: subview) { return field }
-        }
-        return nil
     }
 }
 

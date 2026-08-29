@@ -273,3 +273,59 @@ struct ColumnResizer: View {
             )
     }
 }
+
+
+/// Shared in-column search field (marketplace, skills, duplicates, MCP,
+/// rules, links): magnifier, rounded surface field whose placeholder
+/// states the search scope, and a clear button once text is present.
+struct ListSearchBar: View {
+    let placeholderKey: String
+    @Binding var text: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 11))
+                .foregroundStyle(AppTheme.muted)
+            TextField(L10n.string(placeholderKey), text: $text)
+                .textFieldStyle(.plain)
+                .font(AppTheme.body(13))
+                .accessibilityLabel(L10n.string(placeholderKey))
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(AppTheme.muted)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.string("Clear Search"))
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(AppTheme.surfaceWarm, in: RoundedRectangle(cornerRadius: 8))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+}
+
+
+/// "No matching results" state for filtered list columns.
+struct NoResultsView: View {
+    var body: some View {
+        VStack(spacing: 8) {
+            Spacer(minLength: 48)
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 26))
+                .foregroundStyle(AppTheme.meta)
+            Text(verbatim: L10n.string("No Matching Results"))
+                .font(AppTheme.display(17, weight: .semibold))
+                .foregroundStyle(AppTheme.foreground)
+            Spacer(minLength: 48)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}

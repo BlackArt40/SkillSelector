@@ -30,6 +30,22 @@ struct DuplicateGroupsView: View {
 
     @State private var mode: Mode = .exact
     @State private var compareRequest: DuplicateCompareRequest?
+    /// In-column text filter (any member's name contains the term).
+    @State private var searchText = ""
+
+    private var displayedExactGroups: [DuplicateSkillGroup] {
+        groups.filter { matchesSearch($0.members.map(\.name)) }
+    }
+
+    private var displayedNearGroups: [NearDuplicateSkillGroup] {
+        nearGroups.filter { matchesSearch($0.members.map { $0.snapshot.name }) }
+    }
+
+    private func matchesSearch(_ names: [String]) -> Bool {
+        let term = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !term.isEmpty else { return true }
+        return names.contains { $0.localizedCaseInsensitiveContains(term) }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -37,6 +53,9 @@ struct DuplicateGroupsView: View {
             Rectangle()
                 .fill(AppTheme.borderSoft)
                 .frame(height: 1)
+            if !groups.isEmpty || !nearGroups.isEmpty {
+                searchBar
+            }
             content
         }
         .background(AppTheme.background)
@@ -53,6 +72,12 @@ struct DuplicateGroupsView: View {
         }
     }
 
+    /// In-column search field — same design as the marketplace's; a group
+    /// stays visible when any member's name contains the term.
+    private var searchBar: some View {
+        ListSearchBar(placeholderKey: "Search Skills", text: $searchText)
+    }
+
     private var header: some View {
         HStack(alignment: .center, spacing: 8) {
             Text(verbatim: L10n.string("Duplicate Skills"))
@@ -61,7 +86,7 @@ struct DuplicateGroupsView: View {
                 .lineLimit(1)
             Text(verbatim: String.localizedStringWithFormat(
                 L10n.string("Duplicate Groups Count"),
-                mode == .exact ? groups.count : nearGroups.count
+                mode == .exact ? displayedExactGroups.count : displayedNearGroups.count
             ))
             .font(AppTheme.body(12))
             .foregroundStyle(AppTheme.muted)
@@ -91,10 +116,15 @@ struct DuplicateGroupsView: View {
                         ? "No Duplicates Description"
                         : "No Skills in Scope Description")
                 )
+            } else if displayedExactGroups.isEmpty {
+                emptyState(
+                    title: L10n.string("No Matching Skills"),
+                    message: L10n.string("No Matching Skills Description")
+                )
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 14) {
-                        ForEach(groups) { group in
+                        ForEach(displayedExactGroups) { group in
                             DuplicateGroupSection(
                                 group: group,
                                 selection: selection,
@@ -119,10 +149,15 @@ struct DuplicateGroupsView: View {
                         ? "No Near Duplicates Description"
                         : "No Skills in Scope Description")
                 )
+            } else if displayedNearGroups.isEmpty {
+                emptyState(
+                    title: L10n.string("No Matching Skills"),
+                    message: L10n.string("No Matching Skills Description")
+                )
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 14) {
-                        ForEach(nearGroups) { group in
+                        ForEach(displayedNearGroups) { group in
                             NearDuplicateGroupSection(
                                 group: group,
                                 selection: selection,

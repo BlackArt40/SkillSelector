@@ -19,18 +19,50 @@ struct CatalogListView: View {
     /// Repository filter from the column header; nil shows every source.
     @State private var selectedSourceID: String?
     @State private var showingAddSheet = false
+    /// Marketplace-local text filter (name + prefetched description).
+    @State private var searchText = ""
 
     private var skills: [CatalogSkill] {
         if case .loaded(let skills, _) = state { return skills }
         return []
     }
 
+    private var filteredSkills: [CatalogSkill] {
+        guard !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return skills
+        }
+        return skills.filter { skill in
+            Self.matches(
+                skill,
+                description: model.catalogDescriptions[skill.id],
+                query: searchText
+            )
+        }
+    }
+
     private var displayedSections: [CatalogSection] {
-        Self.sections(of: skills, sources: model.catalogSources, sourceID: selectedSourceID)
+        Self.sections(
+            of: filteredSkills,
+            sources: model.catalogSources,
+            sourceID: selectedSourceID
+        )
     }
 
     private var displayedCount: Int {
         displayedSections.reduce(0) { $0 + $1.skills.count }
+    }
+
+    /// A skill matches the query when its name or its prefetched
+    /// description contains it, case-insensitive. A blank query matches all.
+    static func matches(
+        _ skill: CatalogSkill,
+        description: String?,
+        query: String
+    ) -> Bool {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return true }
+        return skill.name.localizedCaseInsensitiveContains(trimmed)
+            || (description?.localizedCaseInsensitiveContains(trimmed) ?? false)
     }
 
     var body: some View {
@@ -39,6 +71,9 @@ struct CatalogListView: View {
             Rectangle()
                 .fill(AppTheme.borderSoft)
                 .frame(height: 1)
+            if case .loaded = state {
+                searchBar
+            }
             content
         }
         .background(AppTheme.background)
@@ -142,6 +177,8 @@ struct CatalogListView: View {
         case .loaded(_, let truncated):
             if skills.isEmpty {
                 emptyState
+            } else if displayedSections.isEmpty {
+                noMatchesState
             } else {
                 ScrollView {
                     LazyVStack(spacing: 2, pinnedViews: [.sectionHeaders]) {
@@ -257,6 +294,29 @@ struct CatalogListView: View {
                 .foregroundStyle(AppTheme.muted)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 24)
+            Spacer(minLength: 48)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var searchBar: some View {
+        ListSearchBar(placeholderKey: "Search Names Or Descriptions", text: $searchText)
+    }
+
+    private var noMatchesState: some View {
+        VStack(spacing: 8) {
+            Spacer(minLength: 48)
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 26))
+                .foregroundStyle(AppTheme.meta)
+            Text(verbatim: L10n.string("No Marketplace Matches"))
+                .font(AppTheme.display(17, weight: .semibold))
+                .foregroundStyle(AppTheme.foreground)
+            Text(verbatim: L10n.string("No Marketplace Matches Description"))
+                .font(AppTheme.body(13))
+                .foregroundStyle(AppTheme.muted)
+                .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)
             Spacer(minLength: 48)
         }

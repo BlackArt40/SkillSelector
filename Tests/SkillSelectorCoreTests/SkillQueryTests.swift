@@ -119,10 +119,10 @@ final class SkillQueryTests: XCTestCase {
         XCTAssertEqual(beta.map(\.path), ["/beta/only"])
     }
 
-    /// Free terms fuzzy-match the Skill **name or body** (case- and
-    /// diacritic-insensitive substring). Descriptions and paths are never
+    /// Free terms match the Skill **name, description, or body**
+    /// (case- and diacritic-insensitive substring). Paths are never
     /// searched by plain terms; the body only when its text is indexed.
-    func testFreeTermsFuzzyMatchNameOnly() {
+    func testFreeTermsMatchNameDescriptionOrBody() {
         let snapshots = [
             snapshot(path: "/name", name: "Release Helper"),
             snapshot(path: "/custom", name: "Custom", localDescription: "CUSTOM summary"),
@@ -141,28 +141,32 @@ final class SkillQueryTests: XCTestCase {
                 .apply(to: snapshots, rootsByID: rootsByID).map(\.path),
             ["/name"]
         )
-        // A description-only term finds nothing as a free term…
-        XCTAssertTrue(
+        // A description-only term matches as a free term too — the same
+        // name-or-description contract as the marketplace search.
+        XCTAssertEqual(
             SkillQuery(searchText: "SUMMARY")
-                .apply(to: snapshots, rootsByID: rootsByID).isEmpty
+                .apply(to: snapshots, rootsByID: rootsByID).map(\.path),
+            ["/custom"]
         )
-        XCTAssertTrue(
+        XCTAssertEqual(
             SkillQuery(searchText: "documentation")
-                .apply(to: snapshots, rootsByID: rootsByID).isEmpty
+                .apply(to: snapshots, rootsByID: rootsByID).map(\.path),
+            ["/local"]
         )
     }
 
-    /// Free terms never search descriptions; the `desc:` prefix still does.
-    func testDescriptionOnlyMatchedWithPrefix() {
+    /// Free terms and the `desc:` prefix both reach the description.
+    func testDescriptionMatchedAsFreeTermAndWithPrefix() {
         let skill = snapshot(
             path: "/priority",
             name: "Priority",
             localDescription: "Hidden local text"
         )
 
-        XCTAssertTrue(
+        XCTAssertEqual(
             SkillQuery(searchText: "hidden")
-                .apply(to: [skill], rootsByID: rootsByID).isEmpty
+                .apply(to: [skill], rootsByID: rootsByID).map(\.path),
+            [skill.path]
         )
         XCTAssertEqual(
             SkillQuery(searchText: "desc:hidden")

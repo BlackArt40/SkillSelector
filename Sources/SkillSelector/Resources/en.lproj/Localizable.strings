@@ -302,3 +302,15 @@
 "Remove Imported Source" = "Remove Imported Source";
 "Marketplace Partial Failure" = "Some sources failed to load — the rest of the listing is shown. Remove a failing imported source with − next to its name.";
 "Import" = "Import";
+"Search Marketplace" = "Search Marketplace";
+"Clear Search" = "Clear Search";
+"No Marketplace Matches" = "No Matching Skills";
+"No Marketplace Matches Description" = "Try a different term, or set the source filter back to All Sources.";
+"Marketplace Search Placeholder" = "Search names & descriptions";
+"No Matching Skills" = "No Matching Skills";
+"No Matching Skills Description" = "Try a different term.";
+"Search Names Or Descriptions" = "Search names & descriptions";
+"Search Paths Filenames Placeholder" = "Search paths & filenames";
+"Search Names Paths Placeholder" = "Search names & paths";
+"Search Mcp Placeholder" = "Search names, commands & URLs";
+"No Matching Results" = "No matching results";

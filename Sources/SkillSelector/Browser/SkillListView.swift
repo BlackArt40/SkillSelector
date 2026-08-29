@@ -8,6 +8,9 @@ struct SkillListView: View {
     let selection: SkillSelection?
     @Binding var searchText: String
     @Binding var sort: SkillQuery.Sort
+    /// Drives the in-column search field's focus (⌘F and the search
+    /// session history live in RootView).
+    @FocusState.Binding var searchFocused: Bool
 
     let title: String
     let skills: [SkillSnapshot]
@@ -34,11 +37,20 @@ struct SkillListView: View {
             Rectangle()
                 .fill(AppTheme.borderSoft)
                 .frame(height: 1)
+            if !skills.isEmpty || hasActiveFilters {
+                searchBar
+            }
             content
         }
         .background(AppTheme.background)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .navigationTitle(title)
+    }
+
+    /// In-column search field — same design as the marketplace's, bound
+    /// to RootView's query text (name, description, or indexed body).
+    private var searchBar: some View {
+        ListSearchBar(placeholderKey: "Search Names Or Descriptions", text: $searchText)
     }
 
     private var header: some View {

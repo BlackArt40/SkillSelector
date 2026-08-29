@@ -11,12 +11,27 @@ struct SymlinkListView: View {
     var onRevealInFinder: ((SkillSnapshot) -> Void)?
     let onSelect: (String) -> Void
 
+    /// In-column text filter (name or path contains the term).
+    @State private var searchText = ""
+
+    private var displayedLinks: [SkillSnapshot] {
+        let term = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !term.isEmpty else { return links }
+        return links.filter {
+            $0.name.localizedCaseInsensitiveContains(term)
+                || $0.path.localizedCaseInsensitiveContains(term)
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             header
             Rectangle()
                 .fill(AppTheme.borderSoft)
                 .frame(height: 1)
+            if !links.isEmpty {
+                ListSearchBar(placeholderKey: "Search Names Paths Placeholder", text: $searchText)
+            }
             content
         }
         .background(AppTheme.background)
@@ -31,7 +46,7 @@ struct SymlinkListView: View {
                 .foregroundStyle(AppTheme.foreground)
                 .lineLimit(1)
             Text(verbatim: String.localizedStringWithFormat(
-                L10n.string("Symbolic Links Count"), links.count
+                L10n.string("Symbolic Links Count"), displayedLinks.count
             ))
             .font(AppTheme.body(12))
             .foregroundStyle(AppTheme.muted)
@@ -60,10 +75,12 @@ struct SymlinkListView: View {
                 Spacer(minLength: 48)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if displayedLinks.isEmpty {
+            NoResultsView()
         } else {
             ScrollView {
                 LazyVStack(spacing: 2) {
-                    ForEach(links) { skill in
+                    ForEach(displayedLinks) { skill in
                         SymlinkRow(
                             skill: skill,
                             agentNamesByID: agentNamesByID,
