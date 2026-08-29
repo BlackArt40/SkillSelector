@@ -12,13 +12,24 @@ public struct CatalogSource: Hashable, Sendable, Identifiable {
     public let owner: String
     public let repo: String
     public let branch: String
+    /// True for sources the user imported at runtime (persisted in
+    /// UserDefaults); built-in sources are shipped in code only.
+    public let isCustom: Bool
 
-    public init(id: String, displayName: String, owner: String, repo: String, branch: String) {
+    public init(
+        id: String,
+        displayName: String,
+        owner: String,
+        repo: String,
+        branch: String,
+        isCustom: Bool = false
+    ) {
         self.id = id
         self.displayName = displayName
         self.owner = owner
         self.repo = repo
         self.branch = branch
+        self.isCustom = isCustom
     }
 }
 
@@ -36,10 +47,45 @@ public enum CatalogRegistry {
             branch: "main"
         ),
         CatalogSource(
+            id: "anthropics/claude-plugins-official",
+            displayName: "Anthropic Plugins",
+            owner: "anthropics",
+            repo: "claude-plugins-official",
+            branch: "main"
+        ),
+        CatalogSource(
             id: "obra/superpowers",
             displayName: "Superpowers",
             owner: "obra",
             repo: "superpowers",
+            branch: "main"
+        ),
+        CatalogSource(
+            id: "vercel-labs/agent-skills",
+            displayName: "Vercel Agent Skills",
+            owner: "vercel-labs",
+            repo: "agent-skills",
+            branch: "main"
+        ),
+        CatalogSource(
+            id: "alirezarezvani/claude-skills",
+            displayName: "Claude Skills Collection",
+            owner: "alirezarezvani",
+            repo: "claude-skills",
+            branch: "main"
+        ),
+        CatalogSource(
+            id: "wshobson/agents",
+            displayName: "wshobson Agents",
+            owner: "wshobson",
+            repo: "agents",
+            branch: "main"
+        ),
+        CatalogSource(
+            id: "mattpocock/skills",
+            displayName: "Matt Pocock Skills",
+            owner: "mattpocock",
+            repo: "skills",
             branch: "main"
         ),
     ]
@@ -114,4 +160,103 @@ public enum CatalogError: Error, Equatable {
 public protocol CatalogFetching: Sendable {
     func fetchSkills(source: CatalogSource) async throws -> CatalogPage
     func fetchDocument(_ skill: CatalogSkill) async throws -> String
+}
+
+/// One user-imported marketplace source (「导入市场」). Persisted as plain
+/// owner/repo/branch; everything else (listing, documents, install
+/// command) flows through the same pipeline as built-in sources.
+public struct CustomCatalogSource: Codable, Hashable, Sendable {
+    public let owner: String
+    public let repo: String
+    public let branch: String
+
+    public init(owner: String, repo: String, branch: String = "main") {
+        self.owner = owner
+        self.repo = repo
+        self.branch = branch
+    }
+
+    /// Accepts "owner/repo", "owner/repo@branch", or GitHub URLs
+    /// ("https://github.com/owner/repo", with or without further path
+    /// segments). Returns nil for malformed input.
+    public static func parsing(_ text: String) -> CustomCatalogSource? {
+        var value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        while value.hasSuffix("/") { value.removeLast() }
+        guard !value.isEmpty else { return nil }
+
+        var isURL = false
+        for prefix in ["https://github.com/", "http://github.com/", "github.com/"] {
+            if value.hasPrefix(prefix) {
+                value = String(value.dropFirst(prefix.count))
+                isURL = true
+                break
+            }
+        }
+        // Keep only owner/repo when a longer URL path was pasted
+        // (…/tree/main/…); a branch embedded that way is ignored in favor
+        // of the explicit @branch form or the default. A bare non-URL
+        // value must be exactly owner/repo — no silent collapsing.
+        if isURL, let firstSlash = value.firstIndex(of: "/"),
+           let secondSlash = value[value.index(after: firstSlash)...].firstIndex(of: "/") {
+            value = String(value[..<secondSlash])
+        }
+        var branch = "main"
+        if let at = value.lastIndex(of: "@") {
+            let candidate = String(value[value.index(after: at)...])
+            let base = String(value[..<at])
+            if !candidate.isEmpty, !candidate.contains("/"), !base.isEmpty {
+                branch = candidate
+                value = base
+            }
+        }
+        let parts = value.split(separator: "/").map(String.init)
+        guard parts.count == 2 else { return nil }
+        let allowed = Set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
+        for component in [parts[0], parts[1], branch] {
+            guard !component.isEmpty, component.allSatisfy({ allowed.contains($0) }) else {
+                return nil
+            }
+        }
+        return CustomCatalogSource(owner: parts[0], repo: parts[1], branch: branch)
+    }
+
+    /// The catalog source this custom entry resolves to (repo name as the
+    /// display name — badge-sized).
+    public var source: CatalogSource {
+        CatalogSource(
+            id: "\(owner)/\(repo)",
+            displayName: repo,
+            owner: owner,
+            repo: repo,
+            branch: branch,
+            isCustom: true
+        )
+    }
+}
+
+/// Persistence boundary for user-imported sources — the same shape as the
+/// custom-Agent store: UserDefaults JSON, suite-injected for tests.
+public protocol CatalogSourceStoring: Sendable {
+    func loadCustomSources() -> [CustomCatalogSource]
+    func saveCustomSources(_ sources: [CustomCatalogSource])
+}
+
+public final class UserDefaultsCatalogSourceStore: CatalogSourceStoring, @unchecked Sendable {
+    private let defaults: UserDefaults
+    private let key: String
+
+    public init(defaults: UserDefaults = .standard, key: String = "SkillSelector.customCatalogSources") {
+        self.defaults = defaults
+        self.key = key
+    }
+
+    public func loadCustomSources() -> [CustomCatalogSource] {
+        guard let data = defaults.data(forKey: key) else { return [] }
+        return (try? JSONDecoder().decode([CustomCatalogSource].self, from: data)) ?? []
+    }
+
+    public func saveCustomSources(_ sources: [CustomCatalogSource]) {
+        guard let data = try? JSONEncoder().encode(sources) else { return }
+        defaults.set(data, forKey: key)
+    }
 }

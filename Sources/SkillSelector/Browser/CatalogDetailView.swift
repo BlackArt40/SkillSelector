@@ -77,7 +77,7 @@ struct CatalogDetailView: View {
                         text: sourceNamesByID[skill.sourceID] ?? skill.sourceID,
                         style: .link
                     )
-                    PillBadge(text: L10n.string("Catalog Remote Badge"), style: .link)
+                    PillBadge(text: L10n.string("Marketplace Remote Badge"), style: .link)
                 }
                 .padding(.top, 12)
             }
@@ -162,13 +162,13 @@ struct CatalogDetailView: View {
     @ViewBuilder
     private func contentSection(_ skill: CatalogSkill) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeading(L10n.string("Catalog Content"))
+            sectionHeading(L10n.string("Marketplace Document Section"))
             switch contentState {
             case .loading:
                 HStack(spacing: 8) {
                     ProgressView()
                         .controlSize(.small)
-                    Text(verbatim: L10n.string("Catalog Document Loading"))
+                    Text(verbatim: L10n.string("Marketplace Document Loading"))
                         .foregroundStyle(AppTheme.muted)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -200,7 +200,7 @@ struct CatalogDetailView: View {
                     }
             case .failed(let failure):
                 errorShell(
-                    title: L10n.string("Catalog Document Failed"),
+                    title: L10n.string("Marketplace Document Failed"),
                     detail: CatalogFailureMessage.text(for: failure)
                 )
                 .padding(20)
@@ -294,10 +294,10 @@ struct CatalogDetailView: View {
         VStack(spacing: 16) {
             AppIconView(size: 96)
                 .opacity(0.9)
-            Text(verbatim: L10n.string("Select a Catalog Skill"))
+            Text(verbatim: L10n.string("Select a Marketplace Skill"))
                 .font(AppTheme.display(28, weight: .semibold))
                 .foregroundStyle(AppTheme.foreground)
-            Text(verbatim: L10n.string("Select a Catalog Skill Description"))
+            Text(verbatim: L10n.string("Select a Marketplace Skill Description"))
                 .font(AppTheme.body(14))
                 .foregroundStyle(AppTheme.muted)
                 .multilineTextAlignment(.center)

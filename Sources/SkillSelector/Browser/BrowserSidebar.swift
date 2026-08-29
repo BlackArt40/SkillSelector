@@ -216,7 +216,7 @@ struct BrowserSidebar: View {
                 destination = .mcp
             }
             SidebarItem(
-                title: L10n.string("Catalog"),
+                title: L10n.string("Marketplace"),
                 glyph: Image(systemName: "sparkles"),
                 count: counts[.catalog],
                 isActive: destination == .catalog

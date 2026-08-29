@@ -44,32 +44,81 @@ extension AppModel {
         catalogState = .loading
         catalogDescriptionTask?.cancel()
         catalogDescriptions = [:]
+        catalogFailedSourceIDs = []
         do {
             var pages: [String: CatalogPage] = [:]
-            try await withThrowingTaskGroup(of: (String, CatalogPage).self) { group in
-                for source in CatalogRegistry.sources {
+            var failures: [String: Error] = [:]
+            // Per-source tolerance: one bad imported repo must not take
+            // down the whole listing — failures land in
+            // catalogFailedSourceIDs and the load continues.
+            await withTaskGroup(of: (CatalogSource, Result<CatalogPage, Error>).self) { group in
+                for source in catalogSources {
                     group.addTask { [catalogFetcher] in
-                        (source.id, try await catalogFetcher.fetchSkills(source: source))
+                        do {
+                            return (source, .success(try await catalogFetcher.fetchSkills(source: source)))
+                        } catch {
+                            return (source, .failure(error))
+                        }
                     }
                 }
-                for try await (sourceID, page) in group {
-                    pages[sourceID] = page
+                for await (source, result) in group {
+                    switch result {
+                    case .success(let page):
+                        pages[source.id] = page
+                    case .failure(let error):
+                        failures[source.id] = error
+                    }
                 }
             }
             // Source order stays declarative; each page is already sorted.
-            let skills = CatalogRegistry.sources.flatMap { pages[$0.id]?.skills ?? [] }
-            let truncated = CatalogRegistry.sources.contains { pages[$0.id]?.truncated == true }
+            let skills = catalogSources.flatMap { pages[$0.id]?.skills ?? [] }
+            let truncated = catalogSources.contains { pages[$0.id]?.truncated == true }
+            if !failures.isEmpty, failures.count == catalogSources.count {
+                // Every source failed — that is a load failure, not a
+                // partial one. Surface the most actionable error.
+                let ordered = catalogSources.compactMap { failures[$0.id] }.first
+                catalogState = .failed(Self.catalogFailure(for: ordered ?? CatalogError.invalidResponse))
+                return
+            }
             catalogState = .loaded(skills, truncated: truncated)
+            catalogFailedSourceIDs = catalogSources.filter { failures[$0.id] != nil }.map(\.id)
             startDescriptionPrefetch(for: skills)
         } catch {
             catalogState = .failed(Self.catalogFailure(for: error))
         }
     }
 
+    /// Imports a user marketplace source. Returns false when a source
+    /// with the same owner/repo already exists (built-in or imported).
+    @discardableResult
+    func addCatalogSource(_ custom: CustomCatalogSource) -> Bool {
+        let source = custom.source
+        guard !catalogSources.contains(where: { $0.id == source.id }) else { return false }
+        var stored = catalogSourceStore.loadCustomSources()
+        stored.append(custom)
+        catalogSourceStore.saveCustomSources(stored)
+        catalogSources.append(source)
+        return true
+    }
+
+    /// Removes a previously imported source; built-in sources are
+    /// ignored (they cannot be removed).
+    func removeCatalogSource(id: String) {
+        guard let source = catalogSources.first(where: { $0.id == id }), source.isCustom else {
+            return
+        }
+        var stored = catalogSourceStore.loadCustomSources()
+        stored.removeAll { "\($0.owner)/\($0.repo)" == id }
+        catalogSourceStore.saveCustomSources(stored)
+        catalogSources.removeAll { $0.id == id }
+    }
+
     /// Fetches every listed skill's SKILL.md and keeps its frontmatter
     /// description — rows fill in progressively. Raw GitHub downloads are
     /// CDN-served (outside the API rate limit), results are memory-only,
-    /// and the whole pass is cancelled by the next load.
+    /// and the whole pass is cancelled by the next load. Writes are
+    /// batched: with hundreds of skills, per-item observable writes would
+    /// re-render the browser for every single row.
     private func startDescriptionPrefetch(for skills: [CatalogSkill]) {
         guard !skills.isEmpty else { return }
         let fetcher = catalogFetcher
@@ -83,11 +132,19 @@ extension AppModel {
                         return (skill.id, FrontmatterParser.parse(document).description)
                     }
                 }
+                var pending: [String: String] = [:]
                 for await (id, description) in group {
                     guard let self, !Task.isCancelled, let description, !description.isEmpty else {
                         continue
                     }
-                    self.catalogDescriptions[id] = description
+                    pending[id] = description
+                    if pending.count >= 40 {
+                        self.catalogDescriptions.merge(pending) { _, new in new }
+                        pending.removeAll()
+                    }
+                }
+                if let self, !Task.isCancelled, !pending.isEmpty {
+                    self.catalogDescriptions.merge(pending) { _, new in new }
                 }
             }
         }

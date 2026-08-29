@@ -76,12 +76,19 @@ final class AppModel {
     /// Memory-only: fetched on demand from the declared sources, never
     /// persisted, never polled. Written only by AppModel+Catalog.swift.
     var catalogState: CatalogState = .idle
+    /// Effective catalog sources: the built-in table plus the user's
+    /// imported ones (UserDefaults-persisted, see AppModel+Catalog.swift).
+    var catalogSources: [CatalogSource] = CatalogRegistry.sources
+    /// Source ids whose last fetch failed while other sources loaded.
+    var catalogFailedSourceIDs: [String] = []
     /// Frontmatter descriptions keyed by skill id, prefetched in the
     /// background after a catalog load; rows fill them in progressively.
     /// Same memory-only discipline as the listing itself.
     var catalogDescriptions: [String: String] = [:]
     /// Catalog network boundary; injected for tests, immutable after init.
     @ObservationIgnored let catalogFetcher: any CatalogFetching
+    /// Persistence for user-imported sources; immutable after init.
+    @ObservationIgnored let catalogSourceStore: any CatalogSourceStoring
     /// In-flight catalog load; guards duplicate concurrent loads.
     @ObservationIgnored var catalogLoadTask: Task<Void, Never>?
     /// In-flight description prefetch; cancelled by the next load.
@@ -123,7 +130,8 @@ final class AppModel {
         refreshHistoryStore: (any RefreshHistoryStoring)? = nil,
         diagnosticStore: DiagnosticStore = .shared,
         homeDirectory: URL = AppModel.realUserHomeDirectory(),
-        catalogFetcher: (any CatalogFetching)? = nil
+        catalogFetcher: (any CatalogFetching)? = nil,
+        catalogSourceStore: (any CatalogSourceStoring)? = nil
     ) {
         self.refresher = refresher
         self.index = index
@@ -134,6 +142,9 @@ final class AppModel {
         self.diagnosticStore = diagnosticStore
         self.homeDirectory = homeDirectory
         self.catalogFetcher = catalogFetcher ?? CatalogFetcher()
+        let sourceStore = catalogSourceStore ?? UserDefaultsCatalogSourceStore(defaults: defaults)
+        self.catalogSourceStore = sourceStore
+        catalogSources = CatalogRegistry.sources + sourceStore.loadCustomSources().map(\.source)
         let store = customAgentStore ?? UserDefaultsAgentDefinitionStore(defaults: defaults)
         self.customAgentStore = store
         self.refreshHistoryStore = refreshHistoryStore

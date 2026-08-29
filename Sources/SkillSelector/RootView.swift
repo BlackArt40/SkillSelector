@@ -148,8 +148,6 @@ struct RootView: View {
                     CatalogListView(
                         state: model.catalogState,
                         selection: catalogSelection,
-                        sourceNamesByID: catalogSourceNames,
-                        descriptionsByID: model.catalogDescriptions,
                         onSelect: { skill in selectCatalog(skill) },
                         onRefresh: { Task { await model.refreshCatalog() } }
                     )
@@ -618,7 +616,7 @@ struct RootView: View {
     }
 
     private var catalogSourceNames: [String: String] {
-        Dictionary(uniqueKeysWithValues: CatalogRegistry.sources.map { ($0.id, $0.displayName) })
+        Dictionary(uniqueKeysWithValues: model.catalogSources.map { ($0.id, $0.displayName) })
     }
 
     /// Selecting a catalog skill shows its detail and records the sidebar
@@ -819,7 +817,7 @@ extension BrowserDestination {
         case .links: L10n.string("Symbolic Links")
         case .rules: L10n.string("Rules")
         case .mcp: L10n.string("MCP")
-        case .catalog: L10n.string("Catalog")
+        case .catalog: L10n.string("Marketplace")
         case .system(let rootID), .project(let rootID):
             rootsByID[rootID]?.displayName ?? rootID
         case .agent(let id):

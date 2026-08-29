@@ -5,17 +5,32 @@ import SwiftUI
 /// a header with title, count and refresh, then one row per remote skill
 /// grouped under its declared source. Read-only — rows open the detail
 /// pane; installation stays with the ecosystem's tooling.
+///
+/// Descriptions are read from the model directly (not flowed through the
+/// parent): prefetch flushes then invalidate only this list, not the
+/// whole browser, so scrolling stays smooth while they stream in.
 struct CatalogListView: View {
+    @Environment(AppModel.self) private var model
     let state: CatalogState
     var selection: String?
-    var sourceNamesByID: [String: String] = [:]
-    var descriptionsByID: [String: String] = [:]
     var onSelect: ((CatalogSkill) -> Void)?
     var onRefresh: (() -> Void)?
+
+    /// Repository filter from the column header; nil shows every source.
+    @State private var selectedSourceID: String?
+    @State private var showingAddSheet = false
 
     private var skills: [CatalogSkill] {
         if case .loaded(let skills, _) = state { return skills }
         return []
+    }
+
+    private var displayedSections: [CatalogSection] {
+        Self.sections(of: skills, sources: model.catalogSources, sourceID: selectedSourceID)
+    }
+
+    private var displayedCount: Int {
+        displayedSections.reduce(0) { $0 + $1.skills.count }
     }
 
     var body: some View {
@@ -28,19 +43,35 @@ struct CatalogListView: View {
         }
         .background(AppTheme.background)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .sheet(isPresented: $showingAddSheet) {
+            AddCatalogSourceSheet(
+                onImport: { custom in
+                    let added = model.addCatalogSource(custom)
+                    showingAddSheet = false
+                    if added {
+                        selectedSourceID = nil
+                        Task { await model.refreshCatalog() }
+                    }
+                    return added
+                },
+                onCancel: { showingAddSheet = false }
+            )
+        }
     }
 
     private var header: some View {
         HStack(alignment: .center, spacing: 8) {
-            Text(verbatim: L10n.string("Catalog"))
+            Text(verbatim: L10n.string("Marketplace"))
                 .font(AppTheme.display(17, weight: .semibold))
                 .foregroundStyle(AppTheme.foreground)
                 .lineLimit(1)
-            if !skills.isEmpty {
-                Text(verbatim: "\(skills.count)")
+            if displayedCount > 0 {
+                Text(verbatim: "\(displayedCount)")
                     .font(AppTheme.body(12))
                     .foregroundStyle(AppTheme.muted)
             }
+            sourceFilterPicker
+            addSourceButton
             Spacer(minLength: 8)
             Button {
                 onRefresh?()
@@ -53,13 +84,49 @@ struct CatalogListView: View {
             }
             .buttonStyle(.plain)
             .disabled(isLoading)
-            .help(L10n.string("Refresh Catalog"))
-            .accessibilityLabel(L10n.string("Refresh Catalog"))
+            .help(L10n.string("Refresh Marketplace"))
+            .accessibilityLabel(L10n.string("Refresh Marketplace"))
         }
         .padding(.leading, 16)
         .padding(.trailing, 8)
         .frame(height: 46)
         .background(AppTheme.background)
+    }
+
+    /// Repository category filter: every declared source plus the
+    /// everything option, rendered as a compact pull-down menu.
+    private var sourceFilterPicker: some View {
+        Picker("Marketplace Source Filter", selection: $selectedSourceID) {
+            Text(verbatim: L10n.string("All Sources")).tag(String?.none)
+            ForEach(model.catalogSources) { source in
+                Text(verbatim: source.displayName).tag(Optional(source.id))
+            }
+        }
+        .pickerStyle(.menu)
+        .labelsHidden()
+        .controlSize(.small)
+        .accessibilityLabel(L10n.string("Marketplace Source Filter"))
+    }
+
+    /// 「导入市场」: block button with a label — opens the import sheet
+    /// for a user-declared GitHub source.
+    private var addSourceButton: some View {
+        Button {
+            showingAddSheet = true
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "plus.circle")
+                    .font(.system(size: 11))
+                Text(verbatim: L10n.string("Import Source"))
+                    .font(AppTheme.body(12, weight: .medium))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(AppTheme.surfaceWarm, in: RoundedRectangle(cornerRadius: 7))
+        }
+        .buttonStyle(.plain)
+        .help(L10n.string("Import Source"))
+        .accessibilityLabel(L10n.string("Import Source"))
     }
 
     private var isLoading: Bool {
@@ -72,24 +139,33 @@ struct CatalogListView: View {
         switch state {
         case .idle, .loading:
             loadingState
-        case .loaded(let skills, let truncated):
+        case .loaded(_, let truncated):
             if skills.isEmpty {
                 emptyState
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 2) {
+                    LazyVStack(spacing: 2, pinnedViews: [.sectionHeaders]) {
                         if truncated {
                             truncatedBanner
                         }
-                        ForEach(skills) { skill in
-                            CatalogSkillRow(
-                                skill: skill,
-                                sourceName: sourceNamesByID[skill.sourceID] ?? skill.sourceID,
-                                description: descriptionsByID[skill.id],
-                                isActive: selection == skill.id,
-                                onSelect: { onSelect?(skill) }
-                            )
-                            .padding(.horizontal, 8)
+                        if !model.catalogFailedSourceIDs.isEmpty {
+                            partialFailureBanner
+                        }
+                        ForEach(displayedSections) { section in
+                            Section {
+                                ForEach(section.skills) { skill in
+                                    CatalogSkillRow(
+                                        skill: skill,
+                                        sourceName: section.source.displayName,
+                                        description: model.catalogDescriptions[skill.id],
+                                        isActive: selection == skill.id,
+                                        onSelect: { onSelect?(skill) }
+                                    )
+                                    .padding(.horizontal, 8)
+                                }
+                            } header: {
+                                sectionHeader(section)
+                            }
                         }
                     }
                     .padding(.vertical, 8)
@@ -100,12 +176,66 @@ struct CatalogListView: View {
         }
     }
 
+    /// One repository category: its declared display name, skill count,
+    /// and the skills themselves (already sorted within the source).
+    struct CatalogSection: Identifiable, Equatable {
+        let source: CatalogSource
+        let skills: [CatalogSkill]
+        var id: String { source.id }
+    }
+
+    /// Groups the flat listing by the effective sources (built-in plus
+    /// imported), keeping the declared order and dropping empty sources.
+    /// With `sourceID` set, only that repository's section is produced.
+    static func sections(
+        of skills: [CatalogSkill],
+        sources: [CatalogSource],
+        sourceID: String? = nil
+    ) -> [CatalogSection] {
+        sources.compactMap { source in
+            if let sourceID, source.id != sourceID { return nil }
+            let group = skills.filter { $0.sourceID == source.id }
+            guard !group.isEmpty else { return nil }
+            return CatalogSection(source: source, skills: group)
+        }
+    }
+
+    private func sectionHeader(_ section: CatalogSection) -> some View {
+        HStack(spacing: 6) {
+            Text(verbatim: section.source.displayName)
+                .font(AppTheme.display(12, weight: .semibold))
+                .foregroundStyle(AppTheme.muted)
+            Text(verbatim: "\(section.skills.count)")
+                .font(AppTheme.body(11))
+                .foregroundStyle(AppTheme.meta)
+            Spacer(minLength: 0)
+            if section.source.isCustom {
+                Button {
+                    model.removeCatalogSource(id: section.source.id)
+                    Task { await model.refreshCatalog() }
+                } label: {
+                    Image(systemName: "minus.circle")
+                        .font(.system(size: 11))
+                        .foregroundStyle(AppTheme.muted)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(L10n.string("Remove Imported Source"))
+                .accessibilityLabel(L10n.string("Remove Imported Source"))
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.background)
+    }
+
     private var loadingState: some View {
         VStack(spacing: 8) {
             Spacer(minLength: 48)
             ProgressView()
                 .controlSize(.small)
-            Text(verbatim: L10n.string("Catalog Loading"))
+            Text(verbatim: L10n.string("Marketplace Loading"))
                 .font(AppTheme.body(13))
                 .foregroundStyle(AppTheme.muted)
             Spacer(minLength: 48)
@@ -119,10 +249,10 @@ struct CatalogListView: View {
             Image(systemName: "sparkles")
                 .font(.system(size: 26))
                 .foregroundStyle(AppTheme.meta)
-            Text(verbatim: L10n.string("No Catalog Skills"))
+            Text(verbatim: L10n.string("No Marketplace Skills"))
                 .font(AppTheme.display(17, weight: .semibold))
                 .foregroundStyle(AppTheme.foreground)
-            Text(verbatim: L10n.string("No Catalog Skills Description"))
+            Text(verbatim: L10n.string("No Marketplace Skills Description"))
                 .font(AppTheme.body(13))
                 .foregroundStyle(AppTheme.muted)
                 .multilineTextAlignment(.center)
@@ -134,7 +264,17 @@ struct CatalogListView: View {
     }
 
     private var truncatedBanner: some View {
-        Label(L10n.string("Catalog Truncated"), systemImage: "exclamationmark.triangle")
+        Label(L10n.string("Marketplace Truncated"), systemImage: "exclamationmark.triangle")
+            .font(AppTheme.body(12))
+            .foregroundStyle(AppTheme.muted)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(10)
+            .background(AppTheme.surfaceWarm, in: RoundedRectangle(cornerRadius: 8))
+            .padding(.horizontal, 8)
+    }
+
+    private var partialFailureBanner: some View {
+        Label(L10n.string("Marketplace Partial Failure"), systemImage: "exclamationmark.triangle")
             .font(AppTheme.body(12))
             .foregroundStyle(AppTheme.muted)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -149,7 +289,7 @@ struct CatalogListView: View {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 26))
                 .foregroundStyle(AppTheme.meta)
-            Text(verbatim: L10n.string("Catalog Failed"))
+            Text(verbatim: L10n.string("Marketplace Failed"))
                 .font(AppTheme.display(17, weight: .semibold))
                 .foregroundStyle(AppTheme.foreground)
             Text(verbatim: CatalogFailureMessage.text(for: failure))
@@ -168,13 +308,22 @@ struct CatalogListView: View {
 }
 
 /// One catalog row: skill name, its frontmatter description once the
-/// prefetch lands (path until then), and the source badge.
-struct CatalogSkillRow: View {
+/// prefetch lands (path until then), and the source badge. Equatable so
+/// parent invalidations skip re-rendering unchanged realized rows, and
+/// fixed-height so LazyVStack's scroll geometry stays cheap.
+struct CatalogSkillRow: View, Equatable {
     let skill: CatalogSkill
     let sourceName: String
     var description: String?
     let isActive: Bool
     var onSelect: (() -> Void)?
+
+    nonisolated static func == (lhs: CatalogSkillRow, rhs: CatalogSkillRow) -> Bool {
+        lhs.skill == rhs.skill
+            && lhs.sourceName == rhs.sourceName
+            && lhs.description == rhs.description
+            && lhs.isActive == rhs.isActive
+    }
 
     var body: some View {
         HStack(spacing: 8) {
@@ -204,7 +353,7 @@ struct CatalogSkillRow: View {
             PillBadge(text: sourceName, style: .link)
         }
         .padding(.horizontal, 10)
-        .frame(minHeight: 46)
+        .frame(height: 46)
         .background(isActive ? AppTheme.accentTint : Color.clear, in: RoundedRectangle(cornerRadius: 8))
         .contentShape(Rectangle())
         .onTapGesture {
@@ -218,13 +367,72 @@ enum CatalogFailureMessage {
     static func text(for failure: CatalogLoadFailure) -> String {
         switch failure {
         case .rateLimited:
-            L10n.string("Catalog Failure Rate Limited")
+            L10n.string("Marketplace Failure Rate Limited")
         case .network:
-            L10n.string("Catalog Failure Network")
+            L10n.string("Marketplace Failure Network")
         case .invalidResponse:
-            L10n.string("Catalog Failure Invalid Response")
+            L10n.string("Marketplace Failure Invalid Response")
         case .http(let status):
-            L10n.string("Catalog Failure HTTP", status)
+            L10n.string("Marketplace Failure HTTP", status)
         }
+    }
+}
+
+/// 「导入市场」sheet: one text field accepting owner/repo, a GitHub URL,
+/// or owner/repo@branch. Import refreshes the catalog with the new
+/// source; duplicates and malformed input surface inline.
+struct AddCatalogSourceSheet: View {
+    var onImport: (CustomCatalogSource) -> Bool
+    var onCancel: () -> Void
+
+    @State private var input = ""
+    @State private var errorText: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(verbatim: L10n.string("Import Source"))
+                .font(AppTheme.display(17, weight: .semibold))
+                .foregroundStyle(AppTheme.foreground)
+            TextField(
+                L10n.string("Market Source Placeholder"),
+                text: $input
+            )
+            .textFieldStyle(.roundedBorder)
+            .font(AppTheme.mono(13))
+            Text(verbatim: L10n.string("Market Source Hint"))
+                .font(AppTheme.body(12))
+                .foregroundStyle(AppTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+            if let errorText {
+                Text(verbatim: errorText)
+                    .font(AppTheme.body(12))
+                    .foregroundStyle(.orange)
+            }
+            HStack {
+                Spacer(minLength: 0)
+                Button(L10n.string("Cancel")) {
+                    onCancel()
+                }
+                .keyboardShortcut(.cancelAction)
+                Button(L10n.string("Import")) {
+                    importSource()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(input.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(24)
+        .frame(width: 440)
+    }
+
+    private func importSource() {
+        guard let custom = CustomCatalogSource.parsing(input) else {
+            errorText = L10n.string("Market Source Invalid")
+            return
+        }
+        if onImport(custom) {
+            return
+        }
+        errorText = L10n.string("Market Source Duplicate")
     }
 }
