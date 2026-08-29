@@ -147,22 +147,62 @@ public final class SkillIndex {
     /// Returns how many records were updated.
     @discardableResult
     public func backfillContentFingerprints(_ fingerprintsByPath: [String: String]) throws -> Int {
-        guard !fingerprintsByPath.isEmpty else { return 0 }
+        try backfillFingerprints(
+            contentByPath: fingerprintsByPath,
+            similarityByPath: [:]
+        )
+    }
+
+    /// Combined write-back for both deferred fingerprints (exact SHA-256
+    /// and similarity SimHash). A record is updated when either value
+    /// changes; its cache entry is rewritten so cache hits keep serving
+    /// both without re-reading the file.
+    @discardableResult
+    public func backfillFingerprints(
+        contentByPath: [String: String],
+        similarityByPath: [String: String]
+    ) throws -> Int {
+        guard !contentByPath.isEmpty || !similarityByPath.isEmpty else { return 0 }
         do {
             let records = try recordsByPath()
             var updated = 0
-            for (path, fingerprint) in fingerprintsByPath {
-                guard let record = records[path],
-                      record.contentFingerprint != fingerprint else {
-                    continue
+            for (path, content) in contentByPath {
+                guard let record = records[path] else { continue }
+                let similarity = similarityByPath[path]
+                let contentChanged = record.contentFingerprint != content
+                let similarityChanged = record.similarityFingerprint != similarity
+                guard contentChanged || similarityChanged else { continue }
+                if contentChanged {
+                    record.contentFingerprint = content
                 }
-                record.contentFingerprint = fingerprint
+                if similarityChanged {
+                    record.similarityFingerprint = similarity
+                }
                 if let data = record.scanStateData,
                    let entry = try? decoder.decode(ScannedSkillCacheEntry.self, from: data) {
                     record.scanStateData = try encoder.encode(ScannedSkillCacheEntry(
                         state: entry.state,
                         document: entry.document,
-                        contentFingerprint: fingerprint,
+                        contentFingerprint: content,
+                        similarityFingerprint: similarity ?? entry.similarityFingerprint,
+                        entryModificationDate: entry.entryModificationDate
+                    ))
+                }
+                updated += 1
+            }
+            // Similarity-only backfill (content fingerprint was already
+            // current): still write the record and its cache entry.
+            for (path, similarity) in similarityByPath where contentByPath[path] == nil {
+                guard let record = records[path],
+                      record.similarityFingerprint != similarity else { continue }
+                record.similarityFingerprint = similarity
+                if let data = record.scanStateData,
+                   let entry = try? decoder.decode(ScannedSkillCacheEntry.self, from: data) {
+                    record.scanStateData = try encoder.encode(ScannedSkillCacheEntry(
+                        state: entry.state,
+                        document: entry.document,
+                        contentFingerprint: entry.contentFingerprint,
+                        similarityFingerprint: similarity,
                         entryModificationDate: entry.entryModificationDate
                     ))
                 }
@@ -217,6 +257,7 @@ public final class SkillIndex {
         record.entryFilename = scanned.entryFilename
         record.parseDiagnosticsData = (try? encoder.encode(scanned.document.issues)) ?? Data()
         record.contentFingerprint = scanned.contentFingerprint
+        record.similarityFingerprint = scanned.similarityFingerprint
         // Fresh scans persist their stat state for the next incremental
         // pass; cache hits keep what they have; diagnostic candidates have
         // no trustworthy state and drop any stale one.
@@ -227,6 +268,7 @@ public final class SkillIndex {
                 state: state,
                 document: scanned.document,
                 contentFingerprint: scanned.contentFingerprint,
+                similarityFingerprint: scanned.similarityFingerprint,
                 entryModificationDate: scanned.entryModificationDate
             ))
         } else {
@@ -249,7 +291,9 @@ public final class SkillIndex {
             entryFilename: record.entryFilename,
             parseDiagnostics: (try? decoder.decode([ParseIssue].self, from: record.parseDiagnosticsData)) ?? [],
             contentFingerprint: record.contentFingerprint,
-            ignoredDuplicateGroup: record.ignoredDuplicateGroup
+            similarityFingerprint: record.similarityFingerprint,
+            ignoredDuplicateGroup: record.ignoredDuplicateGroup,
+            ignoredNearDuplicateGroup: record.ignoredNearDuplicateGroup
         )
     }
 
@@ -266,6 +310,37 @@ public final class SkillIndex {
                 let target = ignored ? fingerprint : nil
                 guard record.ignoredDuplicateGroup != target else { continue }
                 record.ignoredDuplicateGroup = target
+                updated += 1
+            }
+            if updated > 0 {
+                try context.save()
+            }
+            return updated
+        } catch {
+            context.rollback()
+            throw error
+        }
+    }
+
+    /// Marks (or unmarks) the Skills of one near-duplicate cluster as
+    /// ignored. The cluster key derives from the member paths, so the
+    /// caller passes them explicitly; a membership change leaves the old
+    /// key stale and the group reappears until ignored again. Returns how
+    /// many records were updated.
+    @discardableResult
+    public func setIgnoredNearDuplicateGroup(
+        paths: [String],
+        key: String,
+        ignored: Bool
+    ) throws -> Int {
+        do {
+            let records = try recordsByPath()
+            var updated = 0
+            for path in paths {
+                guard let record = records[path] else { continue }
+                let target = ignored ? key : nil
+                guard record.ignoredNearDuplicateGroup != target else { continue }
+                record.ignoredNearDuplicateGroup = target
                 updated += 1
             }
             if updated > 0 {

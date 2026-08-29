@@ -12,9 +12,15 @@ public struct SkillSnapshot: Identifiable, Hashable, Sendable {
     public let entryFilename: String
     public let parseDiagnostics: [ParseIssue]
     public var contentFingerprint: String? = nil
+    /// SimHash-64 of the body (`s1:` prefix), nil when the body is too
+    /// short to compare meaningfully. Powers the near-duplicates view.
+    public var similarityFingerprint: String? = nil
     /// Set to the group's fingerprint when the user ignored this duplicate
     /// group; excluded from the duplicates view while set.
     public var ignoredDuplicateGroup: String? = nil
+    /// Set to the near-duplicate cluster key the user ignored; excluded
+    /// from the near-duplicates view while set.
+    public var ignoredNearDuplicateGroup: String? = nil
 
     /// Whether this Skill is a symbolic link whose target is no longer
     /// reachable (moved or deleted target). Checked at read time — the scan

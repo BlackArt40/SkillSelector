@@ -44,11 +44,30 @@ public struct RefreshSummary: Hashable, Sendable {
     public let added: Int
     public let changed: Int
     public let removed: Int
+    /// Paths behind the counts, so the refresh history can answer "what
+    /// exactly changed" without re-deriving anything.
+    public let addedPaths: [String]
+    public let changedPaths: [String]
+    public let removedPaths: [String]
 
-    public init(added: Int, changed: Int, removed: Int) {
+    public init(
+        added: Int,
+        changed: Int,
+        removed: Int,
+        addedPaths: [String] = [],
+        changedPaths: [String] = [],
+        removedPaths: [String] = []
+    ) {
         self.added = added
         self.changed = changed
         self.removed = removed
+        self.addedPaths = addedPaths
+        self.changedPaths = changedPaths
+        self.removedPaths = removedPaths
+    }
+
+    public var isEmpty: Bool {
+        added == 0 && changed == 0 && removed == 0
     }
 }
 
@@ -440,18 +459,21 @@ public final class IndexRefresher {
         // unique in practice, but a corrupted store must not crash here).
         let oldByPath = Dictionary(before.map { ($0.path, $0) }, uniquingKeysWith: { first, _ in first })
         let newByPath = Dictionary(after.map { ($0.path, $0) }, uniquingKeysWith: { first, _ in first })
-        let added = newByPath.keys.filter { oldByPath[$0] == nil }.count
-        let removed = oldByPath.keys.filter { newByPath[$0] == nil }.count
-        let changed = newByPath.keys.filter { path in
+        let addedPaths = newByPath.keys.filter { oldByPath[$0] == nil }.sorted()
+        let removedPaths = oldByPath.keys.filter { newByPath[$0] == nil }.sorted()
+        let changedPaths = newByPath.keys.filter { path in
             guard let old = oldByPath[path], let snapshot = newByPath[path] else {
                 return false
             }
             return old != snapshot
-        }.count
+        }.sorted()
         return RefreshSummary(
-            added: added,
-            changed: changed,
-            removed: removed
+            added: addedPaths.count,
+            changed: changedPaths.count,
+            removed: removedPaths.count,
+            addedPaths: addedPaths,
+            changedPaths: changedPaths,
+            removedPaths: removedPaths
         )
     }
 }

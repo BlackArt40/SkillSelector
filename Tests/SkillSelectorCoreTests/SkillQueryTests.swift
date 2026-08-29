@@ -119,9 +119,9 @@ final class SkillQueryTests: XCTestCase {
         XCTAssertEqual(beta.map(\.path), ["/beta/only"])
     }
 
-    /// Free terms fuzzy-match the Skill name only: case- and
-    /// diacritic-insensitive substring. Descriptions and paths are no
-    /// longer searched by plain terms.
+    /// Free terms fuzzy-match the Skill **name or body** (case- and
+    /// diacritic-insensitive substring). Descriptions and paths are never
+    /// searched by plain terms; the body only when its text is indexed.
     func testFreeTermsFuzzyMatchNameOnly() {
         let snapshots = [
             snapshot(path: "/name", name: "Release Helper"),
@@ -250,6 +250,77 @@ final class SkillQueryTests: XCTestCase {
             SkillQuery(searchText: "name:helper desc:codex")
                 .apply(to: snapshots, rootsByID: rootsByID).map(\.path),
             ["/three"]
+        )
+    }
+
+    // MARK: Body search
+
+    /// `body:` restricts the match to the indexed body text only.
+    func testBodyPrefixSearchesOnlyTheBody() {
+        let snapshots = [
+            snapshot(path: "/docker", name: "Container Helper"),
+            snapshot(path: "/other", name: "Docker Notes"),
+        ]
+        let bodies = [
+            "/docker": "runs compose stacks for local projects",
+            "/other": "general notes about writing",
+        ]
+
+        XCTAssertEqual(
+            SkillQuery(searchText: "body:compose")
+                .apply(to: snapshots, rootsByID: rootsByID, bodyTextsByPath: bodies)
+                .map(\.path),
+            ["/docker"]
+        )
+        // The name matches "docker" but the body doesn't — body: must not
+        // leak into the name.
+        XCTAssertTrue(
+            SkillQuery(searchText: "body:docker")
+                .apply(to: snapshots, rootsByID: rootsByID, bodyTextsByPath: bodies)
+                .isEmpty
+        )
+        // Without an indexed body the term matches nothing.
+        XCTAssertTrue(
+            SkillQuery(searchText: "body:compose")
+                .apply(to: snapshots, rootsByID: rootsByID)
+                .isEmpty
+        )
+    }
+
+    /// Free terms match the name or the indexed body; skills without an
+    /// indexed body degrade to name-only matching.
+    func testFreeTermsMatchNameOrBody() {
+        let snapshots = [
+            snapshot(path: "/named", name: "Kubernetes Helper"),
+            snapshot(path: "/bodied", name: "Plain Tool"),
+            snapshot(path: "/unindexed", name: "Unrelated"),
+        ]
+        let bodies = [
+            "/named": "totally different prose",
+            "/bodied": "deploys kubernetes manifests",
+        ]
+
+        XCTAssertEqual(
+            Set(
+                SkillQuery(searchText: "kubernetes")
+                    .apply(to: snapshots, rootsByID: rootsByID, bodyTextsByPath: bodies)
+                    .map(\.path)
+            ),
+            ["/bodied", "/named"]
+        )
+        // The unindexed skill is not dropped from results it deserves.
+        XCTAssertEqual(
+            SkillQuery(searchText: "unrelated")
+                .apply(to: snapshots, rootsByID: rootsByID, bodyTextsByPath: bodies)
+                .map(\.path),
+            ["/unindexed"]
+        )
+        // Name and body terms combine with AND.
+        XCTAssertEqual(
+            SkillQuery(searchText: "plain body:manifests")
+                .apply(to: snapshots, rootsByID: rootsByID, bodyTextsByPath: bodies)
+                .map(\.path),
+            ["/bodied"]
         )
     }
 

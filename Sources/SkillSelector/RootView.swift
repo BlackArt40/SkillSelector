@@ -29,8 +29,12 @@ struct RootView: View {
     @State private var didSeedHistory = false
     /// Selected MCP server id for the MCP detail pane.
     @State private var mcpSelection: String?
+    /// Selected rules file id for the Rules detail pane.
+    @State private var rulesSelection: String?
     /// True while a probe-all pass is in flight (drives list progress).
     @State private var mcpProbingAll = false
+    /// True while the refresh history popover is presented.
+    @State private var isShowingRefreshHistory = false
 
     init(initialDestination: BrowserDestination = .all) {
         _destination = State(initialValue: initialDestination)
@@ -52,7 +56,8 @@ struct RootView: View {
         let filteredSkills = query.apply(
             to: model.snapshots,
             rootsByID: model.rootsByID,
-            agentNamesByID: agentNamesByID
+            agentNamesByID: agentNamesByID,
+            bodyTextsByPath: model.bodySearchTextsByPath
         )
         let detectedAgentIDs = BrowserSidebar.detectedAgentIDs(
             from: model.snapshots,
@@ -85,6 +90,7 @@ struct RootView: View {
                 if currentDestination == .duplicates {
                     DuplicateGroupsView(
                         groups: model.duplicateGroups,
+                        nearGroups: model.nearDuplicateGroups,
                         selection: model.selection,
                         agentNamesByID: agentNamesByID,
                         hasAuthorization: model.hasAuthorization,
@@ -92,6 +98,12 @@ struct RootView: View {
                         onOpenInEditor: { skill in openInEditor(skill) },
                         onIgnoreGroup: { fingerprint in
                             _ = try? model.setDuplicateGroupIgnored(fingerprint: fingerprint, ignored: true)
+                        },
+                        onIgnoreNearGroup: { group in
+                            _ = try? model.setNearDuplicateGroupIgnored(group, ignored: true)
+                        },
+                        onLoadComparison: { left, right in
+                            try await model.compareSnapshots(left, right)
                         },
                         onSelect: { path in selectSkill(path) }
                     )
@@ -103,6 +115,16 @@ struct RootView: View {
                         agentNamesByID: agentNamesByID,
                         onRevealInFinder: { skill in reveal(skill) },
                         onSelect: { path in selectSkill(path) }
+                    )
+                    .frame(width: listColumnWidth)
+                } else if currentDestination == .rules {
+                    RulesListView(
+                        files: model.rulesFiles,
+                        selection: rulesSelection,
+                        agentNamesByID: agentNamesByID,
+                        onSelect: { file in selectRules(file) },
+                        onReveal: { file in revealRules(file) },
+                        onOpen: { file in openRules(file) }
                     )
                     .frame(width: listColumnWidth)
                 } else if currentDestination == .mcp {
@@ -144,7 +166,15 @@ struct RootView: View {
                 }
                 ColumnResizer(width: $listColumnWidth, range: 300...620)
 
-                if currentDestination == .mcp {
+                if currentDestination == .rules {
+                    RulesDetailView(
+                        file: model.rulesFiles.first { $0.id == rulesSelection },
+                        agentNamesByID: agentNamesByID,
+                        onReveal: { file in revealRules(file) },
+                        onOpen: { file in openRules(file) }
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if currentDestination == .mcp {
                     McpDetailView(
                         server: model.mcpServers.first { $0.id == mcpSelection },
                         status: mcpSelection.flatMap { id in model.mcpProbeStatuses[id] } ?? .unknown,
@@ -264,6 +294,8 @@ struct RootView: View {
                 .accessibilityLabel(L10n.string("Go Forward"))
             }
             ToolbarItemGroup(placement: .primaryAction) {
+                refreshButton
+                historyButton
                 searchField
                 themeToggle
             }
@@ -279,6 +311,49 @@ struct RootView: View {
     }
 
     // MARK: Toolbar
+
+    /// The explicit refresh action: rescans every authorized root now.
+    /// While a refresh runs the button shows progress and ignores clicks
+    /// (the in-flight task is awaited either way).
+    private var refreshButton: some View {
+        let isRunning = model.refreshState == RefreshState.running
+        return Button {
+            Task { await model.refresh() }
+        } label: {
+            if isRunning {
+                ProgressView()
+                    .controlSize(.small)
+                    .frame(width: 30, height: 30)
+            } else {
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 14))
+                    .frame(width: 30, height: 30)
+                    .contentShape(Rectangle())
+            }
+        }
+        .buttonStyle(.borderless)
+        .disabled(isRunning)
+        .help(L10n.string("Refresh Now"))
+        .accessibilityLabel(L10n.string("Refresh Now"))
+    }
+
+    /// Recent refresh changes, anchored to the history button.
+    private var historyButton: some View {
+        Button {
+            isShowingRefreshHistory = true
+        } label: {
+            Image(systemName: "clock.arrow.circlepath")
+                .font(.system(size: 14))
+                .frame(width: 30, height: 30)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .help(L10n.string("Change History"))
+        .accessibilityLabel(L10n.string("Change History"))
+        .popover(isPresented: $isShowingRefreshHistory, arrowEdge: .bottom) {
+            RefreshHistoryPopover(history: model.refreshHistory)
+        }
+    }
 
     /// `.search`: 240×30 rounded field with surface background.
     private var searchField: some View {
@@ -386,6 +461,7 @@ struct RootView: View {
         counts[.global] = SkillQuery(scope: .global).apply(to: model.snapshots, rootsByID: model.rootsByID).count
         counts[.duplicates] = DuplicateSkillGrouper.memberCount(in: model.duplicateGroups)
         counts[.links] = model.snapshots.filter { $0.resolvedTarget != nil }.count
+        counts[.rules] = model.rulesFiles.count
         counts[.mcp] = model.mcpServers.count
         for root in model.authorizedRoots {
             switch root.kind {
@@ -468,6 +544,7 @@ struct RootView: View {
             searchText = ""
             model.selectOnly(nil)
             if destination != .mcp { mcpSelection = nil }
+            if destination != .rules { rulesSelection = nil }
         } else if let query = entry.searchQuery {
             searchText = query
             model.selectOnly(nil)
@@ -484,6 +561,7 @@ struct RootView: View {
         searchText = ""
         model.selectOnly(nil)
         mcpSelection = nil
+        rulesSelection = nil
         suppressingHistory = false
     }
 
@@ -500,6 +578,32 @@ struct RootView: View {
     private func openInEditor(_ skill: SkillSnapshot) {
         do {
             try model.openDocumentInDefaultEditor(for: skill)
+        } catch {
+            openError = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
+        }
+    }
+
+    // MARK: Rules
+
+    /// Selecting a rules file shows its detail; the destination change is
+    /// already recorded by the sidebar, so this mirrors the MCP flow's
+    /// re-record of the sidebar step per selection.
+    private func selectRules(_ file: RulesFileDescriptor) {
+        rulesSelection = file.id
+        model.recordNavigation(.sidebar(.rules))
+    }
+
+    private func revealRules(_ file: RulesFileDescriptor) {
+        do {
+            try model.revealRulesFile(file)
+        } catch {
+            openError = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
+        }
+    }
+
+    private func openRules(_ file: RulesFileDescriptor) {
+        do {
+            try model.openRulesFileInEditor(file)
         } catch {
             openError = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
         }
@@ -671,6 +775,7 @@ extension BrowserDestination {
         case .global: L10n.string("Global Skills")
         case .duplicates: L10n.string("Duplicate Skills")
         case .links: L10n.string("Symbolic Links")
+        case .rules: L10n.string("Rules")
         case .mcp: L10n.string("MCP")
         case .system(let rootID), .project(let rootID):
             rootsByID[rootID]?.displayName ?? rootID

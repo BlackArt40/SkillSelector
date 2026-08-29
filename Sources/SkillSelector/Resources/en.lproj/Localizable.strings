@@ -56,7 +56,7 @@
 "Authorize" = "Authorize";
 "Legacy Agents" = "Legacy Agents";
 "Legacy Agent Hint" = "Hidden until their Skills are detected or enabled here.";
-"Search Help" = "Plain terms fuzzy-match the Skill name; prefix a term with name:, desc:, path:, or agent: to search one field only.";
+"Search Help" = "Plain terms fuzzy-match the Skill name or body; prefix a term with name:, desc:, path:, agent:, or body: to search one field only.";
 "SkillSelector" = "SkillSelector";
 "Edit Custom Agent" = "Edit Custom Agent";
 "Agent Name" = "Agent Name";
@@ -139,6 +139,40 @@
 "No Duplicates" = "No Duplicates";
 "Duplicate Members Count" = "%d copies";
 
+/* Duplicate modes (exact / near) */
+"Duplicate Mode" = "Duplicate Mode";
+"Exact Duplicates" = "Exact";
+"Near Duplicates" = "Near";
+"No Near Duplicates" = "No Near Duplicates";
+"No Near Duplicates Description" = "No copies that drifted apart by small edits were found.";
+"Near Members Count" = "%d near copies";
+"Similarity Range" = "≈%d%%–%d%% similar";
+"Similarity Estimate Help" = "Similarity is a SimHash estimate, for guidance only.";
+"Ignore Near Duplicate Group" = "Ignore this near-duplicate group";
+
+/* Copy comparison */
+"Compare Copies" = "Compare Copies";
+"Compare" = "Compare";
+"Compare Duplicate Group" = "Compare this group's copies";
+"Left Copy" = "Left";
+"Right Copy" = "Right";
+"Loading Comparison" = "Comparing…";
+"Comparison Failed" = "Comparison Failed";
+"Frontmatter Differences" = "Frontmatter Differences";
+"No Frontmatter" = "Neither copy has frontmatter.";
+"Missing Value" = "(missing)";
+"Body Differences" = "Body Differences";
+"Bodies Are Identical" = "The bodies are byte-identical (differences live in metadata or sibling files).";
+"Identical Lines Hidden" = "… %d identical lines hidden …";
+"File Differences" = "Sibling Files";
+"All Files Identical" = "The sibling files are identical.";
+"Identical Files Omitted" = "%d identical files omitted.";
+"Left Only" = "Left only";
+"Right Only" = "Right only";
+"Kind Mismatch" = "Kind differs";
+"Size Differs" = "Size differs";
+"Identical" = "Identical";
+
 /* Bookmark health */
 "Needs Re-authorization" = "Needs re-authorization";
 "Re-authorize…" = "Re-authorize…";
@@ -183,12 +217,31 @@
 "Ignore" = "Ignore";
 "Ignore Duplicate Group" = "Ignore this duplicate group";
 
+/* Refresh & change history */
+"Refresh Now" = "Refresh Now";
+"Change History" = "Change History";
+"No Changes Recorded" = "No Changes Recorded";
+"No Changes Recorded Description" = "Refreshes that add, change, or remove Skills are recorded here.";
+"Added" = "Added";
+"Changed" = "Changed";
+"Removed" = "Removed";
+
 /* Launch defaults */
 
 /* Re-authorization banner */
 "Authorization Lost Banner" = "Some directories are no longer accessible. Re-authorize to keep scanning them.";
 
-/* MCP detection */
+/* Rules */
+"Rules" = "Rules";
+"No Rules Files" = "No Rules Files";
+"No Rules Files Description" = "Rules files (CLAUDE.md, AGENTS.md, .cursor/rules, .claude/rules, …) inside your authorized directories appear here.";
+"Select a Rules File" = "Select a Rules File";
+"Select a Rules File Description" = "Choose a rules file from the list to view its content.";
+"Rules Content" = "Rules Content";
+"Agent" = "Agent";
+"Size" = "Size";
+"Modified" = "Modified";
+
 "MCP" = "MCP";
 "Probe All MCP" = "Probe All";
 "Probe MCP" = "Probe";

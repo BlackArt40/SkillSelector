@@ -236,8 +236,15 @@ public struct SkillScanner: Sendable {
         return installations
     }
 
+    /// Iterative DFS with an explicit work stack. The previous recursive
+    /// form kept ~640 bytes of frame per level, so a tree near the depth
+    /// bound ran within a few kilobytes of a cooperative-pool thread's
+    /// stack limit (the scan runs off the main actor) — any unrelated
+    /// codegen change could push it over. The explicit stack makes the
+    /// depth guard a pure policy bound; stack exhaustion is structurally
+    /// impossible regardless of nesting.
     private func walkProjectDirectory(
-        _ directory: URL,
+        _ rootDirectory: URL,
         relativeComponents: [String],
         root: ScanRoot,
         declarations: [SkillRootDeclaration],
@@ -245,60 +252,59 @@ public struct SkillScanner: Sendable {
         cache: SkillScanCache,
         installations: inout [ScannedSkill]
     ) throws {
-        guard relativeComponents.count <= Self.maximumProjectWalkDepth else {
-            // Depth guard (audit R3/F-01 parity): stop descending beyond the
-            // bound so a pathological nesting cannot exhaust the stack.
-            return
-        }
-        if !relativeComponents.isEmpty,
-           let candidate = makeProjectCandidate(
-               installationURL: directory,
-               entries: matchingEntries(
-                   in: relativeComponents,
-                   declarations: declarations
-               ),
-               rootID: root.id,
-               authorizedURLs: authorizedURLs,
-               sourceDiscoveryRootURL: root.url,
-               cache: cache
-           ) {
-            installations.append(candidate)
-            return
-        }
-
-        for child in try directoryContents(directory) {
-            let name = child.lastPathComponent
-            guard !Self.skippedDirectoryNames.contains(name),
-                  isDirectoryOrSymbolicLink(child) else {
+        var stack: [(directory: URL, components: [String])] = [
+            (rootDirectory, relativeComponents)
+        ]
+        while let (directory, components) = stack.popLast() {
+            guard components.count <= Self.maximumProjectWalkDepth else {
+                // Depth guard (audit R3/F-01 parity): stop descending
+                // beyond the bound so a pathological nesting cannot grow
+                // the work stack without limit.
+                continue
+            }
+            if !components.isEmpty,
+               let candidate = makeProjectCandidate(
+                   installationURL: directory,
+                   entries: matchingEntries(
+                       in: components,
+                       declarations: declarations
+                   ),
+                   rootID: root.id,
+                   authorizedURLs: authorizedURLs,
+                   sourceDiscoveryRootURL: root.url,
+                   cache: cache
+               ) {
+                installations.append(candidate)
                 continue
             }
 
-            let childComponents = relativeComponents + [name]
-            if isSymbolicLink(child) {
-                guard let candidate = makeProjectCandidate(
-                    installationURL: child,
-                    entries: matchingEntries(
-                        in: childComponents,
-                        declarations: declarations
-                    ),
-                    rootID: root.id,
-                    authorizedURLs: authorizedURLs,
-                    sourceDiscoveryRootURL: root.url,
-                    cache: cache
-                ) else {
+            // Children are pushed in reverse so the work stack pops them
+            // in the same order the recursive form visited them.
+            for child in try directoryContents(directory).reversed() {
+                let name = child.lastPathComponent
+                guard !Self.skippedDirectoryNames.contains(name),
+                      isDirectoryOrSymbolicLink(child) else {
                     continue
                 }
-                installations.append(candidate)
-            } else {
-                try walkProjectDirectory(
-                    child,
-                    relativeComponents: childComponents,
-                    root: root,
-                    declarations: declarations,
-                    authorizedURLs: authorizedURLs,
-                    cache: cache,
-                    installations: &installations
-                )
+
+                let childComponents = components + [name]
+                if isSymbolicLink(child) {
+                    if let candidate = makeProjectCandidate(
+                        installationURL: child,
+                        entries: matchingEntries(
+                            in: childComponents,
+                            declarations: declarations
+                        ),
+                        rootID: root.id,
+                        authorizedURLs: authorizedURLs,
+                        sourceDiscoveryRootURL: root.url,
+                        cache: cache
+                    ) {
+                        installations.append(candidate)
+                    }
+                } else {
+                    stack.append((child, childComponents))
+                }
             }
         }
     }
@@ -430,6 +436,7 @@ public struct SkillScanner: Sendable {
                 entryFilename: entryFilename,
                 entryModificationDate: cached.entryModificationDate,
                 contentFingerprint: cached.contentFingerprint,
+                similarityFingerprint: cached.similarityFingerprint,
                 reusedCachedScan: true
             )
         }
@@ -496,6 +503,13 @@ public struct SkillScanner: Sendable {
         let modificationDate = try? resolvedEntryURL.resourceValues(
             forKeys: [.contentModificationDateKey]
         ).contentModificationDate
+        // One read feeds both fingerprints (exact SHA-256 + similarity
+        // SimHash); deferred-scan builds skip this entirely.
+        let fingerprints = computesContentFingerprints
+            ? try? SkillSimilarityFingerprint.computePair(
+                entryFileURL: contentDirectory.appendingPathComponent(entryFilename)
+            )
+            : nil
         return ScannedSkill(
             installation: SkillInstallation(
                 path: installationURL,
@@ -506,11 +520,8 @@ public struct SkillScanner: Sendable {
             agentIDsByRoot: [rootID: agentIDs],
             entryFilename: entryFilename,
             entryModificationDate: modificationDate,
-            contentFingerprint: computesContentFingerprints
-                ? try? SkillContentFingerprint.compute(
-                    entryFileURL: contentDirectory.appendingPathComponent(entryFilename)
-                )
-                : nil,
+            contentFingerprint: fingerprints?.content,
+            similarityFingerprint: fingerprints?.similarity,
             scanState: document.issues.contains { $0.diagnostic?.code == .unableToReadEntry }
                 ? nil
                 : state

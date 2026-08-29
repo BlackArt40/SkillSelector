@@ -6,6 +6,7 @@ enum BrowserDestination: Hashable {
     case global
     case duplicates
     case links
+    case rules
     case mcp
     case system(rootID: String)
     case project(rootID: String)
@@ -13,9 +14,7 @@ enum BrowserDestination: Hashable {
 
     var queryScope: SkillQuery.Scope {
         switch self {
-        case .all, .agent, .duplicates, .links:
-            .all
-        case .mcp:
+        case .all, .agent, .duplicates, .links, .rules, .mcp:
             .all
         case .global:
             .global
@@ -198,6 +197,14 @@ struct BrowserSidebar: View {
                 isActive: destination == .links
             ) {
                 destination = .links
+            }
+            SidebarItem(
+                title: L10n.string("Rules"),
+                glyph: Image(systemName: "text.document"),
+                count: counts[.rules],
+                isActive: destination == .rules
+            ) {
+                destination = .rules
             }
             SidebarItem(
                 title: L10n.string("MCP"),

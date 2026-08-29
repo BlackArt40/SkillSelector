@@ -42,6 +42,9 @@ public struct ScannedSkill: Hashable, Sendable {
     public var entryFilename: String
     public var entryModificationDate: Date?
     public var contentFingerprint: String?
+    /// SimHash-64 of the body (`s1:`), nil for short bodies; reused from
+    /// the incremental cache like the content fingerprint.
+    public var similarityFingerprint: String?
     /// The fresh stat state to persist, present only when this skill was
     /// freshly scanned (never for cache hits or diagnostic candidates —
     /// those keep or invalidate what the record already holds).
@@ -57,6 +60,7 @@ public struct ScannedSkill: Hashable, Sendable {
         entryFilename: String,
         entryModificationDate: Date? = nil,
         contentFingerprint: String? = nil,
+        similarityFingerprint: String? = nil,
         scanState: SkillScanState? = nil,
         reusedCachedScan: Bool = false
     ) {
@@ -70,6 +74,7 @@ public struct ScannedSkill: Hashable, Sendable {
         self.entryFilename = entryFilename
         self.entryModificationDate = entryModificationDate
         self.contentFingerprint = contentFingerprint
+        self.similarityFingerprint = similarityFingerprint
         self.scanState = scanState
         self.reusedCachedScan = reusedCachedScan
     }

@@ -62,6 +62,51 @@ public enum McpRegistry {
             projectPath: ".mcp.json",
             format: "json"
         ),
+        // Gemini CLI: JSON; mcpServers live at the top level of
+        // settings.json, both globally and per-project.
+        McpAgentDeclaration(
+            agentID: "gemini-cli",
+            globalPath: "~/.gemini/settings.json",
+            projectPath: ".gemini/settings.json",
+            format: "json"
+        ),
+        // GitHub Copilot: VS Code's native MCP config — the user-profile
+        // mcp.json and the workspace .vscode/mcp.json ("servers" key).
+        McpAgentDeclaration(
+            agentID: "github-copilot",
+            globalPath: "~/Library/Application Support/Code/User/mcp.json",
+            projectPath: ".vscode/mcp.json",
+            format: "json"
+        ),
+        // Cline: mcpServers live in the extension's VS Code globalStorage
+        // settings; the Cline CLI reads ~/.cline/mcp.json.
+        McpAgentDeclaration(
+            agentID: "cline",
+            globalPath: "~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json",
+            projectPath: nil,
+            format: "json"
+        ),
+        McpAgentDeclaration(
+            agentID: "cline",
+            globalPath: "~/.cline/mcp.json",
+            projectPath: nil,
+            format: "json"
+        ),
+        // Roo Code: VS Code extension globalStorage plus project .roo/mcp.json.
+        McpAgentDeclaration(
+            agentID: "roo-code",
+            globalPath: "~/Library/Application Support/Code/User/globalStorage/RooVeterinaryInc.roo-cline/settings/mcp_settings.json",
+            projectPath: ".roo/mcp.json",
+            format: "json"
+        ),
+        // Kilo Code: VS Code extension globalStorage plus project
+        // .kilocode/mcp.json.
+        McpAgentDeclaration(
+            agentID: "kilo-code",
+            globalPath: "~/Library/Application Support/Code/User/globalStorage/kilocode.kilo-code/settings/mcp_settings.json",
+            projectPath: ".kilocode/mcp.json",
+            format: "json"
+        ),
         // Generic project-level .mcp.json applies to every project as a
         // shared declaration, regardless of Agent.
         McpAgentDeclaration(

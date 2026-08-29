@@ -54,17 +54,22 @@ public struct ScannedSkillCacheEntry: Codable, Hashable, Sendable {
     public let state: SkillScanState
     public let document: ParsedSkillDocument
     public let contentFingerprint: String?
+    /// Optional so cache entries written before near-duplicate grouping
+    /// decode unchanged.
+    public let similarityFingerprint: String?
     public let entryModificationDate: Date?
 
     public init(
         state: SkillScanState,
         document: ParsedSkillDocument,
         contentFingerprint: String?,
+        similarityFingerprint: String? = nil,
         entryModificationDate: Date?
     ) {
         self.state = state
         self.document = document
         self.contentFingerprint = contentFingerprint
+        self.similarityFingerprint = similarityFingerprint
         self.entryModificationDate = entryModificationDate
     }
 }
@@ -82,9 +87,11 @@ public struct SkillScanCache: Sendable {
     public static let empty = SkillScanCache()
 }
 
-enum ScanStateBuilder {
+/// Builds stat-only directory trees. Public so the app layer can capture a
+/// fresh tree for the copy-comparison view (stat walk, no content reads).
+public enum ScanStateBuilder {
     /// Walks the content directory collecting stat metadata only.
-    static func build(
+    public static func build(
         contentDirectory: URL,
         entryFilename: String,
         resolvedTarget: URL?

@@ -56,7 +56,7 @@
 "Authorize" = "授权";
 "Legacy Agents" = "旧版 Agent";
 "Legacy Agent Hint" = "在检测到 Skill 或在此启用前保持隐藏。";
-"Search Help" = "普通词按 Skill 名称模糊匹配；用 name:、desc:、path:、agent: 前缀可限定单个字段。";
+"Search Help" = "普通词按 Skill 名称或正文模糊匹配；用 name:、desc:、path:、agent:、body: 前缀可限定单个字段。";
 "SkillSelector" = "SkillSelector";
 "Edit Custom Agent" = "编辑自定义 Agent";
 "Agent Name" = "Agent 名称";
@@ -139,6 +139,40 @@
 "No Duplicates" = "没有重复";
 "Duplicate Members Count" = "%d 份副本";
 
+/* Duplicate modes (exact / near) */
+"Duplicate Mode" = "重复模式";
+"Exact Duplicates" = "完全相同";
+"Near Duplicates" = "近似重复";
+"No Near Duplicates" = "没有近似重复";
+"No Near Duplicates Description" = "没有找到正文经小幅修改后彼此相似的 Skill 副本。";
+"Near Members Count" = "%d 份近似副本";
+"Similarity Range" = "相似度约 %d%%–%d%%";
+"Similarity Estimate Help" = "相似度为 SimHash 估算值，仅供参考。";
+"Ignore Near Duplicate Group" = "忽略此近似组";
+
+/* Copy comparison */
+"Compare Copies" = "对比副本";
+"Compare" = "对比";
+"Compare Duplicate Group" = "对比此组副本";
+"Left Copy" = "左侧";
+"Right Copy" = "右侧";
+"Loading Comparison" = "正在对比…";
+"Comparison Failed" = "对比失败";
+"Frontmatter Differences" = "Frontmatter 差异";
+"No Frontmatter" = "两份副本都没有 Frontmatter。";
+"Missing Value" = "（缺失）";
+"Body Differences" = "正文差异";
+"Bodies Are Identical" = "两份副本的正文完全相同（差异只在元数据或子文件）。";
+"Identical Lines Hidden" = "… 已折叠 %d 行相同内容 …";
+"File Differences" = "子文件差异";
+"All Files Identical" = "两份副本的子文件完全相同。";
+"Identical Files Omitted" = "另有 %d 个文件完全相同，已省略。";
+"Left Only" = "仅左侧";
+"Right Only" = "仅右侧";
+"Kind Mismatch" = "类型不同";
+"Size Differs" = "大小不同";
+"Identical" = "相同";
+
 /* Bookmark health */
 "Needs Re-authorization" = "需要重新授权";
 "Re-authorize…" = "重新授权…";
@@ -183,10 +217,30 @@
 "Ignore" = "忽略";
 "Ignore Duplicate Group" = "忽略此重复组";
 
+/* Refresh & change history */
+"Refresh Now" = "立即刷新";
+"Change History" = "变更历史";
+"No Changes Recorded" = "暂无变更记录";
+"No Changes Recorded Description" = "刷新后如有 Skill 新增、变更或移除，会记录在这里。";
+"Added" = "新增";
+"Changed" = "变更";
+"Removed" = "移除";
+
 /* Launch defaults */
 
 /* Re-authorization banner */
 "Authorization Lost Banner" = "部分目录已无法访问，请重新授权以继续扫描。";
+
+/* Rules 规则文件 */
+"Rules" = "规则文件";
+"No Rules Files" = "没有规则文件";
+"No Rules Files Description" = "已授权目录中的规则文件（CLAUDE.md、AGENTS.md、.cursor/rules、.claude/rules 等）会显示在这里。";
+"Select a Rules File" = "选择一个规则文件";
+"Select a Rules File Description" = "从左侧列表选择一个规则文件以查看内容。";
+"Rules Content" = "规则内容";
+"Agent" = "Agent";
+"Size" = "大小";
+"Modified" = "修改时间";
 
 /* MCP 检测 */
 "MCP" = "MCP";

@@ -211,6 +211,103 @@ final class McpScannerTests: XCTestCase {
         XCTAssertTrue(filesystem.configFile.hasSuffix("/.mcp.json"))
     }
 
+    /// Gemini CLI keeps its MCP servers under the top-level `mcpServers`
+    /// key of settings.json — global and per-project.
+    func testScansGeminiSettingsJsonMcpServers() throws {
+        let home = tempRoot.appending(path: "home")
+        try FileManager.default.createDirectory(
+            at: home.appending(path: ".gemini"),
+            withIntermediateDirectories: true
+        )
+        try """
+        {
+          "theme": "auto",
+          "mcpServers": {
+            "context7": { "command": "npx", "args": ["-y", "@upstash/context7-mcp"] }
+          }
+        }
+        """.write(to: home.appending(path: ".gemini/settings.json"), atomically: true, encoding: .utf8)
+
+        let project = tempRoot.appending(path: "demo-webapp")
+        try FileManager.default.createDirectory(
+            at: project.appending(path: ".gemini"),
+            withIntermediateDirectories: true
+        )
+        try """
+        { "mcpServers": { "search": { "type": "http", "url": "https://example.com/mcp" } } }
+        """.write(to: project.appending(path: ".gemini/settings.json"), atomically: true, encoding: .utf8)
+
+        let servers = McpScanner().scan(
+            homeRoot: AuthorizedRootSnapshot(id: "home", url: home, kind: .home),
+            projectRoots: [
+                AuthorizedRootSnapshot(id: "proj", url: project, kind: .project),
+            ]
+        )
+
+        let context7 = try XCTUnwrap(servers.first { $0.name == "context7" })
+        XCTAssertEqual(context7.agentID, "gemini-cli")
+        XCTAssertNil(context7.projectRootID)
+        XCTAssertEqual(context7.command, "npx")
+
+        let search = try XCTUnwrap(servers.first { $0.name == "search" })
+        XCTAssertEqual(search.agentID, "gemini-cli")
+        XCTAssertEqual(search.projectRootID, "proj")
+        XCTAssertEqual(search.transport, .http)
+    }
+
+    /// The VS Code family: Copilot reads VS Code's native mcp.json
+    /// ("servers" key), while Cline keeps mcpServers in its extension's
+    /// globalStorage settings.
+    func testScansVSCodeFamilyMcpConfigs() throws {
+        let home = tempRoot.appending(path: "home")
+        let codeUser = home.appending(path: "Library/Application Support/Code/User")
+        try FileManager.default.createDirectory(at: codeUser, withIntermediateDirectories: true)
+        try """
+        { "servers": { "github": { "type": "http", "url": "https://api.githubcopilot.com/mcp" } } }
+        """.write(to: codeUser.appending(path: "mcp.json"), atomically: true, encoding: .utf8)
+
+        let clineSettings = codeUser.appending(
+            path: "globalStorage/saoudrizwan.claude-dev/settings",
+            directoryHint: .isDirectory
+        )
+        try FileManager.default.createDirectory(at: clineSettings, withIntermediateDirectories: true)
+        try """
+        { "mcpServers": { "browser": { "command": "npx", "args": ["-y", "@cline/browser"] } } }
+        """.write(
+            to: clineSettings.appending(path: "cline_mcp_settings.json"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let project = tempRoot.appending(path: "demo-webapp")
+        try FileManager.default.createDirectory(
+            at: project.appending(path: ".vscode"),
+            withIntermediateDirectories: true
+        )
+        try """
+        { "servers": { "local-disk": { "command": "npx", "args": ["-y", "mcp-disk"] } } }
+        """.write(to: project.appending(path: ".vscode/mcp.json"), atomically: true, encoding: .utf8)
+
+        let servers = McpScanner().scan(
+            homeRoot: AuthorizedRootSnapshot(id: "home", url: home, kind: .home),
+            projectRoots: [
+                AuthorizedRootSnapshot(id: "proj", url: project, kind: .project),
+            ]
+        )
+
+        let github = try XCTUnwrap(servers.first { $0.name == "github" })
+        XCTAssertEqual(github.agentID, "github-copilot")
+        XCTAssertNil(github.projectRootID)
+
+        let browser = try XCTUnwrap(servers.first { $0.name == "browser" })
+        XCTAssertEqual(browser.agentID, "cline")
+        XCTAssertEqual(browser.configFile, clineSettings.appending(path: "cline_mcp_settings.json").path)
+
+        let disk = try XCTUnwrap(servers.first { $0.name == "local-disk" })
+        XCTAssertEqual(disk.agentID, "github-copilot")
+        XCTAssertEqual(disk.projectRootID, "proj")
+    }
+
     func testNoRootsYieldsEmpty() {
         XCTAssertEqual(McpScanner().scan(homeRoot: nil, projectRoots: []), [])
     }

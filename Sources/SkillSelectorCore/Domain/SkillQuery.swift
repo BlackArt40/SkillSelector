@@ -34,7 +34,8 @@ public struct SkillQuery: Hashable, Sendable {
     public func apply(
         to snapshots: [SkillSnapshot],
         rootsByID: [String: AuthorizedRootSnapshot],
-        agentNamesByID: [String: String] = [:]
+        agentNamesByID: [String: String] = [:],
+        bodyTextsByPath: [String: String] = [:]
     ) -> [SkillSnapshot] {
         var snapshotsByPath: [String: SkillSnapshot] = [:]
         for snapshot in snapshots where snapshotsByPath[snapshot.path] == nil {
@@ -45,20 +46,31 @@ public struct SkillQuery: Hashable, Sendable {
         return snapshotsByPath.values
             .filter { matchesScope($0, rootsByID: rootsByID) }
             .filter { matchesAgent($0) }
-            .filter { matchesSearch($0, terms: terms, agentNamesByID: agentNamesByID) }
+            .filter {
+                matchesSearch(
+                    $0,
+                    terms: terms,
+                    agentNamesByID: agentNamesByID,
+                    bodyTextsByPath: bodyTextsByPath
+                )
+            }
             .sorted(by: comesBefore)
     }
 
-    /// One whitespace-separated search token. Free terms match the Skill
-    /// **name** only (fuzzy substring, case/diacritic-insensitive);
-    /// prefixed terms (`name:`, `desc:`, `path:`, `agent:`) restrict the
-    /// match to a single field.
+    /// One whitespace-separated search token. Free terms fuzzy-match the
+    /// Skill **name or body** (substring, case/diacritic-insensitive);
+    /// prefixed terms (`name:`, `desc:`, `path:`, `agent:`, `body:`)
+    /// restrict the match to a single field. Body text comes from the
+    /// caller's in-memory index (keyed by installation path, pre-folded);
+    /// a Skill without indexed body text simply falls back to name
+    /// matching.
     struct SearchTerm: Hashable, Sendable {
         enum Field: String {
             case name
             case description = "desc"
             case path
             case agent
+            case body
         }
 
         let field: Field?
@@ -115,14 +127,19 @@ public struct SkillQuery: Hashable, Sendable {
     private func matchesSearch(
         _ snapshot: SkillSnapshot,
         terms: [SearchTerm],
-        agentNamesByID: [String: String]
+        agentNamesByID: [String: String],
+        bodyTextsByPath: [String: String]
     ) -> Bool {
         guard !terms.isEmpty else { return true }
         return terms.allSatisfy { term in
             let key = Self.searchKey(term.term)
             switch term.field {
-            case nil, .name:
-                // Free terms search the Skill name too — same as a name: term.
+            case nil:
+                // Free terms match the name or (when indexed) the body.
+                if Self.searchKey(snapshot.name).contains(key) { return true }
+                guard let body = bodyTextsByPath[snapshot.path] else { return false }
+                return body.contains(key)
+            case .name:
                 return Self.searchKey(snapshot.name).contains(key)
             case .description:
                 return Self.searchKey(Self.effectiveDescription(for: snapshot)).contains(key)
@@ -131,6 +148,9 @@ public struct SkillQuery: Hashable, Sendable {
             case .agent:
                 let names = snapshot.agentIDs.map { agentNamesByID[$0] ?? $0 }
                 return names.contains { Self.searchKey($0).contains(key) }
+            case .body:
+                guard let body = bodyTextsByPath[snapshot.path] else { return false }
+                return body.contains(key)
             }
         }
     }
@@ -147,6 +167,13 @@ public struct SkillQuery: Hashable, Sendable {
     }
 
     private static func searchKey(_ value: String) -> String {
+        foldedSearchKey(value)
+    }
+
+    /// Shared folding for search keys — the app layer pre-folds body
+    /// texts with the same rule so query-time matching is a plain
+    /// substring test.
+    public static func foldedSearchKey(_ value: String) -> String {
         value.folding(
             options: [.caseInsensitive, .diacriticInsensitive],
             locale: Locale(identifier: "en_US_POSIX")
