@@ -39,6 +39,10 @@ macOS 原生应用，管理本机的 Agent Skill：浏览、搜索、查看重�
 
 ![诊断查看器（简体中文）](screenshots/diagnostics-zh.png)
 
+![规则文件（简体中文）](screenshots/rules-zh.png)
+
+![市场目录（简体中文）](screenshots/catalog-zh.png)
+
 ## 支持的 Agent
 
 内置 19 个：Claude Code、Codex、Qoder、CodeBuddy、OpenCode、Cursor、Kilo Code、Cline、Roo Code、Windsurf、Gemini CLI、GitHub Copilot、Amp、Tabnine、Letta、OpenHands、Goose、Kiro、Factory Droid。

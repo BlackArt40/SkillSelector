@@ -96,6 +96,28 @@ enum ScreenshotMode {
         capture(mcp, name: "mcp-\(languageTag).png")
         mcp.orderOut(nil)
 
+        // 2c. Rules page, hosted full-size.
+        let rules = hostedWindow(
+            RootView(initialDestination: .rules).environment(model),
+            size: NSSize(width: 1440, height: 900)
+        )
+        await settle()
+        capture(rules, name: "rules-\(languageTag).png")
+        rules.orderOut(nil)
+
+        // 2d. Catalog page, hosted full-size — real declared sources,
+        // fetched live: the listing is public GitHub data and the shot is
+        // meant to show what the ecosystem actually offers. Loaded before
+        // hosting so the capture never shows a transient loading state.
+        await model.loadCatalogIfNeeded()
+        let catalog = hostedWindow(
+            RootView(initialDestination: .catalog).environment(model),
+            size: NSSize(width: 1440, height: 900)
+        )
+        await settle(seconds: 1.2)
+        capture(catalog, name: "catalog-\(languageTag).png")
+        catalog.orderOut(nil)
+
         // 3. Settings window (directories tab), titled so it can host sheets.
         let settings = titledHostedWindow(
             SettingsView(initialTab: .directories).environment(model)
@@ -331,7 +353,37 @@ private enum FixtureBuilder {
         // real content in the captures.
         try writeMcpCodexToml(at: home.appending(path: ".codex/config.toml"))
         try writeMcpClaudeJson(at: home.appending(path: ".claude.json"))
+        // Rules fixtures: global and project files plus directory sources,
+        // so the rules page lists rows instead of its empty state.
+        try writeText(
+            "# Global Claude Rules\n\n- Review before commit, never after.\n- Prefer small, reversible changes.\n",
+            to: home.appending(path: ".claude/CLAUDE.md")
+        )
+        try writeText(
+            "# Docs Style\n\nKeep headings hierarchical and code fences tagged.\n",
+            to: home.appending(path: ".claude/rules/docs-style.md")
+        )
+        try writeText(
+            "---\ndescription: API conventions\nglobs:\n  - \"src/api/**\"\nalwaysApply: false\n---\n\n# API Conventions\n\nReturn typed errors; never throw raw strings.\n",
+            to: home.appending(path: ".cursor/rules/api-conventions.mdc")
+        )
+        try writeText(
+            "# Demo Webapp Agents\n\nRun `swift test` before proposing changes.\n",
+            to: project.appending(path: "AGENTS.md")
+        )
+        try writeText(
+            "# Testing Rules\n\nEvery bug fix ships with a regression test.\n",
+            to: project.appending(path: ".roo/rules/testing.md")
+        )
         return (home, project)
+    }
+
+    private static func writeText(_ text: String, to url: URL) throws {
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try text.write(to: url, atomically: true, encoding: .utf8)
     }
 
     private static func writeMcpCodexToml(at url: URL) throws {

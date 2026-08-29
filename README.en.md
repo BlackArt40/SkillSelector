@@ -39,6 +39,10 @@ Also:
 
 ![Diagnostics viewer (English)](screenshots/diagnostics-en.png)
 
+![Rules (English)](screenshots/rules-en.png)
+
+![Catalog (English)](screenshots/catalog-en.png)
+
 ## Supported Agents
 
 Nineteen built in: Claude Code, Codex, Qoder, CodeBuddy, OpenCode, Cursor, Kilo Code, Cline, Roo Code, Windsurf, Gemini CLI, GitHub Copilot, Amp, Tabnine, Letta, OpenHands, Goose, Kiro, Factory Droid.
