@@ -45,9 +45,8 @@ extension AppModel {
         catalogDescriptionTask?.cancel()
         catalogDescriptions = [:]
         catalogFailedSourceIDs = []
-        do {
-            var pages: [String: CatalogPage] = [:]
-            var failures: [String: Error] = [:]
+        var pages: [String: CatalogPage] = [:]
+        var failures: [String: Error] = [:]
             // Per-source tolerance: one bad imported repo must not take
             // down the whole listing — failures land in
             // catalogFailedSourceIDs and the load continues.
@@ -83,9 +82,6 @@ extension AppModel {
             catalogState = .loaded(skills, truncated: truncated)
             catalogFailedSourceIDs = catalogSources.filter { failures[$0.id] != nil }.map(\.id)
             startDescriptionPrefetch(for: skills)
-        } catch {
-            catalogState = .failed(Self.catalogFailure(for: error))
-        }
     }
 
     /// Imports a user marketplace source. Returns false when a source

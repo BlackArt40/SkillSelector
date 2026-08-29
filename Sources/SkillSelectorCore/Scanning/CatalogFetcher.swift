@@ -19,7 +19,7 @@ public struct CatalogFetcher: CatalogFetching, Sendable {
     public func fetchSkills(source: CatalogSource) async throws -> CatalogPage {
         var request = URLRequest(url: Self.treesURL(source: source))
         request.timeoutInterval = 30
-        let (data, response) = try await Self.validatedData(for: request, session: session)
+        let (data, _) = try await Self.validatedData(for: request, session: session)
         return try Self.parseTree(data, source: source)
     }
 

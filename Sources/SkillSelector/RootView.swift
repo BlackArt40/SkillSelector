@@ -768,10 +768,15 @@ struct RootView: View {
             object: nil,
             queue: .main
         ) { note in
-            guard let window = note.object as? NSWindow,
-                  let field = Self.searchField(in: window),
-                  field.currentEditor() != nil || window.firstResponder === field else { return }
-            center.post(name: .searchFocusDismissed, object: nil)
+            // The queue is .main, so the AppKit isolation below holds;
+            // the unsafe annotation just proves it to the type checker.
+            nonisolated(unsafe) let note = note
+            MainActor.assumeIsolated {
+                guard let window = note.object as? NSWindow,
+                      let field = Self.searchField(in: window),
+                      field.currentEditor() != nil || window.firstResponder === field else { return }
+                center.post(name: .searchFocusDismissed, object: nil)
+            }
         }
         searchFocusObservers = [observer]
     }
