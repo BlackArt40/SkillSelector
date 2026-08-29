@@ -27,4 +27,17 @@ final class CatalogRegistryTests: XCTestCase {
             ["anthropics/skills", "obra/superpowers"]
         )
     }
+
+    func testInstallCommandUsesVerifiedSkillsCLISyntax() {
+        let skill = CatalogSkill(
+            id: "anthropics/skills:skills/pdf/SKILL.md",
+            sourceID: "anthropics/skills",
+            name: "pdf",
+            skillPath: "skills/pdf/SKILL.md",
+            githubURL: URL(string: "https://github.com/anthropics/skills/tree/main/skills/pdf")!,
+            rawURL: URL(string: "https://raw.githubusercontent.com/anthropics/skills/main/skills/pdf/SKILL.md")!
+        )
+        // vercel-labs/skills CLI: `npx skills add <owner/repo> --skill <name>`.
+        XCTAssertEqual(skill.installCommand, "npx skills add anthropics/skills --skill pdf")
+    }
 }

@@ -149,6 +149,7 @@ struct RootView: View {
                         state: model.catalogState,
                         selection: catalogSelection,
                         sourceNamesByID: catalogSourceNames,
+                        descriptionsByID: model.catalogDescriptions,
                         onSelect: { skill in selectCatalog(skill) },
                         onRefresh: { Task { await model.refreshCatalog() } }
                     )

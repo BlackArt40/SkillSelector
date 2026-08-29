@@ -288,7 +288,8 @@
 "Catalog Document Failed" = "无法加载 Skill 文档";
 "Open in GitHub" = "在 GitHub 打开";
 "Copy Link" = "复制链接";
-"Link Copied" = "已复制";
+"Copied" = "已复制";
+"Copy Install Command" = "复制安装命令";
 "Source" = "来源";
 "Select a Catalog Skill" = "选择一个市场 Skill";
 "Select a Catalog Skill Description" = "从目录中选择一个 Skill 查看其文档。不会安装任何内容——应用是只读看板。";

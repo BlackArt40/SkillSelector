@@ -9,6 +9,7 @@ struct CatalogListView: View {
     let state: CatalogState
     var selection: String?
     var sourceNamesByID: [String: String] = [:]
+    var descriptionsByID: [String: String] = [:]
     var onSelect: ((CatalogSkill) -> Void)?
     var onRefresh: (() -> Void)?
 
@@ -84,6 +85,7 @@ struct CatalogListView: View {
                             CatalogSkillRow(
                                 skill: skill,
                                 sourceName: sourceNamesByID[skill.sourceID] ?? skill.sourceID,
+                                description: descriptionsByID[skill.id],
                                 isActive: selection == skill.id,
                                 onSelect: { onSelect?(skill) }
                             )
@@ -165,10 +167,12 @@ struct CatalogListView: View {
     }
 }
 
-/// One catalog row: skill name, source badge, and the repo-relative path.
+/// One catalog row: skill name, its frontmatter description once the
+/// prefetch lands (path until then), and the source badge.
 struct CatalogSkillRow: View {
     let skill: CatalogSkill
     let sourceName: String
+    var description: String?
     let isActive: Bool
     var onSelect: (() -> Void)?
 
@@ -183,11 +187,18 @@ struct CatalogSkillRow: View {
                     .font(AppTheme.body(13, weight: .medium))
                     .foregroundStyle(isActive ? AppTheme.accentActive : AppTheme.foreground)
                     .lineLimit(1)
-                Text(verbatim: skill.skillPath)
-                    .font(AppTheme.mono(11))
-                    .foregroundStyle(AppTheme.muted)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                if let description, !description.isEmpty {
+                    Text(verbatim: description)
+                        .font(AppTheme.body(12))
+                        .foregroundStyle(AppTheme.muted)
+                        .lineLimit(1)
+                } else {
+                    Text(verbatim: skill.skillPath)
+                        .font(AppTheme.mono(11))
+                        .foregroundStyle(AppTheme.muted)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
             }
             Spacer(minLength: 4)
             PillBadge(text: sourceName, style: .link)

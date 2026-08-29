@@ -287,7 +287,8 @@
 "Catalog Document Failed" = "Unable to Load Skill Document";
 "Open in GitHub" = "Open on GitHub";
 "Copy Link" = "Copy Link";
-"Link Copied" = "Copied";
+"Copied" = "Copied";
+"Copy Install Command" = "Copy Install Command";
 "Source" = "Source";
 "Select a Catalog Skill" = "Select a Catalog Skill";
 "Select a Catalog Skill Description" = "Pick a skill from the catalog to read its document. Nothing is installed — the app is a read-only board.";

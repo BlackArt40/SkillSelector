@@ -107,6 +107,22 @@ public enum McpRegistry {
             projectPath: ".kilocode/mcp.json",
             format: "json"
         ),
+        // Goose: YAML with an `extensions` map; the CLI keeps a single
+        // global config and has no project-level file.
+        McpAgentDeclaration(
+            agentID: "goose",
+            globalPath: "~/.config/goose/config.yaml",
+            projectPath: nil,
+            format: "yaml"
+        ),
+        // OpenCode: JSON with the `mcp` key — local servers carry a command
+        // array, remote ones a url.
+        McpAgentDeclaration(
+            agentID: "opencode",
+            globalPath: "~/.config/opencode/opencode.json",
+            projectPath: "opencode.json",
+            format: "json"
+        ),
         // Generic project-level .mcp.json applies to every project as a
         // shared declaration, regardless of Agent.
         McpAgentDeclaration(

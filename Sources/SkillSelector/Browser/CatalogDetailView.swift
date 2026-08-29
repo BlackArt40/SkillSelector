@@ -20,7 +20,7 @@ struct CatalogDetailView: View {
     }
 
     @State private var contentState: ContentState = .loading
-    @State private var copied = false
+    @State private var copied: FieldCopy?
 
     var body: some View {
         if let skill {
@@ -91,30 +91,70 @@ struct CatalogDetailView: View {
             actionButton(
                 icon: Image(systemName: "safari"),
                 title: L10n.string("Open in GitHub"),
-                role: .secondary
+                isActive: copied == .link
             ) {
                 NSWorkspace.shared.open(skill.githubURL)
             }
             actionButton(
                 icon: nil,
-                title: copied ? L10n.string("Link Copied") : L10n.string("Copy Link"),
-                role: .secondary
+                title: L10n.string("Copy Link"),
+                isActive: copied == .link
             ) {
-                copyLink(skill)
+                copy(skill.githubURL.absoluteString, field: .link)
+            }
+            actionButton(
+                icon: Image(systemName: "terminal"),
+                title: L10n.string("Copy Install Command"),
+                isActive: copied == .installCommand
+            ) {
+                copy(skill.installCommand, field: .installCommand)
             }
             Spacer(minLength: 8)
         }
         .frame(maxWidth: .infinity)
     }
 
-    private func copyLink(_ skill: CatalogSkill) {
+    private enum FieldCopy {
+        case link
+        case installCommand
+    }
+
+    private func copy(_ value: String, field: FieldCopy) {
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(skill.githubURL.absoluteString, forType: .string)
-        copied = true
+        NSPasteboard.general.setString(value, forType: .string)
+        copied = field
         Task {
             try? await Task.sleep(for: .seconds(2))
-            copied = false
+            copied = nil
         }
+    }
+
+    private func actionButton(
+        icon: Image?,
+        title: String,
+        isActive: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button {
+            action()
+        } label: {
+            HStack(spacing: 6) {
+                icon?
+                    .font(.system(size: 12))
+                Text(verbatim: title)
+                    .font(AppTheme.body(13, weight: .medium))
+                    .foregroundStyle(isActive ? AppTheme.accentActive : AppTheme.foreground)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                isActive ? AppTheme.accentTint : AppTheme.surfaceWarm,
+                in: RoundedRectangle(cornerRadius: 8)
+            )
+        }
+        .buttonStyle(.plain)
+        .help(title)
+        .accessibilityLabel(title)
     }
 
     // MARK: Content

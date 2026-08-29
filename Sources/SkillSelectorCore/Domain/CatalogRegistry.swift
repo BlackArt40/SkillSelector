@@ -61,6 +61,13 @@ public struct CatalogSkill: Identifiable, Hashable, Sendable {
     /// Raw SKILL.md URL (document fetch).
     public let rawURL: URL
 
+    /// Install command for the ecosystem's own CLI (vercel-labs/skills,
+    /// syntax verified against its docs: `npx skills add <owner/repo>
+    /// --skill <name>`). The app copies this string; it never runs it.
+    public var installCommand: String {
+        "npx skills add \(sourceID) --skill \(name)"
+    }
+
     public init(
         id: String,
         sourceID: String,

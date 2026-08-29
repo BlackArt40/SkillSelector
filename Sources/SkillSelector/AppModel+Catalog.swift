@@ -16,19 +16,22 @@ extension AppModel {
         await refreshCatalog()
     }
 
-    /// Forces a refetch of every declared source.
+    /// Forces a refetch of every declared source. A complete refresh
+    /// covers the description prefetch too — the listing itself lands
+    /// first (`.loaded`), rows fill descriptions progressively after.
     func refreshCatalog() async {
         if let running = catalogLoadTask {
             await running.value
-            return
+        } else {
+            let task = Task { [weak self] in
+                guard let self else { return }
+                await self.performCatalogLoad()
+            }
+            catalogLoadTask = task
+            await task.value
+            catalogLoadTask = nil
         }
-        let task = Task { [weak self] in
-            guard let self else { return }
-            await self.performCatalogLoad()
-        }
-        catalogLoadTask = task
-        await task.value
-        catalogLoadTask = nil
+        await catalogDescriptionTask?.value
     }
 
     /// Fetches a skill's SKILL.md for the detail view. On-demand, capped
@@ -39,6 +42,8 @@ extension AppModel {
 
     private func performCatalogLoad() async {
         catalogState = .loading
+        catalogDescriptionTask?.cancel()
+        catalogDescriptions = [:]
         do {
             var pages: [String: CatalogPage] = [:]
             try await withThrowingTaskGroup(of: (String, CatalogPage).self) { group in
@@ -55,8 +60,36 @@ extension AppModel {
             let skills = CatalogRegistry.sources.flatMap { pages[$0.id]?.skills ?? [] }
             let truncated = CatalogRegistry.sources.contains { pages[$0.id]?.truncated == true }
             catalogState = .loaded(skills, truncated: truncated)
+            startDescriptionPrefetch(for: skills)
         } catch {
             catalogState = .failed(Self.catalogFailure(for: error))
+        }
+    }
+
+    /// Fetches every listed skill's SKILL.md and keeps its frontmatter
+    /// description — rows fill in progressively. Raw GitHub downloads are
+    /// CDN-served (outside the API rate limit), results are memory-only,
+    /// and the whole pass is cancelled by the next load.
+    private func startDescriptionPrefetch(for skills: [CatalogSkill]) {
+        guard !skills.isEmpty else { return }
+        let fetcher = catalogFetcher
+        catalogDescriptionTask = Task { [weak self] in
+            await withTaskGroup(of: (String, String?).self) { group in
+                for skill in skills {
+                    group.addTask {
+                        guard let document = try? await fetcher.fetchDocument(skill) else {
+                            return (skill.id, nil)
+                        }
+                        return (skill.id, FrontmatterParser.parse(document).description)
+                    }
+                }
+                for await (id, description) in group {
+                    guard let self, !Task.isCancelled, let description, !description.isEmpty else {
+                        continue
+                    }
+                    self.catalogDescriptions[id] = description
+                }
+            }
         }
     }
 

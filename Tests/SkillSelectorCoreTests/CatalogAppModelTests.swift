@@ -174,6 +174,42 @@ final class CatalogAppModelTests: XCTestCase {
         XCTAssertEqual(model.catalogState, .failed(.network))
     }
 
+    func testDescriptionsPrefetchedAfterLoad() async {
+        let fetcher = MockFetcher(
+            pages: [
+                "anthropics/skills": .success(page(["pdf", "pptx"])),
+                "obra/superpowers": .success(page([])),
+            ],
+            document: .success("---\nname: pdf\ndescription: Read and create PDF files.\n---\n# pdf\n")
+        )
+        let model = makeModel(fetcher: fetcher)
+
+        await model.loadCatalogIfNeeded()
+        XCTAssertEqual(
+            model.catalogDescriptions["s:pdf"],
+            "Read and create PDF files."
+        )
+        XCTAssertEqual(
+            model.catalogDescriptions["s:pptx"],
+            "Read and create PDF files."
+        )
+        XCTAssertEqual(fetcher.documentFetchCount, 2, "one document fetch per listed skill")
+    }
+
+    func testDescriptionFetchFailureLeavesNoEntry() async {
+        let fetcher = MockFetcher(
+            pages: ["anthropics/skills": .success(page(["pdf"]))],
+            document: .failure(CatalogError.rateLimited)
+        )
+        let model = makeModel(fetcher: fetcher)
+
+        await model.loadCatalogIfNeeded()
+        XCTAssertTrue(model.catalogDescriptions.isEmpty, "failed prefetch must not crash the listing")
+        guard case .loaded = model.catalogState else {
+            return XCTFail("listing itself must stay loaded")
+        }
+    }
+
     func testDocumentFetchDelegatesToFetcher() async throws {
         let fetcher = MockFetcher(
             pages: [:],

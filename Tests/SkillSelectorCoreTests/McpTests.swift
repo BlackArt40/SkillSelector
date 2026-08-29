@@ -141,8 +141,81 @@ final class McpConfigParserTests: XCTestCase {
         XCTAssertEqual(servers.first?.command, "/Applications/.../node_repl")
     }
 
+    // MARK: YAML — Goose's `extensions` map
+
+    func testParsesGooseYamlExtensions() throws {
+        let yaml = """
+        GOOSE_PROVIDER: anthropic
+        extensions:
+          fetch:
+            cmd: uvx
+            args: ["mcp-server-fetch"]
+            type: stdio
+            enabled: true
+          dice:
+            name: Dice Roller
+            cmd: uvx
+            args: ["dice-mcp"]
+            enabled: false
+          remote:
+            type: streamable_http
+            uri: https://example.com/mcp
+          sse-one:
+            type: sse
+            uri: https://example.com/sse
+          bare-remote:
+            uri: https://example.com/bare
+        """
+        let servers = try McpConfigParser.parse(Data(yaml.utf8), format: "yaml")
+
+        // Disabled extensions are skipped, like unusable entries elsewhere.
+        XCTAssertEqual(Set(servers.map(\.name)), ["fetch", "remote", "sse-one", "bare-remote"])
+        let fetch = servers.first { $0.name == "fetch" }
+        XCTAssertEqual(fetch?.transport, .stdio)
+        XCTAssertEqual(fetch?.command, "uvx")
+        XCTAssertEqual(fetch?.arguments, ["mcp-server-fetch"])
+        XCTAssertEqual(servers.first { $0.name == "remote" }?.transport, .http)
+        XCTAssertEqual(servers.first { $0.name == "remote" }?.url, "https://example.com/mcp")
+        XCTAssertEqual(servers.first { $0.name == "sse-one" }?.transport, .sse)
+        XCTAssertEqual(servers.first { $0.name == "bare-remote" }?.transport, .http)
+    }
+
+    func testGooseYamlWithoutExtensionsYieldsEmpty() throws {
+        let servers = try McpConfigParser.parse(Data("GOOSE_MODE: approve\n".utf8), format: "yaml")
+        XCTAssertTrue(servers.isEmpty)
+    }
+
+    func testMalformedYamlThrows() {
+        XCTAssertThrowsError(try McpConfigParser.parse(Data("extensions: [unclosed".utf8), format: "yaml"))
+    }
+
+    // MARK: OpenCode — the `mcp` key with array command
+
+    func testParsesOpenCodeMcpKeyWithArrayCommand() throws {
+        let json = """
+        {
+          "$schema": "https://opencode.ai/config.json",
+          "mcp": {
+            "shadcn": { "type": "local", "command": ["npx", "-y", "shadcn-vue@latest", "mcp"], "enabled": true },
+            "off": { "type": "local", "command": ["uvx", "mcp-off"], "enabled": false },
+            "remote": { "type": "remote", "url": "https://example.com/mcp", "enabled": true }
+          }
+        }
+        """
+        let servers = try McpConfigParser.parse(Data(json.utf8), format: "json")
+
+        XCTAssertEqual(Set(servers.map(\.name)), ["shadcn", "remote"], "disabled entries are skipped")
+        let shadcn = servers.first { $0.name == "shadcn" }
+        XCTAssertEqual(shadcn?.command, "npx", "the array's first element is the command")
+        XCTAssertEqual(shadcn?.arguments, ["-y", "shadcn-vue@latest", "mcp"])
+        XCTAssertEqual(shadcn?.transport, .stdio)
+        let remote = servers.first { $0.name == "remote" }
+        XCTAssertEqual(remote?.transport, .http)
+        XCTAssertEqual(remote?.url, "https://example.com/mcp")
+    }
+
     func testUnsupportedFormatThrows() {
-        XCTAssertThrowsError(try McpConfigParser.parse(Data("nope".utf8), format: "yaml"))
+        XCTAssertThrowsError(try McpConfigParser.parse(Data("nope".utf8), format: "xml"))
     }
 
     // MARK: Transport inference
@@ -306,6 +379,70 @@ final class McpScannerTests: XCTestCase {
         let disk = try XCTUnwrap(servers.first { $0.name == "local-disk" })
         XCTAssertEqual(disk.agentID, "github-copilot")
         XCTAssertEqual(disk.projectRootID, "proj")
+    }
+
+    /// Goose (YAML `extensions`) and OpenCode (the `mcp` key) round-trip
+    /// through the scanner at their declared paths.
+    func testScansGooseAndOpenCodeConfigs() throws {
+        let home = tempRoot.appending(path: "home")
+        try FileManager.default.createDirectory(
+            at: home.appending(path: ".config/goose"),
+            withIntermediateDirectories: true
+        )
+        try """
+        extensions:
+          fetch:
+            cmd: npx
+            args: ["-y", "@upstash/context7-mcp"]
+            type: stdio
+        """.write(to: home.appending(path: ".config/goose/config.yaml"), atomically: true, encoding: .utf8)
+
+        try FileManager.default.createDirectory(
+            at: home.appending(path: ".config/opencode"),
+            withIntermediateDirectories: true
+        )
+        try """
+        { "mcp": { "agent-docs": { "type": "remote", "url": "https://opencode.ai/mcp" } } }
+        """.write(to: home.appending(path: ".config/opencode/opencode.json"), atomically: true, encoding: .utf8)
+
+        let project = tempRoot.appending(path: "demo-webapp")
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        try """
+        { "mcp": { "disk": { "type": "local", "command": ["npx", "-y", "mcp-disk"] } } }
+        """.write(to: project.appending(path: "opencode.json"), atomically: true, encoding: .utf8)
+
+        let servers = McpScanner().scan(
+            homeRoot: AuthorizedRootSnapshot(id: "home", url: home, kind: .home),
+            projectRoots: [
+                AuthorizedRootSnapshot(id: "proj", url: project, kind: .project),
+            ]
+        )
+
+        let fetch = try XCTUnwrap(servers.first { $0.name == "fetch" })
+        XCTAssertEqual(fetch.agentID, "goose")
+        XCTAssertNil(fetch.projectRootID)
+        XCTAssertEqual(fetch.transport, .stdio)
+
+        let docs = try XCTUnwrap(servers.first { $0.name == "agent-docs" })
+        XCTAssertEqual(docs.agentID, "opencode")
+        XCTAssertNil(docs.projectRootID)
+
+        let disk = try XCTUnwrap(servers.first { $0.name == "disk" })
+        XCTAssertEqual(disk.agentID, "opencode")
+        XCTAssertEqual(disk.projectRootID, "proj")
+        XCTAssertEqual(disk.command, "npx")
+    }
+
+    func testGooseAndOpenCodeMcpDeclarations() {
+        let goose = McpRegistry.declarations.first { $0.agentID == "goose" }
+        XCTAssertEqual(goose?.globalPath, "~/.config/goose/config.yaml")
+        XCTAssertNil(goose?.projectPath)
+        XCTAssertEqual(goose?.format, "yaml")
+
+        let opencode = McpRegistry.declarations.first { $0.agentID == "opencode" }
+        XCTAssertEqual(opencode?.globalPath, "~/.config/opencode/opencode.json")
+        XCTAssertEqual(opencode?.projectPath, "opencode.json")
+        XCTAssertEqual(opencode?.format, "json")
     }
 
     func testNoRootsYieldsEmpty() {

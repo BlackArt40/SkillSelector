@@ -76,10 +76,16 @@ final class AppModel {
     /// Memory-only: fetched on demand from the declared sources, never
     /// persisted, never polled. Written only by AppModel+Catalog.swift.
     var catalogState: CatalogState = .idle
+    /// Frontmatter descriptions keyed by skill id, prefetched in the
+    /// background after a catalog load; rows fill them in progressively.
+    /// Same memory-only discipline as the listing itself.
+    var catalogDescriptions: [String: String] = [:]
     /// Catalog network boundary; injected for tests, immutable after init.
     @ObservationIgnored let catalogFetcher: any CatalogFetching
     /// In-flight catalog load; guards duplicate concurrent loads.
     @ObservationIgnored var catalogLoadTask: Task<Void, Never>?
+    /// In-flight description prefetch; cancelled by the next load.
+    @ObservationIgnored var catalogDescriptionTask: Task<Void, Never>?
 
     var refreshState: RefreshState = .idle
     var selection: SkillSelection?

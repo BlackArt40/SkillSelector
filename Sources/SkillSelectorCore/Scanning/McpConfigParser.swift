@@ -1,4 +1,5 @@
 import Foundation
+import Yams
 
 /// A server parsed out of one config file, before it is assigned an Agent
 /// or a root. Format-agnostic: both the JSON (mcp.json family) and TOML
@@ -23,6 +24,7 @@ public enum McpConfigParserError: Error, LocalizedError {
     case unsupportedFormat(String)
     case malformedJSON(String)
     case malformedTOML(Int, String)
+    case malformedYAML(String)
 
     public var errorDescription: String? {
         switch self {
@@ -32,6 +34,8 @@ public enum McpConfigParserError: Error, LocalizedError {
             return "Malformed MCP JSON config: \(detail)"
         case .malformedTOML(let line, let detail):
             return "Malformed MCP TOML config at line \(line): \(detail)"
+        case .malformedYAML(let detail):
+            return "Malformed MCP YAML config: \(detail)"
         }
     }
 }
@@ -59,6 +63,11 @@ public enum McpConfigParser {
                 throw McpConfigParserError.malformedTOML(0, "not valid UTF-8")
             }
             return try parseTOML(text)
+        case "yaml":
+            guard let text = String(data: data, encoding: .utf8) else {
+                throw McpConfigParserError.malformedYAML("not valid UTF-8")
+            }
+            return try parseYAML(text)
         default:
             throw McpConfigParserError.unsupportedFormat(format)
         }
@@ -81,9 +90,78 @@ public enum McpConfigParser {
                 return extractServers(servers)
             }
         }
+        // OpenCode's `mcp` key (opencode.json): local servers carry a
+        // command ARRAY, remote ones a url; `enabled: false` hides an
+        // entry. Checked after the standard keys so a config that also
+        // declares `mcpServers` keeps the standard reading.
+        if let mcp = root["mcp"] {
+            return opencodeServers(mcp)
+        }
         // Cursor also persists a "mcpServers" key only when configured; a
         // config without it nests nothing.
         return []
+    }
+
+    private static func opencodeServers(_ value: Any) -> [ParsedMcpServer] {
+        guard let map = value as? [String: Any] else { return [] }
+        return map.compactMap { name, raw in
+            guard let entry = raw as? [String: Any] else { return nil }
+            if entry["enabled"] as? Bool == false { return nil }
+            let command: String?
+            let arguments: [String]
+            if let array = entry["command"] as? [String], !array.isEmpty {
+                command = array[0]
+                arguments = Array(array.dropFirst())
+            } else if let string = entry["command"] as? String {
+                command = string
+                arguments = entry["args"] as? [String] ?? []
+            } else {
+                command = nil
+                arguments = []
+            }
+            let url = entry["url"] as? String
+            return ParsedMcpServer(
+                name: name,
+                transport: .infer(typeField: entry["type"] as? String, command: command, url: url),
+                command: command,
+                arguments: arguments,
+                url: url
+            )
+        }.sorted { $0.name < $1.name }
+    }
+
+    // MARK: YAML — Goose's `extensions` map
+
+    /// Parses the `extensions` map out of Goose's `~/.config/goose/
+    /// config.yaml`: stdio entries carry `cmd` (+ optional `args`), remote
+    /// ones a `uri` with `type: sse|streamable_http`; `enabled: false`
+    /// hides an entry. Everything else in the file (providers, models, …)
+    /// is ignored.
+    static func parseYAML(_ text: String) throws -> [ParsedMcpServer] {
+        let object: Any
+        do {
+            object = try Yams.load(yaml: text) ?? [:]
+        } catch {
+            throw McpConfigParserError.malformedYAML(error.localizedDescription)
+        }
+        guard let root = object as? [String: Any],
+              let extensions = root["extensions"] as? [String: Any] else {
+            return []
+        }
+        return extensions.compactMap { name, raw in
+            guard let entry = raw as? [String: Any] else { return nil }
+            if entry["enabled"] as? Bool == false { return nil }
+            let command = (entry["cmd"] as? String) ?? (entry["command"] as? String)
+            let arguments = (entry["args"] as? [Any])?.compactMap { $0 as? String } ?? []
+            let url = (entry["uri"] as? String) ?? (entry["url"] as? String)
+            return ParsedMcpServer(
+                name: name,
+                transport: .infer(typeField: entry["type"] as? String, command: command, url: url),
+                command: command,
+                arguments: arguments,
+                url: url
+            )
+        }.sorted { $0.name < $1.name }
     }
 
     private static func extractServers(_ value: Any) -> [ParsedMcpServer] {
