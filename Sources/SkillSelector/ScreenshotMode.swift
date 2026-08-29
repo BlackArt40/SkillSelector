@@ -114,7 +114,7 @@ enum ScreenshotMode {
             RootView(initialDestination: .catalog).environment(model),
             size: NSSize(width: 1440, height: 900)
         )
-        await settle(seconds: 1.2)
+        await settle(seconds: 3)
         capture(catalog, name: "catalog-\(languageTag).png")
         catalog.orderOut(nil)
 

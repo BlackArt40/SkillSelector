@@ -3,7 +3,7 @@
 
 # SkillSelector
 
-macOS 原生应用，管理本机的 Agent Skill：浏览、搜索、查看重复与符号链接。它是一个只读的信息看板——不是市场，不是安装器，里面也没有 AI；文件操作交给 Finder。
+macOS 原生应用，管理本机的 Agent Skill：浏览、搜索、查看重复与符号链接，也可只读浏览 Skill 市场。它是一个只读的信息看板——不是安装器，里面也没有 AI；文件操作交给 Finder。
 
 ![主窗口（简体中文）](screenshots/main-zh.png)
 
@@ -20,7 +20,7 @@ macOS 原生应用，管理本机的 Agent Skill：浏览、搜索、查看重�
 - 侧边栏的「规则文件」列出 Agent 的指示文件（`CLAUDE.md`、`AGENTS.md`、`.cursorrules`，含 `.cursor/rules`、`.claude/rules`、`.roo/rules` 等目录源与 GEMINI.md 层级），详情渲染 Markdown；同样只读
 - 重复分组之上还有**近似重复**（MinHash 相似度指纹）与**副本对比**：并排查看两个副本的 frontmatter、正文与子文件差异
 - 「刷新」的变更历史（新增 / 修改 / 移除了哪些）保留在本地，随时可回看
-- 侧边栏的「市场」按需抓取声明的 GitHub 来源（如 `anthropics/skills`）展示生态里有哪些 Skill——仅只读浏览：在 GitHub 打开或复制链接，安装交给生态 CLI 与 Finder，应用内不安装任何东西
+- 侧边栏的「市场」按需抓取 7 个核实过的 GitHub 仓库（Anthropic 官方与 Superpowers、Vercel 等社区集合，约 680 个 Skill），按仓库分组浏览、可按来源筛选，每个 Skill 带简介与文档；「导入市场」可添加自定义仓库（owner/repo 或链接）。仅只读浏览：在 GitHub 打开、复制链接或复制 `npx skills add …` 安装命令，安装交给生态 CLI 与 Finder
 - 项目 / 系统目录入口在有数据时才显示；「全部 Skill」「全局 Skill」「重复」「符号链接」「Agents」始终可见
 - 侧边栏的 Agent 行显示对应品牌图标（Claude Code、Codex、Cursor 等），没有图标的显示首字母徽章
 - 导入新目录只扫描该目录，Skill 列表立即出现，不卡在等待里
@@ -41,7 +41,7 @@ macOS 原生应用，管理本机的 Agent Skill：浏览、搜索、查看重�
 
 ![规则文件（简体中文）](screenshots/rules-zh.png)
 
-![市场目录（简体中文）](screenshots/catalog-zh.png)
+![市场（简体中文）](screenshots/catalog-zh.png)
 
 ## 支持的 Agent
 
@@ -51,7 +51,7 @@ Roo Code 属于旧版兼容，只在检测到已有 Skill 或在设置里手动�
 
 ## 隐私
 
-本机功能离线运行。没有遥测、崩溃报告、文件监视器，也不捆绑模型；唯一的外联是「市场」目录按需抓取声明的 GitHub 来源（仅在打开该区或点刷新时请求，不轮询、不落盘）。索引只存元数据（路径、归属 Agent、简介等），不复制 Skill 内容；目录访问走安全作用域书签，扫描范围限于注册表声明的固定路径。
+本机功能离线运行。没有遥测、崩溃报告、文件监视器，也不捆绑模型；唯一的外联是「市场」按需抓取声明的 GitHub 来源（仅在打开该区或点刷新时请求，不轮询、不落盘）。索引只存元数据（路径、归属 Agent、简介等），不复制 Skill 内容；目录访问走安全作用域书签，扫描范围限于注册表声明的固定路径。
 
 ## 安装
 
