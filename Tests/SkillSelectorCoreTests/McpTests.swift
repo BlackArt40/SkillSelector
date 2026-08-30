@@ -635,6 +635,31 @@ final class McpProberTests: XCTestCase {
         XCTAssertLessThan(elapsed, 3, "probe exceeded the timeout budget")
     }
 
+    /// A server that emits one unparseable line and then hangs: the probe
+    /// must still hit the deadline, terminate the child, and return — the
+    /// deadline check applies to every loop iteration, not only to servers
+    /// that never wrote anything. (The old code only checked the deadline
+    /// while the collector was empty, so this outcome spun forever.)
+    func testStdioProbeTimesOutAfterGarbageOutputThenHang() async throws {
+        let descriptor = McpServerDescriptor(
+            name: "garbage-then-hang",
+            agentID: "test",
+            transport: .stdio,
+            command: "/bin/sh",
+            arguments: ["-c", "echo 'not json at all'; sleep 30"],
+            url: nil,
+            configFile: "/tmp/fake",
+            projectRootID: nil
+        )
+
+        let start = Date()
+        let status = await McpProber(handshakeTimeout: 0.6).probe(descriptor)
+        let elapsed = Date().timeIntervalSince(start)
+
+        XCTAssertEqual(status, .notRunning)
+        XCTAssertLessThan(elapsed, 3, "probe must stay finite after garbage output")
+    }
+
     func testHttpProbeMissingUrlFails() async throws {
         let descriptor = McpServerDescriptor(
             name: "x",

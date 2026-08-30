@@ -115,6 +115,43 @@ final class CatalogFetcherTests: XCTestCase {
         )
     }
 
+    /// Remote-controlled repo paths may contain spaces, `?`, `#`, or `%` —
+    /// macOS's strict URL parser returns nil for those when interpolated
+    /// raw, and a `URL(string:)!` would crash the app on any marketplace
+    /// source publishing such a path. They must be percent-encoded instead.
+    func testRemotePathsWithSpecialCharactersAreEncodedNotCrashed() async throws {
+        StubProtocol.handler = { [self] _ in
+            (200, treeJSON([
+                ["my skill/SKILL.md", "blob"],
+                ["we?ird#name/SKILL.md", "blob"],
+                ["100%pct/SKILL.md", "blob"],
+            ]))
+        }
+
+        let page = try await makeFetcher().fetchSkills(source: source)
+
+        XCTAssertEqual(page.skills.count, 3, "no entry may crash the parse or be dropped")
+        let spaced = try XCTUnwrap(page.skills.first { $0.name == "my skill" })
+        XCTAssertEqual(
+            spaced.rawURL.absoluteString,
+            "https://raw.githubusercontent.com/anthropics/skills/main/my%20skill/SKILL.md"
+        )
+        XCTAssertEqual(
+            spaced.githubURL.absoluteString,
+            "https://github.com/anthropics/skills/tree/main/my%20skill"
+        )
+        let question = try XCTUnwrap(page.skills.first { $0.name == "we?ird#name" })
+        XCTAssertEqual(
+            question.rawURL.absoluteString,
+            "https://raw.githubusercontent.com/anthropics/skills/main/we%3Fird%23name/SKILL.md"
+        )
+        let percent = try XCTUnwrap(page.skills.first { $0.name == "100%pct" })
+        XCTAssertEqual(
+            percent.rawURL.absoluteString,
+            "https://raw.githubusercontent.com/anthropics/skills/main/100%25pct/SKILL.md"
+        )
+    }
+
     func testTruncatedFlagPropagates() async throws {
         let payload: [String: Any] = [
             "sha": "abc", "truncated": true,

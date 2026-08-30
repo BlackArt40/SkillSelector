@@ -90,6 +90,15 @@ public struct SkillScanCache: Sendable {
 /// Builds stat-only directory trees. Public so the app layer can capture a
 /// fresh tree for the copy-comparison view (stat walk, no content reads).
 public enum ScanStateBuilder {
+    /// Hard bound on how deep the stat walk descends. This is scanning
+    /// code, so recursion must be depth-limited (same constraint as the
+    /// scanner's `maximumProjectWalkDepth`): the walk runs on a
+    /// cooperative thread with a 512 KB stack, and an adversarially or
+    /// accidentally deep directory tree (`mkdir -p` chain) must not be
+    /// able to overflow it. Entries below the cap are not collected —
+    /// such a tree falls outside what the read-only board models.
+    public static let maximumWalkDepth = 256
+
     /// Walks the content directory collecting stat metadata only.
     public static func build(
         contentDirectory: URL,
@@ -100,6 +109,7 @@ public enum ScanStateBuilder {
         appendEntries(
             for: contentDirectory,
             relativePath: ".",
+            depth: 0,
             into: &entries
         )
         return SkillScanState(
@@ -112,6 +122,7 @@ public enum ScanStateBuilder {
     private static func appendEntries(
         for url: URL,
         relativePath: String,
+        depth: Int,
         into entries: inout [SkillScanState.Entry]
     ) {
         let values = try? url.resourceValues(forKeys: [
@@ -141,7 +152,7 @@ public enum ScanStateBuilder {
                 ? (try? FileManager.default.destinationOfSymbolicLink(atPath: url.path))
                 : nil
         ))
-        guard kind == .directory else { return }
+        guard kind == .directory, depth < Self.maximumWalkDepth else { return }
         let children = (try? FileManager.default.contentsOfDirectory(
             at: url,
             includingPropertiesForKeys: [.isSymbolicLinkKey],
@@ -151,7 +162,7 @@ public enum ScanStateBuilder {
             let childPath = relativePath == "."
                 ? child.lastPathComponent
                 : "\(relativePath)/\(child.lastPathComponent)"
-            appendEntries(for: child, relativePath: childPath, into: &entries)
+            appendEntries(for: child, relativePath: childPath, depth: depth + 1, into: &entries)
         }
     }
 }

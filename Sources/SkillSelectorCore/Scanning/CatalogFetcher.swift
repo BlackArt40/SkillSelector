@@ -72,6 +72,15 @@ public struct CatalogFetcher: CatalogFetching, Sendable {
         let tree: [Entry]
     }
 
+    /// Percent-encodes a remote-controlled path segment for URL
+    /// interpolation. GitHub tree paths can legitimately contain spaces
+    /// and other characters macOS's strict URL parser rejects; building
+    /// the URL with a raw `URL(string:)!` would let any marketplace
+    /// source crash the app the moment it publishes such a path.
+    static func percentEncodedPath(_ path: String) -> String {
+        path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path
+    }
+
     /// Pure parsing, exposed through the fetcher for tests: filters the
     /// tree to blob entries named SKILL.md, skipping anything inside a
     /// dot-directory (`.github/`, `.claude-plugin/` fixtures, …).
@@ -93,20 +102,27 @@ public struct CatalogFetcher: CatalogFetching, Sendable {
                 let directory = (entry.path as NSString).deletingLastPathComponent
                 return directory.split(separator: "/").allSatisfy { !$0.hasPrefix(".") }
             }
-            .map { entry -> CatalogSkill in
+            .compactMap { entry -> CatalogSkill? in
                 let directory = (entry.path as NSString).deletingLastPathComponent
                 let name = directory.split(separator: "/").map(String.init).last
                     ?? source.repo
+                let githubBase = "https://github.com/\(source.owner)/\(source.repo)"
                 let githubURL = directory.isEmpty
-                    ? URL(string: "https://github.com/\(source.owner)/\(source.repo)")!
-                    : URL(string: "https://github.com/\(source.owner)/\(source.repo)/tree/\(source.branch)/\(directory)")!
+                    ? URL(string: githubBase)
+                    : URL(string: "\(githubBase)/tree/\(source.branch)/\(Self.percentEncodedPath(directory))")
+                let rawURL = URL(string: "https://raw.githubusercontent.com/\(source.owner)/\(source.repo)/\(source.branch)/\(Self.percentEncodedPath(entry.path))")
+                // Unconstructable URLs mean the remote path is malformed
+                // beyond repair: skip the entry (with a plain `%` it is
+                // still encodable, so this is a belt-and-braces guard)
+                // rather than letting it crash the fetch.
+                guard let githubURL, let rawURL else { return nil }
                 return CatalogSkill(
                     id: "\(source.id):\(entry.path)",
                     sourceID: source.id,
                     name: name,
                     skillPath: entry.path,
                     githubURL: githubURL,
-                    rawURL: URL(string: "https://raw.githubusercontent.com/\(source.owner)/\(source.repo)/\(source.branch)/\(entry.path)")!
+                    rawURL: rawURL
                 )
             }
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }

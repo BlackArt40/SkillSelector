@@ -120,6 +120,13 @@ public struct McpProber: Sendable {
         // already exited after writing its response, so "process still
         // running" is not the right gate for success.
         while true {
+            // The deadline check must run on every iteration regardless of
+            // what the server has written: a server that emits one
+            // unparseable line and then hangs (snapshot non-nil, process
+            // alive) would otherwise poll forever. Every probe is finite.
+            if Date() > deadline {
+                return .notRunning
+            }
             if let text = collector.snapshot {
                 switch Self.classifyReply(text) {
                 case .result:
@@ -133,8 +140,6 @@ public struct McpProber: Sendable {
                         return .notRunning
                     }
                 }
-            } else if Date() > deadline {
-                return .notRunning
             } else if !process.isRunning {
                 return .notRunning
             }
