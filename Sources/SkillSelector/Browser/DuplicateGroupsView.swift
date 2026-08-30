@@ -112,11 +112,13 @@ struct DuplicateGroupsView: View {
             .foregroundStyle(AppTheme.muted)
             Spacer(minLength: 8)
             Picker(L10n.string("Duplicate Mode"), selection: $mode) {
-                Text(verbatim: L10n.string("Exact Duplicates")).tag(Mode.exact)
-                Text(verbatim: L10n.string("Near Duplicates")).tag(Mode.near)
+                Label(L10n.string("Exact Duplicates"), systemImage: "doc.on.doc.fill")
+                    .tag(Mode.exact)
+                Label(L10n.string("Near Duplicates"), systemImage: "arrow.left.arrow.right")
+                    .tag(Mode.near)
             }
             .pickerStyle(.segmented)
-            .frame(width: 190)
+            .frame(width: 232)
             .accessibilityLabel(L10n.string("Duplicate Mode"))
         }
         .padding(.leading, 16)
@@ -281,18 +283,21 @@ private struct DuplicateGroupSection: View {
             HStack(spacing: 6) {
                 Image(systemName: "doc.on.doc.fill")
                     .font(.system(size: 12))
-                    .foregroundStyle(AppTheme.meta)
+                    .foregroundStyle(AppTheme.success)
                 HighlightedText(
                     text: groupName,
                     query: highlightQuery,
                     font: AppTheme.body(12, weight: .semibold),
                     baseColor: AppTheme.muted
                 )
+                .lineLimit(1)
+                .truncationMode(.tail)
                 Text(verbatim: String.localizedStringWithFormat(
                     L10n.string("Duplicate Members Count"), group.members.count
                 ))
                 .font(AppTheme.body(11))
                 .foregroundStyle(AppTheme.meta)
+                .fixedSize()
                 Spacer(minLength: 8)
                 GroupHeaderActions(
                     ignoreHelp: L10n.string("Ignore Duplicate Group"),
@@ -341,21 +346,26 @@ private struct NearDuplicateGroupSection: View {
             HStack(spacing: 6) {
                 Image(systemName: "doc.on.doc")
                     .font(.system(size: 12))
-                    .foregroundStyle(AppTheme.meta)
+                    .foregroundStyle(AppTheme.accent)
                 HighlightedText(
                     text: groupName,
                     query: highlightQuery,
                     font: AppTheme.body(12, weight: .semibold),
                     baseColor: AppTheme.muted
                 )
+                .lineLimit(1)
+                .truncationMode(.tail)
                 Text(verbatim: String.localizedStringWithFormat(
                     L10n.string("Near Members Count"), group.members.count
                 ))
                 .font(AppTheme.body(11))
                 .foregroundStyle(AppTheme.meta)
-                Text(verbatim: similarityRangeLabel)
-                    .font(AppTheme.body(11))
-                    .foregroundStyle(AppTheme.meta)
+                .fixedSize()
+                if !similarityRangeLabel.isEmpty {
+                    Text(verbatim: similarityRangeLabel)
+                        .font(AppTheme.body(11))
+                        .foregroundStyle(AppTheme.meta)
+                }
                 Spacer(minLength: 8)
                 GroupHeaderActions(
                     ignoreHelp: L10n.string("Ignore Near Duplicate Group"),
@@ -380,10 +390,19 @@ private struct NearDuplicateGroupSection: View {
                     .overlay(alignment: .topTrailing) {
                         Text(verbatim: "≈\(member.similarityPercent)%")
                             .font(AppTheme.body(10.5, weight: .medium))
-                            .foregroundStyle(AppTheme.muted)
+                            .foregroundStyle(
+                                member.similarityPercent >= 90
+                                    ? AppTheme.accentActive
+                                    : AppTheme.muted
+                            )
                             .padding(.horizontal, 7)
                             .padding(.vertical, 1)
-                            .background(AppTheme.surface, in: Capsule())
+                            .background(
+                                member.similarityPercent >= 90
+                                    ? AppTheme.accentTint
+                                    : AppTheme.surface,
+                                in: Capsule()
+                            )
                             .overlay {
                                 Capsule().stroke(AppTheme.borderSoft, lineWidth: 1)
                             }
