@@ -96,10 +96,10 @@ enum ScreenshotMode {
         capture(mcp, name: "mcp-\(languageTag).png")
         mcp.orderOut(nil)
 
-        // 2c. Rules page, hosted full-size — pre-select the project AGENTS.md
-        // so the capture shows the rendered rule body (Textual) instead of
-        // the empty-state detail pane.
-        let rulesFileID = model.rules.files.first { $0.path.hasSuffix("/AGENTS.md") }?.id
+        // 2c. Rules page, hosted full-size — pre-select a CLAUDE.md so the
+        // capture shows the rendered rule body (Textual) and the
+        // same-name comparison against its global/project counterpart.
+        let rulesFileID = model.rules.files.first { $0.filename == "CLAUDE.md" }?.id
             ?? model.rules.files.first?.id
         let rules = hostedWindow(
             RootView(
@@ -383,6 +383,12 @@ private enum FixtureBuilder {
         try writeText(
             "# Global Claude Rules\n\n- Review before commit, never after.\n- Prefer small, reversible changes.\n",
             to: home.appending(path: ".claude/CLAUDE.md")
+        )
+        // A same-named project CLAUDE.md so the rules detail's「同名文件对比」
+        // section has a global↔project pair to diff in the capture.
+        try writeText(
+            "# Project Claude Rules\n\n- Review before commit, never after.\n- Always run the full test suite first.\n",
+            to: project.appending(path: "CLAUDE.md")
         )
         try writeText(
             "# Docs Style\n\nKeep headings hierarchical and code fences tagged.\n",
