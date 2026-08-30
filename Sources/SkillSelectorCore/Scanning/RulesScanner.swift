@@ -20,7 +20,6 @@ public struct RulesScanner: Sendable {
         homeRoot: AuthorizedRootSnapshot?,
         projectRoots: [AuthorizedRootSnapshot]
     ) -> [RulesFileDescriptor] {
-        var seen = Set<String>()
         var files: [RulesFileDescriptor] = []
 
         func append(
@@ -32,9 +31,11 @@ public struct RulesScanner: Sendable {
             let url = url.standardizedFileURL
             // Guard containment (defense-in-depth: registry paths are fixed
             // but a stray component must never escape the root) and report
-            // regular files only, bounded by the read-size cap.
+            // regular files only, bounded by the read-size cap. A path seen
+            // for several Agents (e.g. a shared project CLAUDE.md) merges
+            // its declaring Agents onto one descriptor instead of dropping
+            // the later ones.
             guard url.isContained(in: authorizedRoot.standardizedFileURL),
-                  seen.insert(url.path).inserted,
                   let values = try? url.resourceValues(forKeys: [
                       .isRegularFileKey,
                       .fileSizeKey,
@@ -43,14 +44,23 @@ public struct RulesScanner: Sendable {
                   values.isRegularFile == true,
                   let fileSize = values.fileSize,
                   fileSize <= Self.maximumRulesFileBytes else { return }
-            files.append(RulesFileDescriptor(
-                path: url.path,
-                filename: url.lastPathComponent,
-                agentID: agentID,
-                projectRootID: projectRootID,
-                fileSize: fileSize,
-                modificationDate: values.contentModificationDate
-            ))
+            let path = url.path
+            if let index = files.firstIndex(where: {
+                $0.path == path && $0.projectRootID == projectRootID
+            }) {
+                if !files[index].agentIDs.contains(agentID) {
+                    files[index].agentIDs.append(agentID)
+                }
+            } else {
+                files.append(RulesFileDescriptor(
+                    path: path,
+                    filename: url.lastPathComponent,
+                    agentIDs: [agentID],
+                    projectRootID: projectRootID,
+                    fileSize: fileSize,
+                    modificationDate: values.contentModificationDate
+                ))
+            }
         }
 
         // Lists a declared rules directory's immediate children and reports
@@ -147,7 +157,9 @@ public struct RulesScanner: Sendable {
             }
         }
 
-        for declaration in RulesRegistry.globalDeclarations {
+        // Walk every declared global source (all Agents — shared paths merge
+        // in `append`), resolving each against the home root.
+        for declaration in RulesRegistry.declarations {
             guard let homeRoot else { continue }
             if let globalPath = declaration.globalPath,
                let url = McpScanner.resolve(
@@ -176,8 +188,10 @@ public struct RulesScanner: Sendable {
             }
         }
 
+        // Project-level sources: every declared project path (all Agents),
+        // so a shared AGENTS.md/CLAUDE.md associates with every reader.
         for root in projectRoots {
-            for declaration in RulesRegistry.projectDeclarations {
+            for declaration in RulesRegistry.declarations {
                 if let projectPath = declaration.projectPath {
                     let url = root.url.appendingPathComponent(projectPath).standardizedFileURL
                     append(

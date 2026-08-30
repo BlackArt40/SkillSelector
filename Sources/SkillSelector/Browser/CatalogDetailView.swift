@@ -11,6 +11,8 @@ struct CatalogDetailView: View {
     @Environment(AppModel.self) private var model
     let skill: CatalogSkill?
     var sourceNamesByID: [String: String] = [:]
+    /// Agent display names for the local-installation section (「对照本地」).
+    var agentNamesByID: [String: String] = [:]
 
     private enum ContentState {
         case loading
@@ -28,6 +30,7 @@ struct CatalogDetailView: View {
                 VStack(alignment: .leading, spacing: 32) {
                     hero(skill)
                     actionBar(skill)
+                    localSection(skill)
                     contentSection(skill)
                     metadataSection(skill)
                 }
@@ -155,6 +158,99 @@ struct CatalogDetailView: View {
         .buttonStyle(.plain)
         .help(title)
         .accessibilityLabel(title)
+    }
+
+    // MARK: Local installation (对照本地)
+
+    /// Connects the market's「发现」with the local index's「管理」, read-only:
+    /// whether this remote skill is already installed locally and under
+    /// which Agents. Pure name-based matching via `LocalInstallationMatcher`;
+    /// the section reads `model.snapshots` directly, so it updates as the
+    /// index refreshes.
+    private func localSection(_ skill: CatalogSkill) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeading(L10n.string("Compare with Local"))
+            let matches = LocalInstallationMatcher.localInstallations(
+                of: skill,
+                in: model.snapshots
+            )
+            if matches.isEmpty {
+                notInstalledCard
+            } else {
+                VStack(spacing: 10) {
+                    ForEach(matches) { match in
+                        localMatchCard(match)
+                    }
+                }
+            }
+            Text(verbatim: L10n.string("Compare with Local Hint"))
+                .font(AppTheme.body(11.5))
+                .foregroundStyle(AppTheme.meta)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func localMatchCard(_ match: SkillSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(AppTheme.success)
+                Text(verbatim: L10n.string("Installed Locally"))
+                    .font(AppTheme.body(13, weight: .semibold))
+                    .foregroundStyle(AppTheme.foreground)
+                Spacer(minLength: 8)
+                if match.resolvedTarget != nil {
+                    PillBadge(text: L10n.string("Symbolic Link Pill"), style: .link)
+                }
+            }
+            let names = match.agentDisplayNames(by: agentNamesByID)
+            if names.isEmpty {
+                Text(verbatim: L10n.string("No Associated Agent"))
+                    .font(AppTheme.body(12))
+                    .foregroundStyle(AppTheme.muted)
+            } else {
+                FlowChips(names: names)
+            }
+            Text(verbatim: match.path)
+                .font(AppTheme.mono(12))
+                .foregroundStyle(AppTheme.muted)
+                .lineLimit(2)
+                .truncationMode(.middle)
+                .textSelection(.enabled)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.surfaceWarm, in: RoundedRectangle(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(AppTheme.borderSoft, lineWidth: 1)
+        }
+    }
+
+    private var notInstalledCard: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "circle.dashed")
+                .font(.system(size: 14))
+                .foregroundStyle(AppTheme.muted)
+                .padding(.top, 2)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(verbatim: L10n.string("Not Installed Locally"))
+                    .font(AppTheme.body(13, weight: .semibold))
+                    .foregroundStyle(AppTheme.foreground)
+                Text(verbatim: L10n.string("Not Installed Locally Hint"))
+                    .font(AppTheme.body(12))
+                    .foregroundStyle(AppTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.surfaceWarm, in: RoundedRectangle(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(AppTheme.borderSoft, lineWidth: 1)
+        }
     }
 
     // MARK: Content

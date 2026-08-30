@@ -310,9 +310,257 @@ final class CatalogAppModelTests: XCTestCase {
         reopened.catalog.removeSource(id: "anthropics/skills")
         XCTAssertEqual(
             reopened.catalog.sources.count,
-            CatalogRegistry.sources.count,
-            "built-in sources cannot be removed"
+            CatalogRegistry.sources.count - 1,
+            "removing a built-in source hides it from the marketplace"
         )
+    }
+
+    func testRemovesAndEditsBuiltInSources() {
+        let fetcher = MockFetcher(pages: [:])
+        let suite = "CatalogBuiltIn-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let container = try! ModelContainer(
+            for: SkillRecord.self,
+            AuthorizedRootRecord.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let registry = BuiltInAgentRegistry.make()
+        let makeModel = { () -> AppModel in
+            AppModel(
+                refresher: IndexRefresher(
+                    registry: registry,
+                    bookmarks: BookmarkStore(container: container, adapter: CatalogPathBookmarkAdapter()),
+                    index: SkillIndex(container: container)
+                ),
+                index: SkillIndex(container: container),
+                registry: registry,
+                defaults: defaults,
+                catalogFetcher: fetcher,
+                catalogSourceStore: UserDefaultsCatalogSourceStore(defaults: defaults)
+            )
+        }
+        let model = makeModel()
+        XCTAssertEqual(model.catalog.sources.count, CatalogRegistry.sources.count)
+
+        // 删除内置来源：从列表移除并持久化为「隐藏」。
+        model.catalog.removeSource(id: "anthropics/skills")
+        XCTAssertFalse(model.catalog.sources.contains { $0.id == "anthropics/skills" })
+        XCTAssertTrue(model.catalog.hiddenBuiltInSourceIDs.contains("anthropics/skills"))
+
+        // 编辑内置来源：迁移为用户自定义覆盖（改分支），原内置条目隐藏。
+        XCTAssertTrue(model.catalog.updateSource(
+            CustomCatalogSource(owner: "obra", repo: "superpowers", branch: "dev"),
+            originalID: "obra/superpowers"
+        ))
+        let migrated = model.catalog.sources.first { $0.id == "obra/superpowers" }
+        XCTAssertEqual(migrated?.isCustom, true)
+        XCTAssertEqual(migrated?.branch, "dev")
+        XCTAssertTrue(model.catalog.hiddenBuiltInSourceIDs.contains("obra/superpowers"))
+
+        // 冲突仍被拒绝（迁移后的自定义 id 与现存来源冲突）。
+        XCTAssertFalse(model.catalog.updateSource(
+            CustomCatalogSource(owner: "wshobson", repo: "agents"),
+            originalID: "obra/superpowers"
+        ))
+
+        // 持久化：重开 model 后删除与编辑都保持生效。
+        let reopened = makeModel()
+        XCTAssertFalse(reopened.catalog.sources.contains { $0.id == "anthropics/skills" })
+        XCTAssertEqual(reopened.catalog.sources.first { $0.id == "obra/superpowers" }?.branch, "dev")
+    }
+
+    func testRestoresAllBuiltInSources() {
+        let fetcher = MockFetcher(pages: [:])
+        let suite = "CatalogRestore-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let container = try! ModelContainer(
+            for: SkillRecord.self,
+            AuthorizedRootRecord.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let registry = BuiltInAgentRegistry.make()
+        let makeModel = { () -> AppModel in
+            AppModel(
+                refresher: IndexRefresher(
+                    registry: registry,
+                    bookmarks: BookmarkStore(container: container, adapter: CatalogPathBookmarkAdapter()),
+                    index: SkillIndex(container: container)
+                ),
+                index: SkillIndex(container: container),
+                registry: registry,
+                defaults: defaults,
+                catalogFetcher: fetcher,
+                catalogSourceStore: UserDefaultsCatalogSourceStore(defaults: defaults)
+            )
+        }
+        let model = makeModel()
+        // 一个真实导入 + 一个被删除的内置 + 一个被编辑（迁移）的内置。
+        XCTAssertTrue(model.catalog.addSource(CustomCatalogSource(owner: "me", repo: "mine")))
+        model.catalog.removeSource(id: "anthropics/skills")
+        XCTAssertTrue(model.catalog.updateSource(
+            CustomCatalogSource(owner: "obra", repo: "superpowers", branch: "dev"),
+            originalID: "obra/superpowers"
+        ))
+        XCTAssertFalse(model.catalog.sources.contains { $0.id == "anthropics/skills" })
+
+        model.catalog.restoreAllBuiltInSources()
+
+        // 内置全部恢复（含被删除与被迁移的），真实导入保留。
+        XCTAssertTrue(model.catalog.sources.contains { $0.id == "anthropics/skills" })
+        XCTAssertTrue(model.catalog.sources.contains { $0.id == "obra/superpowers" && !$0.isCustom })
+        XCTAssertTrue(model.catalog.sources.contains { $0.id == "me/mine" })
+        XCTAssertEqual(model.catalog.sources.count, CatalogRegistry.sources.count + 1)
+        XCTAssertTrue(model.catalog.hiddenBuiltInSourceIDs.isEmpty)
+
+        // 持久化：重开 model 后保持恢复状态。
+        let reopened = makeModel()
+        XCTAssertTrue(reopened.catalog.sources.contains { $0.id == "anthropics/skills" })
+        XCTAssertTrue(reopened.catalog.sources.contains { $0.id == "obra/superpowers" && !$0.isCustom })
+        XCTAssertTrue(reopened.catalog.sources.contains { $0.id == "me/mine" })
+    }
+
+    /// 没有任何隐藏/迁移的内置来源时，恢复是无副作用的空操作：来源列表
+    /// 与隐藏集合都不变，真实导入不受影响。
+    func testRestoreIsNoOpWhenNothingHidden() {
+        let fetcher = MockFetcher(pages: [:])
+        let suite = "CatalogRestoreNoop-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let container = try! ModelContainer(
+            for: SkillRecord.self,
+            AuthorizedRootRecord.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let registry = BuiltInAgentRegistry.make()
+        let model = AppModel(
+            refresher: IndexRefresher(
+                registry: registry,
+                bookmarks: BookmarkStore(container: container, adapter: CatalogPathBookmarkAdapter()),
+                index: SkillIndex(container: container)
+            ),
+            index: SkillIndex(container: container),
+            registry: registry,
+            defaults: defaults,
+            catalogFetcher: fetcher,
+            catalogSourceStore: UserDefaultsCatalogSourceStore(defaults: defaults)
+        )
+        XCTAssertTrue(model.catalog.addSource(CustomCatalogSource(owner: "me", repo: "mine")))
+        let before = model.catalog.sources.count
+
+        model.catalog.restoreAllBuiltInSources()
+
+        XCTAssertEqual(model.catalog.sources.count, before)
+        XCTAssertEqual(model.catalog.sources.count, CatalogRegistry.sources.count + 1)
+        XCTAssertTrue(model.catalog.sources.contains { $0.id == "me/mine" })
+        XCTAssertTrue(model.catalog.hiddenBuiltInSourceIDs.isEmpty)
+    }
+
+    /// 编辑内置来源并改成不同的 owner/repo（id 变化）后恢复：原内置回来，
+    /// 而改 id 的条目作为用户新增来源保留（它的 id 不属于内置，不属于恢复
+    /// 范围）。
+    func testRestoreKeepsReidentifiedBuiltInEdit() {
+        let fetcher = MockFetcher(pages: [:])
+        let suite = "CatalogRestoreReid-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let container = try! ModelContainer(
+            for: SkillRecord.self,
+            AuthorizedRootRecord.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let registry = BuiltInAgentRegistry.make()
+        let model = AppModel(
+            refresher: IndexRefresher(
+                registry: registry,
+                bookmarks: BookmarkStore(container: container, adapter: CatalogPathBookmarkAdapter()),
+                index: SkillIndex(container: container)
+            ),
+            index: SkillIndex(container: container),
+            registry: registry,
+            defaults: defaults,
+            catalogFetcher: fetcher,
+            catalogSourceStore: UserDefaultsCatalogSourceStore(defaults: defaults)
+        )
+        XCTAssertTrue(model.catalog.updateSource(
+            CustomCatalogSource(owner: "me", repo: "reimported", branch: "dev"),
+            originalID: "anthropics/skills"
+        ))
+        XCTAssertFalse(model.catalog.sources.contains { $0.id == "anthropics/skills" })
+        XCTAssertTrue(model.catalog.sources.contains { $0.id == "me/reimported" })
+
+        model.catalog.restoreAllBuiltInSources()
+
+        XCTAssertTrue(model.catalog.sources.contains { $0.id == "anthropics/skills" })
+        XCTAssertTrue(model.catalog.sources.contains { $0.id == "me/reimported" })
+        XCTAssertEqual(model.catalog.sources.count, CatalogRegistry.sources.count + 1)
+        XCTAssertTrue(model.catalog.hiddenBuiltInSourceIDs.isEmpty)
+    }
+
+    /// 「导入来源管理」：`updateSource` 支持改分支重导（身份不变仅 branch
+    /// 变化）与改 owner/repo（身份变化、旧条目被替换）；不存在的原身份、
+    /// 与内置/已有来源冲突的新身份被拒绝；更新持久化到 UserDefaults，
+    /// 重开 model 后仍生效。
+    func testUpdatesImportedSourceBranchAndIdentity() {
+        let fetcher = MockFetcher(pages: [:])
+        let suite = "CatalogUpdate-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let container = try! ModelContainer(
+            for: SkillRecord.self,
+            AuthorizedRootRecord.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let registry = BuiltInAgentRegistry.make()
+        let makeModel = { () -> AppModel in
+            AppModel(
+                refresher: IndexRefresher(
+                    registry: registry,
+                    bookmarks: BookmarkStore(container: container, adapter: CatalogPathBookmarkAdapter()),
+                    index: SkillIndex(container: container)
+                ),
+                index: SkillIndex(container: container),
+                registry: registry,
+                defaults: defaults,
+                catalogFetcher: fetcher,
+                catalogSourceStore: UserDefaultsCatalogSourceStore(defaults: defaults)
+            )
+        }
+        let model = makeModel()
+        XCTAssertTrue(model.catalog.addSource(CustomCatalogSource(owner: "me", repo: "repo")))
+        XCTAssertEqual(model.catalog.sources.first { $0.id == "me/repo" }?.branch, "main")
+
+        // 改分支重导：identity 不变，仅 branch 变化。
+        XCTAssertTrue(model.catalog.updateSource(
+            CustomCatalogSource(owner: "me", repo: "repo", branch: "dev"),
+            originalID: "me/repo"
+        ))
+        XCTAssertEqual(model.catalog.sources.first { $0.id == "me/repo" }?.branch, "dev")
+
+        // 改 owner/repo：identity 变化，旧条目被替换。
+        XCTAssertTrue(model.catalog.updateSource(
+            CustomCatalogSource(owner: "me", repo: "repo2"),
+            originalID: "me/repo"
+        ))
+        XCTAssertNil(model.catalog.sources.first { $0.id == "me/repo" })
+        XCTAssertNotNil(model.catalog.sources.first { $0.id == "me/repo2" })
+
+        // 不存在的 originalID 被拒绝。
+        XCTAssertFalse(model.catalog.updateSource(
+            CustomCatalogSource(owner: "nope", repo: "nope"),
+            originalID: "missing/id"
+        ))
+
+        // 更新到与内置源冲突的 identity 被拒绝。
+        XCTAssertFalse(model.catalog.updateSource(
+            CustomCatalogSource(owner: "anthropics", repo: "skills"),
+            originalID: "me/repo2"
+        ))
+
+        // 更新持久化：重开 model 后仍可见。
+        let reopened = makeModel()
+        XCTAssertNotNil(reopened.catalog.sources.first { $0.id == "me/repo2" })
     }
 
     func testFailingImportedSourceDoesNotBreakTheLoad() async {
@@ -368,7 +616,21 @@ final class CatalogAppModelTests: XCTestCase {
         ))
     }
 
+    /// 搜索增强：市场列表结果中，名称命中的 Skill 排在仅简介命中的之前；
+    /// 双方名称都未命中时保持稳定顺序（不重排）。
+    func testSearchFloatsNameHitsFirst() {
+        let pdf = page(["pdf"]).skills[0]
+        let docs = page(["docs"]).skills[0]
+        // pdf's name contains the query, docs' does not — the name hit
+        // must sort ahead.
+        XCTAssertTrue(CatalogListView.nameMatchComesFirst(lhs: pdf, rhs: docs, query: "pdf"))
+        XCTAssertFalse(CatalogListView.nameMatchComesFirst(lhs: docs, rhs: pdf, query: "pdf"))
+        // With neither name hitting, the declared order is kept (stable).
+        XCTAssertFalse(CatalogListView.nameMatchComesFirst(lhs: pdf, rhs: docs, query: "spreadsheets"))
+    }
+
     func testSearchMatchesNameAndDescriptionCaseInsensitively() {
+
         let skill = CatalogSkill(
             id: "s:pdf",
             sourceID: "anthropics/skills",

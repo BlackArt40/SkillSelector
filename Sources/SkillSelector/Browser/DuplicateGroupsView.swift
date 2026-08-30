@@ -34,11 +34,31 @@ struct DuplicateGroupsView: View {
     @State private var searchText = ""
 
     private var displayedExactGroups: [DuplicateSkillGroup] {
-        groups.filter { matchesSearch($0.members.map(\.name)) }
+        let term = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !term.isEmpty else { return groups }
+        return groups
+            .filter { matchesSearch($0.members.map(\.name)) }
+            // Groups whose display name hits float above member-only hits.
+            .sorted { lhs, rhs in
+                let lhsHit = lhs.members.map(\.name).min()?.localizedCaseInsensitiveContains(term) ?? false
+                let rhsHit = rhs.members.map(\.name).min()?.localizedCaseInsensitiveContains(term) ?? false
+                if lhsHit != rhsHit { return lhsHit }
+                return false
+            }
     }
 
     private var displayedNearGroups: [NearDuplicateSkillGroup] {
-        nearGroups.filter { matchesSearch($0.members.map { $0.snapshot.name }) }
+        let term = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !term.isEmpty else { return nearGroups }
+        return nearGroups
+            .filter { matchesSearch($0.members.map { $0.snapshot.name }) }
+            // Groups whose display name hits float above member-only hits.
+            .sorted { lhs, rhs in
+                let lhsHit = lhs.members.map { $0.snapshot.name }.min()?.localizedCaseInsensitiveContains(term) ?? false
+                let rhsHit = rhs.members.map { $0.snapshot.name }.min()?.localizedCaseInsensitiveContains(term) ?? false
+                if lhsHit != rhsHit { return lhsHit }
+                return false
+            }
     }
 
     private func matchesSearch(_ names: [String]) -> Bool {
@@ -129,6 +149,7 @@ struct DuplicateGroupsView: View {
                                 group: group,
                                 selection: selection,
                                 agentNamesByID: agentNamesByID,
+                                highlightQuery: searchText,
                                 onRevealInFinder: onRevealInFinder,
                                 onOpenInEditor: onOpenInEditor,
                                 onIgnoreGroup: onIgnoreGroup,
@@ -162,6 +183,7 @@ struct DuplicateGroupsView: View {
                                 group: group,
                                 selection: selection,
                                 agentNamesByID: agentNamesByID,
+                                highlightQuery: searchText,
                                 onRevealInFinder: onRevealInFinder,
                                 onOpenInEditor: onOpenInEditor,
                                 onIgnoreGroup: onIgnoreNearGroup,
@@ -246,6 +268,8 @@ private struct DuplicateGroupSection: View {
     let group: DuplicateSkillGroup
     let selection: SkillSelection?
     let agentNamesByID: [String: String]
+    /// Active search text; hits in the group name/member rows highlight.
+    var highlightQuery: String = ""
     var onRevealInFinder: ((SkillSnapshot) -> Void)?
     var onOpenInEditor: ((SkillSnapshot) -> Void)?
     var onIgnoreGroup: ((String) -> Void)?
@@ -258,9 +282,12 @@ private struct DuplicateGroupSection: View {
                 Image(systemName: "doc.on.doc.fill")
                     .font(.system(size: 12))
                     .foregroundStyle(AppTheme.meta)
-                Text(verbatim: groupName)
-                    .font(AppTheme.body(12, weight: .semibold))
-                    .foregroundStyle(AppTheme.muted)
+                HighlightedText(
+                    text: groupName,
+                    query: highlightQuery,
+                    font: AppTheme.body(12, weight: .semibold),
+                    baseColor: AppTheme.muted
+                )
                 Text(verbatim: String.localizedStringWithFormat(
                     L10n.string("Duplicate Members Count"), group.members.count
                 ))
@@ -282,6 +309,7 @@ private struct DuplicateGroupSection: View {
                         skill: skill,
                         agentNamesByID: agentNamesByID,
                         isActive: selection?.path == skill.path,
+                        highlightQuery: highlightQuery,
                         onSelect: { onSelect(skill.path) },
                         onRevealInFinder: onRevealInFinder,
                         onOpenInEditor: onOpenInEditor
@@ -300,6 +328,8 @@ private struct NearDuplicateGroupSection: View {
     let group: NearDuplicateSkillGroup
     let selection: SkillSelection?
     let agentNamesByID: [String: String]
+    /// Active search text; hits in the group name/member rows highlight.
+    var highlightQuery: String = ""
     var onRevealInFinder: ((SkillSnapshot) -> Void)?
     var onOpenInEditor: ((SkillSnapshot) -> Void)?
     var onIgnoreGroup: ((NearDuplicateSkillGroup) -> Void)?
@@ -312,9 +342,12 @@ private struct NearDuplicateGroupSection: View {
                 Image(systemName: "doc.on.doc")
                     .font(.system(size: 12))
                     .foregroundStyle(AppTheme.meta)
-                Text(verbatim: groupName)
-                    .font(AppTheme.body(12, weight: .semibold))
-                    .foregroundStyle(AppTheme.muted)
+                HighlightedText(
+                    text: groupName,
+                    query: highlightQuery,
+                    font: AppTheme.body(12, weight: .semibold),
+                    baseColor: AppTheme.muted
+                )
                 Text(verbatim: String.localizedStringWithFormat(
                     L10n.string("Near Members Count"), group.members.count
                 ))
@@ -339,6 +372,7 @@ private struct NearDuplicateGroupSection: View {
                         skill: member.snapshot,
                         agentNamesByID: agentNamesByID,
                         isActive: selection?.path == member.snapshot.path,
+                        highlightQuery: highlightQuery,
                         onSelect: { onSelect(member.snapshot.path) },
                         onRevealInFinder: onRevealInFinder,
                         onOpenInEditor: onOpenInEditor

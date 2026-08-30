@@ -153,7 +153,6 @@ struct BrowserSidebar: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 12)
             }
-            footer
         }
         .background(AppTheme.surface)
         .overlay(alignment: .trailing) {
@@ -282,13 +281,34 @@ struct BrowserSidebar: View {
         }
     }
 
-    /// Project directories likewise appear only when they hold Skills.
+    /// Project directories appear only when they hold Skills; the section
+    /// header itself always shows, with a + button to import a project.
     @ViewBuilder
     private var projectsSection: some View {
         let visible = Self.visibleProjectRoots(projects, counts: counts)
-        if !visible.isEmpty {
-            VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 0) {
                 sideHeading(L10n.string("Projects"))
+                Spacer(minLength: 4)
+                Button(action: onAddProject) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(AppTheme.muted)
+                        .frame(width: 20, height: 20)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(L10n.string("Add Project"))
+                .accessibilityLabel(L10n.string("Add Project"))
+            }
+            .padding(.trailing, 4)
+            if visible.isEmpty {
+                Text(verbatim: L10n.string("No Projects"))
+                    .font(AppTheme.body(12))
+                    .foregroundStyle(AppTheme.muted)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+            } else {
                 ForEach(visible) { project in
                     projectRow(project)
                 }
@@ -366,36 +386,6 @@ struct BrowserSidebar: View {
                 onRemoveRoot?(project)
             }
         }
-    }
-
-    // MARK: Footer
-
-    private var footer: some View {
-        HStack(spacing: 8) {
-            SettingsLink {
-                SidebarLinkLabel(
-                    title: L10n.string("Settings"),
-                    icon: Image(systemName: "gearshape")
-                )
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(L10n.string("Open Settings"))
-            Button(action: onAddProject) {
-                SidebarLinkLabel(
-                    title: L10n.string("Add Project"),
-                    icon: Image(systemName: "plus")
-                )
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(L10n.string("Add Project"))
-        }
-        .padding(12)
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(AppTheme.borderSoft)
-                .frame(height: 1)
-        }
-        .background(AppTheme.surface)
     }
 }
 
@@ -482,24 +472,5 @@ private struct SidebarButtonStyle: ButtonStyle {
             .onHover { hovering in
                 isHovering = hovering
             }
-    }
-}
-
-/// Footer `.side-link`: 28 pt tall, 12 pt label with a 13 pt icon.
-private struct SidebarLinkLabel: View {
-    let title: String
-    let icon: Image
-
-    var body: some View {
-        HStack(spacing: 6) {
-            icon
-                .font(.system(size: 13))
-            Text(verbatim: title)
-                .font(AppTheme.body(12))
-        }
-        .foregroundStyle(AppTheme.foregroundSecondary)
-        .frame(maxWidth: .infinity)
-        .frame(height: 28)
-        .contentShape(Rectangle())
     }
 }

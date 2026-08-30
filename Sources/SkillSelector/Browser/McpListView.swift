@@ -19,11 +19,19 @@ struct McpListView: View {
     private var displayedServers: [McpServerDescriptor] {
         let term = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !term.isEmpty else { return servers }
-        return servers.filter { server in
-            [server.name, server.command, server.url, server.configFile, server.agentID]
-                .compactMap { $0 }
-                .contains { $0.localizedCaseInsensitiveContains(term) }
-        }
+        return servers
+            .filter { server in
+                [server.name, server.command, server.url, server.configFile, server.agentID]
+                    .compactMap { $0 }
+                    .contains { $0.localizedCaseInsensitiveContains(term) }
+            }
+            // Name hits float above command/URL-only hits (stable).
+            .sorted { lhs, rhs in
+                let lhsHit = lhs.name.localizedCaseInsensitiveContains(term)
+                let rhsHit = rhs.name.localizedCaseInsensitiveContains(term)
+                if lhsHit != rhsHit { return lhsHit }
+                return false
+            }
     }
 
     var body: some View {
@@ -95,6 +103,7 @@ struct McpListView: View {
                             status: statuses[server.id] ?? .unknown,
                             agentNamesByID: agentNamesByID,
                             isActive: selection == server.id,
+                            highlightQuery: searchText,
                             onSelect: { onSelect?(server) },
                             onRevealConfig: { onRevealConfig?(server) }
                         )
@@ -134,6 +143,8 @@ struct McpServerRow: View {
     let status: McpProbeStatus
     var agentNamesByID: [String: String] = [:]
     let isActive: Bool
+    /// Active search text; hits in the name/launch line are highlighted.
+    var highlightQuery: String = ""
     var onSelect: (() -> Void)?
     var onRevealConfig: (() -> Void)?
 
@@ -142,10 +153,13 @@ struct McpServerRow: View {
             statusBadge
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(verbatim: server.name)
-                        .font(AppTheme.body(13, weight: .medium))
-                        .foregroundStyle(isActive ? AppTheme.accentActive : AppTheme.foreground)
-                        .lineLimit(1)
+                    HighlightedText(
+                        text: server.name,
+                        query: highlightQuery,
+                        font: AppTheme.body(13, weight: .medium),
+                        baseColor: isActive ? AppTheme.accentActive : AppTheme.foreground
+                    )
+                    .lineLimit(1)
                     if let agentName = agentNamesByID[server.agentID ?? ""] {
                         Text(verbatim: agentName)
                             .font(AppTheme.body(11))
@@ -153,11 +167,14 @@ struct McpServerRow: View {
                             .lineLimit(1)
                     }
                 }
-                Text(verbatim: server.launchSummary)
-                    .font(AppTheme.mono(11))
-                    .foregroundStyle(AppTheme.muted)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                HighlightedText(
+                    text: server.launchSummary,
+                    query: highlightQuery,
+                    font: AppTheme.mono(11),
+                    baseColor: AppTheme.muted
+                )
+                .lineLimit(1)
+                .truncationMode(.middle)
             }
             Spacer(minLength: 4)
             Button {

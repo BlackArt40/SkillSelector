@@ -12,9 +12,12 @@ import SkillSelectorCore
 @Observable
 final class CatalogModel {
     var state: CatalogState = .idle
-    /// Effective catalog sources: the built-in table plus the user's
-    /// imported ones (UserDefaults-persisted).
+    /// Effective catalog sources: the built-in table (minus any the user
+    /// hid) plus the user's imported ones (UserDefaults-persisted).
     var sources: [CatalogSource] = CatalogRegistry.sources
+    /// Built-in source ids the user removed from the marketplace. Persisted
+    /// in UserDefaults; a hidden built-in can only return by clearing it.
+    private(set) var hiddenBuiltInSourceIDs: Set<String> = []
     /// Source ids whose last fetch failed while other sources loaded.
     var failedSourceIDs: [String] = []
     /// Frontmatter descriptions keyed by skill id, prefetched in the
@@ -26,16 +29,58 @@ final class CatalogModel {
     @ObservationIgnored let fetcher: any CatalogFetching
     /// Persistence for user-imported sources; immutable after init.
     @ObservationIgnored let sourceStore: any CatalogSourceStoring
+    /// Persistence for the hidden built-in source ids.
+    @ObservationIgnored private let defaults: UserDefaults
     /// In-flight catalog load; guards duplicate concurrent loads.
     @ObservationIgnored var loadTask: Task<Void, Never>?
     /// In-flight description prefetch; cancelled by the next load.
     @ObservationIgnored var descriptionTask: Task<Void, Never>?
 
-    init(fetcher: any CatalogFetching, sourceStore: any CatalogSourceStoring) {
+    init(
+        fetcher: any CatalogFetching,
+        sourceStore: any CatalogSourceStoring,
+        defaults: UserDefaults = .standard
+    ) {
         self.fetcher = fetcher
         self.sourceStore = sourceStore
-        sources = CatalogRegistry.sources + sourceStore.loadCustomSources().map(\.source)
+        self.defaults = defaults
+        hiddenBuiltInSourceIDs = Set(
+            defaults.stringArray(forKey: Self.hiddenBuiltInSourcesKey) ?? []
+        )
+        sources = Self.effectiveSources(
+            builtIn: CatalogRegistry.sources,
+            hiddenBuiltIn: hiddenBuiltInSourceIDs,
+            custom: sourceStore.loadCustomSources().map(\.source)
+        )
     }
+
+    /// The effective source list: built-ins (minus hidden ones) followed by
+    /// imported sources in insertion order.
+    private static func effectiveSources(
+        builtIn: [CatalogSource],
+        hiddenBuiltIn: Set<String>,
+        custom: [CatalogSource]
+    ) -> [CatalogSource] {
+        builtIn.filter { !hiddenBuiltIn.contains($0.id) } + custom
+    }
+
+    /// Rebuilds `sources` from the persisted state after a removal or edit.
+    private func reloadSources() {
+        sources = Self.effectiveSources(
+            builtIn: CatalogRegistry.sources,
+            hiddenBuiltIn: hiddenBuiltInSourceIDs,
+            custom: sourceStore.loadCustomSources().map(\.source)
+        )
+    }
+
+    private func persistHiddenBuiltInSources() {
+        defaults.set(
+            hiddenBuiltInSourceIDs.sorted(),
+            forKey: Self.hiddenBuiltInSourcesKey
+        )
+    }
+
+    private static let hiddenBuiltInSourcesKey = "SkillSelector.hiddenBuiltInCatalogSources"
 
     /// Loads the catalog on demand: no-op unless still idle, so switching
     /// to the section repeatedly doesn't refetch (memory cache is the
@@ -126,16 +171,69 @@ final class CatalogModel {
         return true
     }
 
-    /// Removes a previously imported source; built-in sources are
-    /// ignored (they cannot be removed).
+    /// Removes a source from the marketplace. Imported sources are deleted
+    /// from the store; built-in sources are hidden (persisted) so they stop
+    /// appearing but the code-declared table stays intact.
     func removeSource(id: String) {
-        guard let source = sources.first(where: { $0.id == id }), source.isCustom else {
-            return
+        guard let source = sources.first(where: { $0.id == id }) else { return }
+        if source.isCustom {
+            var stored = sourceStore.loadCustomSources()
+            stored.removeAll { "\($0.owner)/\($0.repo)" == id }
+            sourceStore.saveCustomSources(stored)
+            sources.removeAll { $0.id == id }
+        } else {
+            hiddenBuiltInSourceIDs.insert(id)
+            persistHiddenBuiltInSources()
+            sources.removeAll { $0.id == id }
+        }
+    }
+
+    /// Updates a source in place (e.g. re-importing on a different branch).
+    /// `originalID` is the current "owner/repo" identity. Editing a built-in
+    /// source migrates it to a user-managed entry (persisted like an
+    /// imported one) while hiding the original built-in, so the edit sticks
+    /// across restarts. Returns false when the original is missing or the
+    /// new identity collides with another source. The caller decides
+    /// whether to refresh.
+    @discardableResult
+    func updateSource(_ custom: CustomCatalogSource, originalID: String) -> Bool {
+        let newID = "\(custom.owner)/\(custom.repo)"
+        guard !sources.contains(where: { $0.id == newID && $0.id != originalID }) else {
+            return false
+        }
+        let isBuiltIn = CatalogRegistry.sources.contains { $0.id == originalID }
+        if isBuiltIn {
+            // 内置来源被编辑：迁移为用户自定义覆盖，并隐藏原内置条目。
+            var stored = sourceStore.loadCustomSources()
+            stored.removeAll { "\($0.owner)/\($0.repo)" == originalID }
+            stored.append(custom)
+            sourceStore.saveCustomSources(stored)
+            hiddenBuiltInSourceIDs.insert(originalID)
+            persistHiddenBuiltInSources()
+            reloadSources()
+            return true
         }
         var stored = sourceStore.loadCustomSources()
-        stored.removeAll { "\($0.owner)/\($0.repo)" == id }
+        guard let index = stored.firstIndex(where: { "\($0.owner)/\($0.repo)" == originalID }) else {
+            return false
+        }
+        stored[index] = custom
         sourceStore.saveCustomSources(stored)
-        sources.removeAll { $0.id == id }
+        reloadSources()
+        return true
+    }
+
+    /// Restores every built-in source the user removed or edited: clears the
+    /// hidden set and drops the user-managed overrides that carry a built-in
+    /// id (added by editing a built-in), leaving only genuine imports.
+    func restoreAllBuiltInSources() {
+        let builtInIDs = Set(CatalogRegistry.sources.map(\.id))
+        var stored = sourceStore.loadCustomSources()
+        stored.removeAll { builtInIDs.contains("\($0.owner)/\($0.repo)") }
+        sourceStore.saveCustomSources(stored)
+        hiddenBuiltInSourceIDs = []
+        persistHiddenBuiltInSources()
+        reloadSources()
     }
 
     /// Fetches every listed skill's SKILL.md and keeps its frontmatter

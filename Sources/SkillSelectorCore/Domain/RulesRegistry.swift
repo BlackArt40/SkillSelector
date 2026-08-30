@@ -235,6 +235,56 @@ public enum RulesRegistry {
         // Amp: the project-root AGENT.md instructions file (AGENTS.md is
         // already covered by the industry-wide declaration above).
         RulesFileDeclaration(agentID: "amp", globalPath: nil, projectPath: "AGENT.md"),
+        // OpenHands: reads the project-root AGENTS.md (and CLAUDE.md as a
+        // model-specific context); no official global rules file.
+        RulesFileDeclaration(agentID: "openhands", globalPath: nil, projectPath: "AGENTS.md"),
+        RulesFileDeclaration(agentID: "openhands", globalPath: nil, projectPath: "CLAUDE.md"),
+        // Letta Code: consumes the project-root AGENTS.md; official rules
+        // live as agent memory blocks, so there is no global rules file.
+        RulesFileDeclaration(agentID: "letta", globalPath: nil, projectPath: "AGENTS.md"),
+        // Kiro: steering directory (.md) at both the home and project
+        // roots, plus the project-root AGENTS.md.
+        RulesFileDeclaration(
+            agentID: "kiro",
+            globalPath: nil,
+            projectPath: nil,
+            globalDirectory: "~/.kiro/steering",
+            projectDirectory: ".kiro/steering",
+            directoryExtensions: ["md"]
+        ),
+        RulesFileDeclaration(agentID: "kiro", globalPath: nil, projectPath: "AGENTS.md"),
+        // Tabnine: Agent Guidelines live in a `.tabnine/guidelines`
+        // directory at the home and project roots (the Agent does not read
+        // the project-root AGENTS.md).
+        RulesFileDeclaration(
+            agentID: "tabnine",
+            globalPath: nil,
+            projectPath: nil,
+            globalDirectory: "~/.tabnine/guidelines",
+            projectDirectory: ".tabnine/guidelines",
+            directoryExtensions: ["md"]
+        ),
+        // Factory Droid: personal instructions live under ~/.factory/ (and
+        // the project's .factory/), plus the project-root AGENTS.md and
+        // CLAUDE.md.
+        RulesFileDeclaration(
+            agentID: "factory-droid",
+            globalPath: nil,
+            projectPath: nil,
+            globalDirectory: "~/.factory",
+            projectDirectory: ".factory",
+            directoryExtensions: ["md"]
+        ),
+        RulesFileDeclaration(agentID: "factory-droid", globalPath: nil, projectPath: "AGENTS.md"),
+        RulesFileDeclaration(agentID: "factory-droid", globalPath: nil, projectPath: "CLAUDE.md"),
+        // Goose: a global .goosehints file plus per-directory AGENTS.md /
+        // .goosehints in the project.
+        RulesFileDeclaration(
+            agentID: "goose",
+            globalPath: "~/.config/goose/.goosehints",
+            projectPath: ".goosehints"
+        ),
+        RulesFileDeclaration(agentID: "goose", globalPath: nil, projectPath: "AGENTS.md"),
     ]
 
     /// Declarations with a global (user-level, home-root) source — a file

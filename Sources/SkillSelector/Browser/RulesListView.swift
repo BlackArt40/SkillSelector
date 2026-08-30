@@ -67,6 +67,7 @@ struct RulesListView: View {
                             file: file,
                             agentNamesByID: agentNamesByID,
                             isActive: selection == file.id,
+                            highlightQuery: searchText,
                             onSelect: { onSelect?(file) },
                             onReveal: { onReveal?(file) },
                             onOpen: { onOpen?(file) }
@@ -106,9 +107,17 @@ struct RulesFileRow: View {
     let file: RulesFileDescriptor
     var agentNamesByID: [String: String] = [:]
     let isActive: Bool
+    /// Active search text; hits in the filename/path are highlighted.
+    var highlightQuery: String = ""
     var onSelect: (() -> Void)?
     var onReveal: (() -> Void)?
     var onOpen: (() -> Void)?
+
+    /// Display names of the Agents that read this rules file, registry
+    /// order; shared files (e.g. a project CLAUDE.md) carry several.
+    private var agentNames: [String] {
+        file.agentIDs.compactMap { agentNamesByID[$0] }
+    }
 
     var body: some View {
         HStack(spacing: 8) {
@@ -118,19 +127,33 @@ struct RulesFileRow: View {
                 .frame(width: 18)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(verbatim: file.filename)
-                        .font(AppTheme.body(13, weight: .medium))
-                        .foregroundStyle(isActive ? AppTheme.accentActive : AppTheme.foreground)
-                        .lineLimit(1)
-                    if let agentName = file.agentID.flatMap({ agentNamesByID[$0] }) {
-                        AgentChip(text: agentName, onActiveRow: isActive)
+                    HighlightedText(
+                        text: file.filename,
+                        query: highlightQuery,
+                        font: AppTheme.body(13, weight: .medium),
+                        baseColor: isActive ? AppTheme.accentActive : AppTheme.foreground
+                    )
+                    .lineLimit(1)
+                    if !agentNames.isEmpty {
+                        ForEach(agentNames.prefix(3), id: \.self) { name in
+                            AgentChip(text: name, onActiveRow: isActive)
+                        }
+                        if agentNames.count > 3 {
+                            AgentChip(
+                                text: "+\(agentNames.count - 3)",
+                                onActiveRow: isActive
+                            )
+                        }
                     }
                 }
-                Text(verbatim: file.path)
-                    .font(AppTheme.mono(11))
-                    .foregroundStyle(AppTheme.muted)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                HighlightedText(
+                    text: file.path,
+                    query: highlightQuery,
+                    font: AppTheme.mono(11),
+                    baseColor: AppTheme.muted
+                )
+                .lineLimit(1)
+                .truncationMode(.middle)
             }
             Spacer(minLength: 4)
             if let fileSize = file.fileSize {

@@ -7,12 +7,84 @@ struct SkillRow: View {
     let skill: SkillSnapshot
     let agentNamesByID: [String: String]
     let isActive: Bool
+    /// Active search text; hits in the name/description are highlighted.
+    var highlightQuery: String = ""
+    /// Folded body text of this skill (from the in-memory body index). When
+    /// the row matched only through the body — neither the name nor the
+    /// description contains the query — the description line shows the
+    /// body's hit snippet instead, so the match stays visible.
+    var bodyText: String? = nil
     var onSelect: () -> Void
     var onRevealInFinder: ((SkillSnapshot) -> Void)?
     var onOpenInEditor: ((SkillSnapshot) -> Void)?
 
     private var descriptionText: String {
         skill.localDescription ?? skill.name
+    }
+
+    /// The description line. When the query hits the name, the full
+    /// description shows as usual. Otherwise — if the query is not already
+    /// visible in the first ~40 characters of the description (descriptions
+    /// are long and `lineLimit(1)` truncates the rest) — a one-line snippet
+    /// around the hit (description or body) is shown instead, so the match
+    /// and its highlight stay visible.
+    @ViewBuilder
+    private var descriptionLine: some View {
+        let query = highlightQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        let description = descriptionText
+        if !query.isEmpty, !skill.name.localizedCaseInsensitiveContains(query),
+           let displayed = matchDisplay(query: query, description: description) {
+            HighlightedText(
+                text: displayed,
+                query: highlightQuery,
+                font: AppTheme.body(12),
+                baseColor: AppTheme.muted
+            )
+            .lineLimit(1)
+        } else {
+            HighlightedText(
+                text: description,
+                query: highlightQuery,
+                font: AppTheme.body(12),
+                baseColor: AppTheme.muted
+            )
+            .lineLimit(1)
+        }
+    }
+
+    /// The text to show for the description line, or nil when the whole
+    /// description is fine as-is. Hits beyond the visible window are
+    /// replaced by a flattened snippet around the hit.
+    private func matchDisplay(query: String, description: String) -> String? {
+        if let range = description.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) {
+            let offset = description.distance(from: description.startIndex, to: range.lowerBound)
+            return offset <= 40 ? nil : snippet(query, in: description)
+        }
+        guard let bodyText,
+              let range = bodyText.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) else {
+            return nil
+        }
+        let offset = bodyText.distance(from: bodyText.startIndex, to: range.lowerBound)
+        return offset <= 40 ? nil : snippet(query, in: bodyText)
+    }
+
+    /// A short window of `text` around its first hit of `query`, flattened
+    /// to one line (multi-line bodies would otherwise render only the
+    /// fragment before the first newline).
+    private func snippet(_ query: String, in text: String) -> String {
+        guard let range = text.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) else {
+            return text
+        }
+        let radius = 24
+        let start = text.index(range.lowerBound, offsetBy: -radius, limitedBy: text.startIndex)
+            ?? text.startIndex
+        let end = text.index(range.upperBound, offsetBy: radius, limitedBy: text.endIndex)
+            ?? text.endIndex
+        var snippet = String(text[start..<end])
+            .replacingOccurrences(of: "\n", with: " ")
+        if start > text.startIndex { snippet = "…" + snippet }
+        if end < text.endIndex { snippet += "…" }
+        return snippet
     }
 
     var body: some View {
@@ -26,10 +98,13 @@ struct SkillRow: View {
                 )
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 6) {
-                        Text(verbatim: skill.name)
-                            .font(AppTheme.display(13.5, weight: .semibold))
-                            .foregroundStyle(AppTheme.foreground)
-                            .lineLimit(1)
+                        HighlightedText(
+                            text: skill.name,
+                            query: highlightQuery,
+                            font: AppTheme.display(13.5, weight: .semibold),
+                            baseColor: AppTheme.foreground
+                        )
+                        .lineLimit(1)
                         if !skill.parseDiagnostics.isEmpty {
                             BadgeDot(
                                 text: L10n.string("Diagnostics Badge"),
@@ -50,10 +125,7 @@ struct SkillRow: View {
                             .help(target)
                         }
                     }
-                    Text(verbatim: descriptionText)
-                        .font(AppTheme.body(12))
-                        .foregroundStyle(AppTheme.muted)
-                        .lineLimit(1)
+                    descriptionLine
                         .padding(.top, 1)
                     if !agentNames.isEmpty {
                         HStack(spacing: 6) {

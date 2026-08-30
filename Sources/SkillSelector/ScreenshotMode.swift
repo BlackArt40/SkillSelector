@@ -312,6 +312,12 @@ private enum FixtureBuilder {
         )
         // Identical bytes under two agents: one duplicate group.
         try writeSkill(
+            at: home.appending(path: ".claude/skills/pdf"),
+            name: "pdf",
+            description: "Extract text, tables, and metadata from PDF files.",
+            body: shortBody("pdf")
+        )
+        try writeSkill(
             at: home.appending(path: ".codex/skills/pdf-toolkit"),
             name: "pdf-toolkit",
             description: "Extract text, tables, and metadata from PDF files.",

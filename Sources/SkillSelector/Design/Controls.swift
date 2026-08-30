@@ -1,8 +1,49 @@
 import AppKit
+import SkillSelectorCore
 import SwiftUI
 
 /// Shared controls styled from design/screens/browser.html and settings.html:
 /// pill badges, agent chips, action-bar buttons, and a wrapping chip row.
+
+/// Search-match text: renders `text` with every hit of `query` emphasized
+/// (accent blue + semibold, no background fill). Blank query or no hits
+/// falls back to a plain Text. Hit ranges come from Core's pure
+/// `HighlightMatch`, so every searchable list highlights consistently.
+struct HighlightedText: View {
+    let text: String
+    var query: String = ""
+    var font: Font
+    var baseColor: Color
+    /// Foreground color for each hit; defaults to the accent blue.
+    var matchColor: Color = AppTheme.accentActive
+
+    var body: some View {
+        highlightedText
+    }
+
+    private var highlightedText: Text {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let ranges = HighlightMatch.ranges(of: trimmed, in: text)
+        var attributed = AttributedString(text)
+        attributed.font = font
+        attributed.foregroundColor = baseColor
+        // Locate runs by *character offset* rather than converting
+        // String.Index directly: descriptions often contain punctuation,
+        // emoji, or combined characters where the direct conversion can
+        // land off a character boundary and silently return nil.
+        let base = attributed.startIndex
+        for range in ranges {
+            let lowerOffset = text.distance(from: text.startIndex, to: range.lowerBound)
+            let upperOffset = text.distance(from: text.startIndex, to: range.upperBound)
+            let lower = attributed.index(base, offsetByCharacters: lowerOffset)
+            let upper = attributed.index(base, offsetByCharacters: upperOffset)
+            guard lower < upper else { continue }
+            attributed[lower..<upper].font = font.weight(.semibold)
+            attributed[lower..<upper].foregroundColor = matchColor
+        }
+        return Text(attributed)
+    }
+}
 
 /// `.pill-badge`: 11 pt semibold pill used in the detail hero.
 struct PillBadge: View {
@@ -278,9 +319,12 @@ struct ColumnResizer: View {
 /// Shared in-column search field (marketplace, skills, duplicates, MCP,
 /// rules, links): magnifier, rounded surface field whose placeholder
 /// states the search scope, and a clear button once text is present.
+/// It owns its own focus so ⌘F (`.focusSearchField`) lands the caret in
+/// whichever list column is currently visible.
 struct ListSearchBar: View {
     let placeholderKey: String
     @Binding var text: String
+    @FocusState private var searchFocused: Bool
 
     var body: some View {
         HStack(spacing: 6) {
@@ -290,6 +334,7 @@ struct ListSearchBar: View {
             TextField(L10n.string(placeholderKey), text: $text)
                 .textFieldStyle(.plain)
                 .font(AppTheme.body(13))
+                .focused($searchFocused)
                 .accessibilityLabel(L10n.string(placeholderKey))
             if !text.isEmpty {
                 Button {
@@ -309,6 +354,9 @@ struct ListSearchBar: View {
         .background(AppTheme.surfaceWarm, in: RoundedRectangle(cornerRadius: 8))
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+        .onReceive(NotificationCenter.default.publisher(for: .focusSearchField)) { _ in
+            searchFocused = true
+        }
     }
 }
 

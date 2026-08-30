@@ -384,6 +384,28 @@ final class SkillQueryTests: XCTestCase {
         XCTAssertEqual(defaultSorted.map(\.path), nameSorted.map(\.path))
     }
 
+    /// 搜索增强：活跃查询下，名称命中的结果浮到仅简介/正文命中的结果之前
+    /// （默认按名称排序时 "docs" 本会排在前面，这里必须让 "pdf-kit" 靠前）。
+    func testSearchFloatsNameHitsAboveDescriptionOnlyHits() {
+        let nameHit = snapshot(path: "/z/pdf-kit", name: "pdf-kit", localDescription: "PDF utilities")
+        let descriptionOnly = snapshot(path: "/a/docs", name: "docs", localDescription: "PDF documentation")
+        // Without the boost, the default name sort puts "docs" first; the
+        // active query must float the name hit ("pdf-kit") above it.
+        let result = SkillQuery(searchText: "pdf")
+            .apply(to: [descriptionOnly, nameHit], rootsByID: rootsByID)
+        XCTAssertEqual(result.map(\.path), ["/z/pdf-kit", "/a/docs"])
+    }
+
+    /// 用户显式选择按路径排序时，名称命中优先不生效——路径序优先于搜索增强。
+    func testPathSortIsRespectedWithoutNameBoost() {
+        let nameHit = snapshot(path: "/z/pdf-kit", name: "pdf-kit")
+        let descriptionOnly = snapshot(path: "/a/docs", name: "docs", localDescription: "PDF documentation")
+        // Explicit path order wins over the name boost.
+        let result = SkillQuery(searchText: "pdf", sort: .path)
+            .apply(to: [descriptionOnly, nameHit], rootsByID: rootsByID)
+        XCTAssertEqual(result.map(\.path), ["/a/docs", "/z/pdf-kit"])
+    }
+
     private func snapshot(
         path: String,
         name: String,

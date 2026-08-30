@@ -75,14 +75,21 @@ struct RulesDetailView: View {
                     .textSelection(.enabled)
                     .padding(.top, 3)
                 HStack(spacing: 8) {
-                    if let agentName = file.agentID.flatMap({ agentNamesByID[$0] }) {
-                        PillBadge(text: agentName, style: .link)
+                    ForEach(agentNames.prefix(5), id: \.self) { name in
+                        PillBadge(text: name, style: .link)
+                    }
+                    if agentNames.count > 5 {
+                        PillBadge(text: "+\(agentNames.count - 5)", style: .link)
                     }
                     PillBadge(text: scopeLabel(file), style: .link)
                 }
                 .padding(.top, 12)
             }
         }
+    }
+
+    private var agentNames: [String] {
+        file?.agentIDs.compactMap { agentNamesByID[$0] } ?? []
     }
 
     private func scopeLabel(_ file: RulesFileDescriptor) -> String {
@@ -182,7 +189,9 @@ struct RulesDetailView: View {
                 keyValue(L10n.string("Level"), value: scopeLabel(file), monospaced: false)
                 keyValue(
                     L10n.string("Agent"),
-                    value: file.agentID.flatMap { agentNamesByID[$0] } ?? L10n.string("None"),
+                    value: agentNames.isEmpty
+                        ? L10n.string("None")
+                        : agentNames.joined(separator: ", "),
                     monospaced: false
                 )
                 keyValue(L10n.string("Path"), value: file.path, monospaced: true)

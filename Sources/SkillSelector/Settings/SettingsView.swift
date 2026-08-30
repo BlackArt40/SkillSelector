@@ -29,6 +29,9 @@ struct SettingsView: View {
     @State private var editingRootName: String = ""
     @State private var customAgentSheetRequest: CustomAgentSheetRequest?
     @State private var showDiagnosticsViewer = false
+    /// Imported marketplace source being edited (改分支重导).
+    @State private var editingCatalogSource: CustomCatalogSource?
+    @State private var showingAddCatalogSource = false
 
     init(initialTab: SettingsTab = .general) {
         _activeTab = State(initialValue: initialTab)
@@ -68,6 +71,34 @@ struct SettingsView: View {
         }
         .sheet(item: $customAgentSheetRequest) { request in
             CustomAgentSheet(editing: request.agent)
+        }
+        .sheet(item: $editingCatalogSource) { original in
+            EditCatalogSourceSheet(
+                original: original,
+                onSave: { custom in
+                    let originalID = "\(original.owner)/\(original.repo)"
+                    let updated = model.catalog.updateSource(custom, originalID: originalID)
+                    if updated {
+                        editingCatalogSource = nil
+                        Task { await model.catalog.refresh() }
+                    }
+                    return updated
+                },
+                onCancel: { editingCatalogSource = nil }
+            )
+        }
+        .sheet(isPresented: $showingAddCatalogSource) {
+            AddCatalogSourceSheet(
+                onImport: { custom in
+                    let added = model.catalog.addSource(custom)
+                    if added {
+                        showingAddCatalogSource = false
+                        Task { await model.catalog.refresh() }
+                    }
+                    return added
+                },
+                onCancel: { showingAddCatalogSource = false }
+            )
         }
         .sheet(isPresented: $showDiagnosticsViewer) {
             DiagnosticsViewerView(
@@ -171,6 +202,36 @@ struct SettingsView: View {
                     label: L10n.string("Legacy Agent Hint"),
                     hint: true
                 )
+            }
+
+            groupTitle(L10n.string("Market Sources"))
+                .padding(.top, 4)
+            SettingsGroup {
+                ForEach(model.catalog.sources) { source in
+                    catalogSourceRow(source)
+                }
+                SettingsRow(
+                    label: L10n.string("Market Source Hint"),
+                    hint: true
+                ) {
+                    Button(L10n.string("Add…")) {
+                        showingAddCatalogSource = true
+                    }
+                    .buttonStyle(SettingsButtonStyle())
+                    .help(L10n.string("Import Source"))
+                }
+                SettingsRow(
+                    label: L10n.string("Restore Built-in Sources"),
+                    sub: L10n.string("Restore Built-in Sources Sub")
+                ) {
+                    Button(L10n.string("Restore")) {
+                        model.catalog.restoreAllBuiltInSources()
+                        Task { await model.catalog.refresh() }
+                    }
+                    .buttonStyle(SettingsButtonStyle())
+                    .disabled(model.catalog.hiddenBuiltInSourceIDs.isEmpty)
+                    .accessibilityLabel(L10n.string("Restore Built-in Sources"))
+                }
             }
 
             groupTitle(L10n.string("Data"))
@@ -368,6 +429,35 @@ struct SettingsView: View {
         .contextMenu {
             Button(L10n.string("Edit Custom Agent")) {
                 customAgentSheetRequest = CustomAgentSheetRequest(agent: agent)
+            }
+        }
+    }
+
+    /// One marketplace source row: display name, owner/repo@branch, and
+    /// Edit (改分支重导) / Remove actions. Editing a built-in source
+    /// migrates it to a user-managed entry; removing a built-in hides it.
+    private func catalogSourceRow(_ source: CatalogSource) -> some View {
+        SettingsRow(
+            label: source.displayName,
+            sub: "\(source.owner)/\(source.repo) @ \(source.branch)",
+            subMonospaced: true
+        ) {
+            HStack(spacing: 10) {
+                Button(L10n.string("Edit")) {
+                    editingCatalogSource = CustomCatalogSource(
+                        owner: source.owner,
+                        repo: source.repo,
+                        branch: source.branch
+                    )
+                }
+                .buttonStyle(SettingsButtonStyle())
+                .accessibilityLabel(L10n.string("Edit Imported Source"))
+                Button(L10n.string("Remove")) {
+                    model.catalog.removeSource(id: source.id)
+                    Task { await model.catalog.refresh() }
+                }
+                .buttonStyle(SettingsDangerButtonStyle())
+                .accessibilityLabel(L10n.string("Remove Imported Source"))
             }
         }
     }

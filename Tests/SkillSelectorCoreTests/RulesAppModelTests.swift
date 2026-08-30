@@ -61,8 +61,8 @@ final class RulesAppModelTests: XCTestCase {
         // Global vs project attribution.
         XCTAssertNil(homeClaude?.projectRootID)
         XCTAssertEqual(projectClaude?.projectRootID, projectRoot.id)
-        XCTAssertEqual(projectClaude?.agentID, "claude-code")
-        XCTAssertEqual(cursorRules?.agentID, "cursor")
+        XCTAssertEqual(projectClaude?.agentIDs.contains("claude-code"), true)
+        XCTAssertEqual(cursorRules?.agentIDs, ["cursor"])
 
         // The validated reader loads the content.
         let document = try await model.rules.loadDocument(projectClaude!)
@@ -72,7 +72,69 @@ final class RulesAppModelTests: XCTestCase {
         // Revoking the project root drops its rules files on reload.
         await model.revokeAuthorization(id: projectRoot.id)
         XCTAssertEqual(model.rules.files.count, 1)
-        XCTAssertEqual(model.rules.files.first?.path, homeClaude?.path)
+        XCTAssertEqual(model.rules.files.first?.filename, "CLAUDE.md")
+    }
+
+    /// 端到端验证共享项目规则文件的多 Agent 关联：项目根的一个 AGENTS.md
+    /// 会被所有声明它的 Agent 共享，而不是只归给第一个声明者。
+    ///
+    /// 走完整管线——授权 home + project 目录、`refresh()` 触发重扫、再从
+    /// `model.rules.files` 读取结果——而非直接调用 `RulesScanner`，确保
+    /// 授权、IndexRefresher、RulesStateModel 的整条链路一起被验证。
+    ///
+    /// `expected` 集合必须与 `RulesRegistry.declarations` 中所有声明
+    /// `projectPath: "AGENTS.md"` 的 Agent 保持一致：新增或移除这类声明时
+    /// 需同步更新本测试（它锁定当前注册表行为，防止共享关联悄悄回退）。
+    func testSharedProjectAgentsMdAssociatesEveryDeclaringAgent() async throws {
+        let home = FileManager.default.temporaryDirectory
+            .appending(path: "RulesSharedHome-\(UUID().uuidString)", directoryHint: .isDirectory)
+        let project = FileManager.default.temporaryDirectory
+            .appending(path: "RulesSharedProject-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer {
+            try? FileManager.default.removeItem(at: home)
+            try? FileManager.default.removeItem(at: project)
+        }
+        try write("# Shared project briefing\n", to: project.appending(path: "AGENTS.md"))
+
+        let suite = "RulesAppModelShared-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let container = try ModelContainer(
+            for: SkillRecord.self,
+            AuthorizedRootRecord.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let bookmarks = BookmarkStore(container: container, adapter: RulesPathBookmarkAdapter())
+        _ = try bookmarks.save(url: home, kind: .home)
+        let projectRoot = try bookmarks.save(url: project, kind: .project)
+        let index = SkillIndex(container: container)
+        let registry = BuiltInAgentRegistry.make()
+        let refresher = IndexRefresher(
+            registry: registry,
+            bookmarks: bookmarks,
+            index: index
+        )
+        let model = AppModel(
+            refresher: refresher,
+            index: index,
+            bookmarks: bookmarks,
+            registry: registry,
+            defaults: defaults
+        )
+
+        await model.refresh()
+
+        let agents = model.rules.files.first { $0.path == project.appending(path: "AGENTS.md").path }
+        XCTAssertNotNil(agents, "the shared project AGENTS.md must be scanned")
+        XCTAssertEqual(agents?.projectRootID, projectRoot.id)
+        // A project-root AGENTS.md is read by every Agent that declares it —
+        // the whole point of the shared-file multi-Agent association.
+        let expected: Set<String> = [
+            "cursor", "codex", "opencode", "windsurf", "kilo-code",
+            "qoder", "codebuddy", "gemini-cli", "openhands", "letta",
+            "kiro", "factory-droid", "goose",
+        ]
+        XCTAssertEqual(Set(agents?.agentIDs ?? []), expected)
     }
 
     func testLoadDocumentThrowsWhenProjectRootIsNotAuthorized() async throws {
@@ -106,7 +168,7 @@ final class RulesAppModelTests: XCTestCase {
         let orphan = RulesFileDescriptor(
             path: "/tmp/nowhere/CLAUDE.md",
             filename: "CLAUDE.md",
-            agentID: "claude-code",
+            agentIDs: ["claude-code"],
             projectRootID: "missing-root",
             fileSize: nil,
             modificationDate: nil

@@ -120,7 +120,8 @@ final class AppModel {
         let sourceStore = catalogSourceStore ?? UserDefaultsCatalogSourceStore(defaults: defaults)
         self.catalog = CatalogModel(
             fetcher: catalogFetcher ?? CatalogFetcher(),
-            sourceStore: sourceStore
+            sourceStore: sourceStore,
+            defaults: defaults
         )
         let store = customAgentStore ?? UserDefaultsAgentDefinitionStore(defaults: defaults)
         self.customAgentStore = store

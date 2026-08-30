@@ -19,6 +19,9 @@ struct SkillListView: View {
     let hasActiveFilters: Bool
     let refreshState: RefreshState
     let agentNamesByID: [String: String]
+    /// In-memory folded body index by installation path — lets a row whose
+    /// search hit landed only in the body show that snippet.
+    let bodyTextsByPath: [String: String]
     let onClearFilters: () -> Void
     let onImportProject: () -> Void
     let onImportHome: () -> Void
@@ -137,6 +140,8 @@ struct SkillListView: View {
                             skill: skill,
                             agentNamesByID: agentNamesByID,
                             isActive: selection?.path == skill.path,
+                            highlightQuery: searchText,
+                            bodyText: bodyTextsByPath[skill.path],
                             onSelect: { onPrimarySelect?(skill.path) },
                             onRevealInFinder: onRevealInFinder,
                             onOpenInEditor: onOpenInEditor

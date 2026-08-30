@@ -10,9 +10,10 @@ public struct RulesFileDescriptor: Identifiable, Hashable, Sendable {
     public let path: String
     /// Last path component, for display ("CLAUDE.md").
     public let filename: String
-    /// The Agent that declared this rules file (first declaration wins
-    /// when several Agents share a path, e.g. a project CLAUDE.md).
-    public let agentID: String?
+    /// The Agents that declared this rules file. Shared files — e.g. a
+    /// project CLAUDE.md read by several Agents — carry every declaring
+    /// Agent, in registry order.
+    public var agentIDs: [String]
     /// The project root the file belongs to; nil for global (user-level)
     /// files under the home root.
     public let projectRootID: String?
@@ -22,7 +23,7 @@ public struct RulesFileDescriptor: Identifiable, Hashable, Sendable {
     public init(
         path: String,
         filename: String,
-        agentID: String?,
+        agentIDs: [String],
         projectRootID: String?,
         fileSize: Int?,
         modificationDate: Date?
@@ -30,7 +31,7 @@ public struct RulesFileDescriptor: Identifiable, Hashable, Sendable {
         self.id = path
         self.path = path
         self.filename = filename
-        self.agentID = agentID
+        self.agentIDs = agentIDs
         self.projectRootID = projectRootID
         self.fileSize = fileSize
         self.modificationDate = modificationDate

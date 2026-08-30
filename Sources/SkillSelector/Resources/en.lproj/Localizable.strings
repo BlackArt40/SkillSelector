@@ -81,6 +81,7 @@
 "Follow System" = "Follow System";
 "Settings" = "Settings";
 "Add Project" = "Add Project";
+"No Projects" = "No Projects";
 "Reveal in Finder" = "Reveal in Finder";
 "Skill List Count" = "%d Skills";
 "Core Role" = "Core Role";
@@ -285,6 +286,12 @@
 "Marketplace Document Section" = "Skill Document";
 "Marketplace Document Loading" = "Loading skill document…";
 "Marketplace Document Failed" = "Unable to Load Skill Document";
+"Compare with Local" = "Compare with Local";
+"Compare with Local Hint" = "Matched by skill directory name against your authorized local installations; a same-name directory counts as installed, with the actual paths listed below.";
+"Installed Locally" = "Installed";
+"No Associated Agent" = "No Associated Agent";
+"Not Installed Locally" = "Not Installed Locally";
+"Not Installed Locally Hint" = "No skill with this name was found in your authorized directories. Copy the install command above and run it in a terminal to install.";
 "Open in GitHub" = "Open on GitHub";
 "Copy Link" = "Copy Link";
 "Copied" = "Copied";
@@ -300,6 +307,15 @@
 "Market Source Invalid" = "Can't read that source — use owner/repo or a GitHub link.";
 "Market Source Duplicate" = "That source is already in the marketplace.";
 "Remove Imported Source" = "Remove Imported Source";
+"Restore Built-in Sources" = "Restore Built-in Sources";
+"Restore Built-in Sources Sub" = "Restores built-in sources you removed or edited.";
+"Restore" = "Restore";
+"Market Sources" = "Marketplace Sources";
+"Edit Imported Source" = "Edit Imported Source";
+"Edit" = "Edit";
+"Owner" = "Owner";
+"Repo" = "Repository";
+"Branch" = "Branch";
 "Marketplace Partial Failure" = "Some sources failed to load — the rest of the listing is shown. Remove a failing imported source with − next to its name.";
 "Import" = "Import";
 "Search Marketplace" = "Search Marketplace";

@@ -171,6 +171,7 @@ struct RootView: View {
                         hasActiveFilters: hasActiveFilters,
                         refreshState: model.refreshState,
                         agentNamesByID: agentNamesByID,
+                        bodyTextsByPath: model.bodySearchTextsByPath,
                         onClearFilters: clearFilters,
                         onImportProject: { chooseDestinationRoot() },
                         onImportHome: { chooseSystemRoot() },
@@ -207,7 +208,8 @@ struct RootView: View {
                 } else if currentDestination == .catalog {
                     CatalogDetailView(
                         skill: catalogSkills.first { $0.id == catalogSelection },
-                        sourceNamesByID: catalogSourceNames
+                        sourceNamesByID: catalogSourceNames,
+                        agentNamesByID: agentNamesByID
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if let agentID = currentDestination.agentID {
@@ -317,6 +319,7 @@ struct RootView: View {
                 refreshButton
                 historyButton
                 themeToggle
+                settingsButton
             }
         }
         .alert(
@@ -372,6 +375,23 @@ struct RootView: View {
         .popover(isPresented: $isShowingRefreshHistory, arrowEdge: .bottom) {
             RefreshHistoryPopover(history: model.refreshHistory)
         }
+    }
+
+    /// Settings entry point in the window toolbar (top-right), replacing
+    /// the old sidebar footer link. Icon-only, matching the other toolbar
+    /// actions.
+    private var settingsButton: some View {
+        Button {
+            openSettings()
+        } label: {
+            Image(systemName: "gearshape")
+                .font(.system(size: 14))
+                .frame(width: 30, height: 30)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .help(L10n.string("Open Settings"))
+        .accessibilityLabel(L10n.string("Open Settings"))
     }
 
     /// `.themeBtn`: moon in light mode, sun in dark mode; toggles between

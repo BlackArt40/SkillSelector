@@ -17,10 +17,18 @@ struct SymlinkListView: View {
     private var displayedLinks: [SkillSnapshot] {
         let term = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !term.isEmpty else { return links }
-        return links.filter {
-            $0.name.localizedCaseInsensitiveContains(term)
-                || $0.path.localizedCaseInsensitiveContains(term)
-        }
+        return links
+            .filter {
+                $0.name.localizedCaseInsensitiveContains(term)
+                    || $0.path.localizedCaseInsensitiveContains(term)
+            }
+            // Name hits float above path-only hits (stable).
+            .sorted { lhs, rhs in
+                let lhsHit = lhs.name.localizedCaseInsensitiveContains(term)
+                let rhsHit = rhs.name.localizedCaseInsensitiveContains(term)
+                if lhsHit != rhsHit { return lhsHit }
+                return false
+            }
     }
 
     var body: some View {
@@ -85,6 +93,7 @@ struct SymlinkListView: View {
                             skill: skill,
                             agentNamesByID: agentNamesByID,
                             isActive: selection?.path == skill.path,
+                            highlightQuery: searchText,
                             onSelect: { onSelect(skill.path) },
                             onRevealInFinder: onRevealInFinder
                         )
@@ -104,6 +113,8 @@ private struct SymlinkRow: View {
     let skill: SkillSnapshot
     let agentNamesByID: [String: String]
     let isActive: Bool
+    /// Active search text; hits in the name/path are highlighted.
+    var highlightQuery: String = ""
     let onSelect: () -> Void
     var onRevealInFinder: ((SkillSnapshot) -> Void)?
 
@@ -122,10 +133,13 @@ private struct SymlinkRow: View {
                     .frame(width: 16)
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
-                        Text(verbatim: skill.name)
-                            .font(AppTheme.display(13, weight: .semibold))
-                            .foregroundStyle(AppTheme.foreground)
-                            .lineLimit(1)
+                        HighlightedText(
+                            text: skill.name,
+                            query: highlightQuery,
+                            font: AppTheme.display(13, weight: .semibold),
+                            baseColor: AppTheme.foreground
+                        )
+                        .lineLimit(1)
                         if isBroken {
                             BadgeDot(
                                 text: L10n.string("Unreachable Target"),
@@ -137,17 +151,26 @@ private struct SymlinkRow: View {
                         }
                     }
                     HStack(spacing: 6) {
-                        Text(verbatim: skill.path)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
+                        HighlightedText(
+                            text: skill.path,
+                            query: highlightQuery,
+                            font: AppTheme.mono(11),
+                            baseColor: AppTheme.muted
+                        )
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                         Image(systemName: "arrow.right")
                             .font(.system(size: 9))
                             .foregroundStyle(AppTheme.meta)
-                        Text(verbatim: skill.resolvedTarget ?? "")
-                            .lineLimit(1)
-                            .truncationMode(.middle)
+                        HighlightedText(
+                            text: skill.resolvedTarget ?? "",
+                            query: highlightQuery,
+                            font: AppTheme.mono(11),
+                            baseColor: AppTheme.muted
+                        )
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                     }
-                    .font(AppTheme.mono(11))
                     .foregroundStyle(isBroken ? AppTheme.warn : AppTheme.muted)
                     .help(skill.resolvedTarget ?? "")
                     if !agentNames.isEmpty {

@@ -123,6 +123,35 @@ public enum McpRegistry {
             projectPath: "opencode.json",
             format: "json"
         ),
+        // Kiro: JSON mcpServers at the home and project roots.
+        McpAgentDeclaration(
+            agentID: "kiro",
+            globalPath: "~/.kiro/settings/mcp.json",
+            projectPath: ".kiro/settings/mcp.json",
+            format: "json"
+        ),
+        // Tabnine: JSON mcpServers at the home and project roots.
+        McpAgentDeclaration(
+            agentID: "tabnine",
+            globalPath: "~/.tabnine/mcp_servers.json",
+            projectPath: ".tabnine/mcp_servers.json",
+            format: "json"
+        ),
+        // OpenHands CLI: JSON mcpServers in the global config dir; no
+        // project-level file.
+        McpAgentDeclaration(
+            agentID: "openhands",
+            globalPath: "~/.openhands/mcp.json",
+            projectPath: nil,
+            format: "json"
+        ),
+        // Factory Droid: JSON mcpServers at the home and project roots.
+        McpAgentDeclaration(
+            agentID: "factory-droid",
+            globalPath: "~/.factory/mcp.json",
+            projectPath: ".factory/mcp.json",
+            format: "json"
+        ),
         // Generic project-level .mcp.json applies to every project as a
         // shared declaration, regardless of Agent.
         McpAgentDeclaration(

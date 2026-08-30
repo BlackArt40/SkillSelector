@@ -81,6 +81,7 @@
 "Follow System" = "跟随系统";
 "Settings" = "设置";
 "Add Project" = "添加项目";
+"No Projects" = "暂无项目";
 "Reveal in Finder" = "在 Finder 中显示";
 "Skill List Count" = "%d 个";
 "Core Role" = "核心作用";
@@ -286,6 +287,12 @@
 "Marketplace Document Section" = "Skill 文档";
 "Marketplace Document Loading" = "正在加载 Skill 文档…";
 "Marketplace Document Failed" = "无法加载 Skill 文档";
+"Compare with Local" = "对照本地";
+"Compare with Local Hint" = "按 Skill 目录名与本地授权目录中的安装比对；同名目录视为已安装，下方列出实际路径供核对。";
+"Installed Locally" = "已安装";
+"No Associated Agent" = "未关联 Agent";
+"Not Installed Locally" = "本地未安装";
+"Not Installed Locally Hint" = "当前授权目录中未检测到同名 Skill；可复制上面的安装命令，在终端完成安装。";
 "Open in GitHub" = "在 GitHub 打开";
 "Copy Link" = "复制链接";
 "Copied" = "已复制";
@@ -301,6 +308,15 @@
 "Market Source Invalid" = "无法识别该来源——请使用 owner/repo 或 GitHub 链接。";
 "Market Source Duplicate" = "该来源已在目录中。";
 "Remove Imported Source" = "移除导入的来源";
+"Restore Built-in Sources" = "恢复全部内置来源";
+"Restore Built-in Sources Sub" = "恢复你移除或修改过的内置来源。";
+"Restore" = "恢复";
+"Market Sources" = "市场来源";
+"Edit Imported Source" = "编辑导入来源";
+"Edit" = "编辑";
+"Owner" = "所有者";
+"Repo" = "仓库";
+"Branch" = "分支";
 "Marketplace Partial Failure" = "部分来源加载失败，已显示其余内容；可点来源名称旁的 − 移除失效的导入来源。";
 "Import" = "导入";
 "Search Marketplace" = "搜索市场";

@@ -43,6 +43,14 @@ public struct SkillQuery: Hashable, Sendable {
         }
 
         let terms = Self.parseSearchTerms(searchText)
+        // Search boost: with an active query, name hits float above
+        // description/body-only hits before the declared order applies.
+        // Only when the user explicitly ordered by path is it respected
+        // as-is (no name pre-sort).
+        let nameHit: (SkillSnapshot) -> Bool = { snapshot in
+            let key = Self.searchKey(snapshot.name)
+            return terms.contains { key.contains(Self.searchKey($0.term)) }
+        }
         return snapshotsByPath.values
             .filter { matchesScope($0, rootsByID: rootsByID) }
             .filter { matchesAgent($0) }
@@ -54,7 +62,14 @@ public struct SkillQuery: Hashable, Sendable {
                     bodyTextsByPath: bodyTextsByPath
                 )
             }
-            .sorted(by: comesBefore)
+            .sorted { lhs, rhs in
+                if sort != .path {
+                    let lhsHit = nameHit(lhs)
+                    let rhsHit = nameHit(rhs)
+                    if lhsHit != rhsHit { return lhsHit }
+                }
+                return comesBefore(lhs, rhs)
+            }
     }
 
     /// One whitespace-separated search token. Free terms match the
