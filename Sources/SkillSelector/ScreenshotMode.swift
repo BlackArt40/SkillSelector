@@ -96,9 +96,16 @@ enum ScreenshotMode {
         capture(mcp, name: "mcp-\(languageTag).png")
         mcp.orderOut(nil)
 
-        // 2c. Rules page, hosted full-size.
+        // 2c. Rules page, hosted full-size — pre-select the project AGENTS.md
+        // so the capture shows the rendered rule body (Textual) instead of
+        // the empty-state detail pane.
+        let rulesFileID = model.rules.files.first { $0.path.hasSuffix("/AGENTS.md") }?.id
+            ?? model.rules.files.first?.id
         let rules = hostedWindow(
-            RootView(initialDestination: .rules).environment(model),
+            RootView(
+                initialDestination: .rules,
+                initialRulesSelection: rulesFileID
+            ).environment(model),
             size: NSSize(width: 1440, height: 900)
         )
         await settle()
@@ -109,12 +116,24 @@ enum ScreenshotMode {
         // fetched live: the listing is public GitHub data and the shot is
         // meant to show what the ecosystem actually offers. Loaded before
         // hosting so the capture never shows a transient loading state.
+        // Pre-select the first listed skill so the detail shows its
+        // rendered marketplace document; the document is fetched live, so
+        // the settle window below covers that fetch.
         await model.catalog.loadIfNeeded()
+        let catalogSkillID: String?
+        if case .loaded(let skills, _) = model.catalog.state {
+            catalogSkillID = skills.first?.id
+        } else {
+            catalogSkillID = nil
+        }
         let catalog = hostedWindow(
-            RootView(initialDestination: .catalog).environment(model),
+            RootView(
+                initialDestination: .catalog,
+                initialCatalogSelection: catalogSkillID
+            ).environment(model),
             size: NSSize(width: 1440, height: 900)
         )
-        await settle(seconds: 3)
+        await settle(seconds: 4)
         capture(catalog, name: "catalog-\(languageTag).png")
         catalog.orderOut(nil)
 

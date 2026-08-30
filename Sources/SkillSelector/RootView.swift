@@ -39,8 +39,14 @@ struct RootView: View {
     /// True while the refresh history popover is presented.
     @State private var isShowingRefreshHistory = false
 
-    init(initialDestination: BrowserDestination = .all) {
+    init(
+        initialDestination: BrowserDestination = .all,
+        initialRulesSelection: String? = nil,
+        initialCatalogSelection: String? = nil
+    ) {
         _destination = State(initialValue: initialDestination)
+        _rulesSelection = State(initialValue: initialRulesSelection)
+        _catalogSelection = State(initialValue: initialCatalogSelection)
     }
 
     var body: some View {
