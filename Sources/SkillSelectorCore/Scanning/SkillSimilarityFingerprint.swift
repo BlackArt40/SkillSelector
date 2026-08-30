@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 
 /// A MinHash signature of a Skill's entry-file **body only** (frontmatter
@@ -43,15 +42,12 @@ public enum SkillSimilarityFingerprint {
     /// reformatting, leaves genuinely different content alone.
     public static let minimumSimilarityPercent = 75
 
-    public enum Error: Swift.Error, LocalizedError, Equatable {
-        case oversizedEntry(limit: Int)
-
-        public var errorDescription: String? {
-            switch self {
-            case .oversizedEntry(let limit):
-                return "Entry file exceeds the \(limit) byte read limit"
-            }
-        }
+    public static func computePair(entryFileURL: URL) throws -> (content: String, similarity: String?) {
+        let body = try SkillContentFingerprint.bodyText(from: entryFileURL)
+        return (
+            SkillContentFingerprint.currentVersionPrefix + SkillContentFingerprint.sha256Hex(of: body),
+            compute(body: body)
+        )
     }
 
     /// Computes the MinHash signature of the body, or nil when the
@@ -106,26 +102,6 @@ public enum SkillSimilarityFingerprint {
             digest.append(contentsOf: withUnsafeBytes(of: value.bigEndian, Array.init(_:)))
         }
         return versionPrefix + digest.base64EncodedString()
-    }
-
-    /// Reads the entry file once and produces both fingerprints: the exact
-    /// body SHA-256 (`v2:`) and the similarity MinHash (`s1:`, nil for
-    /// short bodies). The deferred backfill uses this so one file read
-    /// feeds both.
-    public static func computePair(entryFileURL: URL) throws -> (content: String, similarity: String?) {
-        let fileSize = try entryFileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize
-        guard let fileSize, fileSize <= SkillDocumentReader.maximumRenderBytes else {
-            throw Error.oversizedEntry(limit: SkillDocumentReader.maximumRenderBytes)
-        }
-        let text = try String(contentsOf: entryFileURL, encoding: .utf8)
-        let body = FrontmatterParser.bodyLines(from: text).joined(separator: "\n")
-        let digest = SHA256.hash(data: Data(body.utf8))
-            .map { String(format: "%02x", $0) }
-            .joined()
-        return (
-            SkillContentFingerprint.currentVersionPrefix + digest,
-            compute(body: body)
-        )
     }
 
     /// Estimated Jaccard similarity between two `s1:` signatures, as a

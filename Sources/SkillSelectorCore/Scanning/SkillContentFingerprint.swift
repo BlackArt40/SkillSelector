@@ -34,6 +34,14 @@ public enum SkillContentFingerprint {
     /// R3/F-01): a multi-GB SKILL.md inside an authorized root must not be
     /// slurped into memory while hashing (local DoS).
     public static func compute(entryFileURL: URL) throws -> String {
+        let body = try bodyText(from: entryFileURL)
+        return currentVersionPrefix + sha256Hex(of: body)
+    }
+
+    /// Shared ingestion pipeline for both fingerprints: applies the 1 MiB
+    /// entry-file bound, decodes UTF-8, and strips the frontmatter, so the
+    /// exact and similarity hashes never drift on their input.
+    static func bodyText(from entryFileURL: URL) throws -> String {
         let fileSize = try entryFileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize
         guard let fileSize, fileSize <= SkillDocumentReader.maximumRenderBytes else {
             throw Error.oversizedEntry(limit: SkillDocumentReader.maximumRenderBytes)
@@ -42,10 +50,13 @@ public enum SkillContentFingerprint {
         // bodyLines() tolerates whitespace around the delimiters and falls
         // back to the whole text when no frontmatter boundary exists — the
         // same single implementation the renderer uses.
-        let body = FrontmatterParser.bodyLines(from: text).joined(separator: "\n")
-        let digest = SHA256.hash(data: Data(body.utf8))
+        return FrontmatterParser.bodyLines(from: text).joined(separator: "\n")
+    }
+
+    /// Hex SHA-256 of a fingerprint body — the exact digest.
+    static func sha256Hex(of body: String) -> String {
+        SHA256.hash(data: Data(body.utf8))
             .map { String(format: "%02x", $0) }
             .joined()
-        return currentVersionPrefix + digest
     }
 }
