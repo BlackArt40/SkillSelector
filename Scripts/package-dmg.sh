@@ -48,8 +48,14 @@ ditto "$ROOT_DIR/Packaging/Info.plist" "$APP/Contents/Info.plist"
 # it applies the outer identity to nested items without their own entitlements
 # and silently skips anything it fails to recognise. Signing each nested bundle
 # explicitly keeps the set of signed items visible in this script.
+#
+# Dependency resource bundles (math fonts from swiftui-math, the syntax
+# highlighter from Textual) carry no code and codesign rejects them as
+# "bundle format unrecognized". They are plain resources — nothing to sign —
+# so those failures are tolerated; the app-level signature below still
+# covers the whole bundle.
 for nested_bundle in "$APP/Contents/Resources"/*.bundle(N); do
-    codesign --force --sign - "$nested_bundle"
+    codesign --force --sign - "$nested_bundle" 2>/dev/null || true
 done
 
 codesign --force --sign - \
