@@ -303,6 +303,12 @@
 "Copied" = "已复制";
 "Copy Install Command" = "复制安装命令";
 "Source" = "来源";
+"Repository" = "仓库信息";
+"Repository Author" = "作者";
+"Stars" = "星标";
+"Forks" = "复刻";
+"Last Updated" = "最后更新";
+"License" = "许可证";
 "Select a Marketplace Skill" = "选择一个市场 Skill";
 "Select a Marketplace Skill Description" = "从目录中选择一个 Skill 查看其文档。不会安装任何内容——应用是只读看板。";
 "All Sources" = "全部来源";

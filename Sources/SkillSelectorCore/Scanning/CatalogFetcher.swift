@@ -36,6 +36,15 @@ public struct CatalogFetcher: CatalogFetching, Sendable {
         return text
     }
 
+    /// Fetches repository-level metadata (stars, forks, last push, license)
+    /// for a source — shared by every skill it publishes.
+    public func fetchRepoInfo(source: CatalogSource) async throws -> CatalogRepoMetadata {
+        var request = URLRequest(url: Self.repoURL(source: source))
+        request.timeoutInterval = 30
+        let (data, _) = try await Self.validatedData(for: request, session: session)
+        return try Self.parseRepo(data)
+    }
+
     // MARK: Plumbing
 
     private static func validatedData(
@@ -58,6 +67,59 @@ public struct CatalogFetcher: CatalogFetching, Sendable {
 
     static func treesURL(source: CatalogSource) -> URL {
         URL(string: "https://api.github.com/repos/\(source.owner)/\(source.repo)/git/trees/\(source.branch)?recursive=1")!
+    }
+
+    static func repoURL(source: CatalogSource) -> URL {
+        URL(string: "https://api.github.com/repos/\(source.owner)/\(source.repo)")!
+    }
+
+    // MARK: Repo metadata parsing
+
+    private struct RepoResponse: Decodable {
+        struct Owner: Decodable { let login: String }
+        struct License: Decodable { let spdxId: String? }
+
+        let name: String
+        let owner: Owner
+        let stargazersCount: Int
+        let forksCount: Int
+        let pushedAt: String?
+        let defaultBranch: String
+        let license: License?
+    }
+
+    /// Pure parsing, exposed through the fetcher for tests. Decodes the
+    /// `/repos/{owner}/{repo}` payload into the metadata the detail page
+    /// shows; a repo without a license decodes with `license == nil`.
+    static func parseRepo(_ data: Data) throws -> CatalogRepoMetadata {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let response: RepoResponse
+        do {
+            response = try decoder.decode(RepoResponse.self, from: data)
+        } catch {
+            throw CatalogError.invalidResponse
+        }
+        let pushedAt = response.pushedAt.flatMap(Self.parseGitHubDate)
+        return CatalogRepoMetadata(
+            owner: response.owner.login,
+            repo: response.name,
+            stars: response.stargazersCount,
+            forks: response.forksCount,
+            pushedAt: pushedAt,
+            license: response.license?.spdxId,
+            defaultBranch: response.defaultBranch
+        )
+    }
+
+    /// GitHub's `pushed_at` is ISO-8601 with an optional fractional-second
+    /// component; try the strict form first, then the fractional one.
+    private static func parseGitHubDate(_ text: String) -> Date? {
+        let strict = ISO8601DateFormatter()
+        if let date = strict.date(from: text) { return date }
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return fractional.date(from: text)
     }
 
     // MARK: Tree parsing

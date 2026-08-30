@@ -302,6 +302,12 @@
 "Copied" = "Copied";
 "Copy Install Command" = "Copy Install Command";
 "Source" = "Source";
+"Repository" = "Repository";
+"Repository Author" = "Author";
+"Stars" = "Stars";
+"Forks" = "Forks";
+"Last Updated" = "Last Updated";
+"License" = "License";
 "Select a Marketplace Skill" = "Select a Marketplace Skill";
 "Select a Marketplace Skill Description" = "Pick a skill from the marketplace to read its document. Nothing is installed — the app is a read-only board.";
 "All Sources" = "All Sources";

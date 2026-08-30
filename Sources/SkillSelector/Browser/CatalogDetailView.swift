@@ -33,6 +33,7 @@ struct CatalogDetailView: View {
                 VStack(alignment: .leading, spacing: 32) {
                     hero(skill)
                     actionBar(skill)
+                    repositorySection(skill)
                     localSection(skill)
                     contentSection(skill)
                     metadataSection(skill)
@@ -321,6 +322,41 @@ struct CatalogDetailView: View {
                 keyValue(L10n.string("Path"), value: skill.skillPath, monospaced: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    // MARK: Repository metadata
+
+    /// The「仓库信息」section — repo-level numbers shared by every skill
+    /// from the same source, prefetched by the catalog model. Empty (hidden)
+    /// until the source's metadata lands.
+    @ViewBuilder
+    private func repositorySection(_ skill: CatalogSkill) -> some View {
+        if let repo = model.catalog.repoInfoBySourceID[skill.sourceID] {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionHeading(L10n.string("Repository"))
+                Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {
+                    keyValue(
+                        L10n.string("Repository Author"),
+                        value: repo.owner,
+                        monospaced: false
+                    )
+                    keyValue(L10n.string("Stars"), value: repo.stars.formatted(), monospaced: true)
+                    keyValue(L10n.string("Forks"), value: repo.forks.formatted(), monospaced: true)
+                    keyValue(
+                        L10n.string("Last Updated"),
+                        value: repo.pushedAt?.formatted(date: .abbreviated, time: .omitted)
+                            ?? "—",
+                        monospaced: false
+                    )
+                    keyValue(
+                        L10n.string("License"),
+                        value: repo.license ?? "—",
+                        monospaced: false
+                    )
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
     }
 

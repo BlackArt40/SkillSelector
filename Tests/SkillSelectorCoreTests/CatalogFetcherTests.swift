@@ -224,4 +224,72 @@ final class CatalogFetcherTests: XCTestCase {
             XCTAssertEqual(error as? CatalogError, .oversized)
         }
     }
+
+    // MARK: Repo metadata
+
+    private static let repoJSON = """
+    {
+      "name": "skills",
+      "owner": { "login": "anthropics" },
+      "stargazers_count": 12345,
+      "forks_count": 678,
+      "pushed_at": "2026-08-30T11:21:44Z",
+      "default_branch": "main",
+      "license": { "spdx_id": "MIT" }
+    }
+    """
+
+    func testParsesRepoMetadata() throws {
+        let repo = try CatalogFetcher.parseRepo(Data(Self.repoJSON.utf8))
+
+        XCTAssertEqual(repo.owner, "anthropics")
+        XCTAssertEqual(repo.repo, "skills")
+        XCTAssertEqual(repo.stars, 12345)
+        XCTAssertEqual(repo.forks, 678)
+        XCTAssertEqual(repo.license, "MIT")
+        XCTAssertEqual(repo.defaultBranch, "main")
+        XCTAssertNotNil(repo.pushedAt)
+    }
+
+    func testParsesRepoWithoutLicenseOrPushDate() throws {
+        let json = """
+        { "name": "skills", "owner": { "login": "x" },
+          "stargazers_count": 0, "forks_count": 0, "default_branch": "main",
+          "pushed_at": null, "license": null }
+        """
+        let repo = try CatalogFetcher.parseRepo(Data(json.utf8))
+
+        XCTAssertNil(repo.license)
+        XCTAssertNil(repo.pushedAt)
+    }
+
+    func testMalformedRepoJSONThrows() {
+        XCTAssertThrowsError(try CatalogFetcher.parseRepo(Data("{nope".utf8)))
+    }
+
+    func testFetchRepoInfo() async throws {
+        StubProtocol.handler = { [self] request in
+            XCTAssertEqual(
+                request.url?.absoluteString,
+                "https://api.github.com/repos/anthropics/skills"
+            )
+            return (200, Data(Self.repoJSON.utf8))
+        }
+        let repo = try await makeFetcher().fetchRepoInfo(source: source)
+
+        XCTAssertEqual(repo.owner, "anthropics")
+        XCTAssertEqual(repo.stars, 12345)
+    }
+
+    func testFetchRepoInfoRateLimited() async {
+        StubProtocol.handler = { _ in (429, Data()) }
+        do {
+            _ = try await makeFetcher().fetchRepoInfo(source: source)
+            XCTFail("expected rateLimited")
+        } catch CatalogError.rateLimited {
+            // Expected — anonymous rate limits surface as the same error.
+        } catch {
+            XCTFail("unexpected error: \(error)")
+        }
+    }
 }

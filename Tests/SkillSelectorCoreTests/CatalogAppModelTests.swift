@@ -13,15 +13,29 @@ final class CatalogAppModelTests: XCTestCase {
         private let lock = NSLock()
         private var pages: [String: Result<CatalogPage, Error>]
         private var document: Result<String, Error>
+        private var repoInfo: Result<CatalogRepoMetadata, Error>
         private(set) var skillFetchCount = 0
         private(set) var documentFetchCount = 0
+        private(set) var repoInfoFetchCount = 0
 
         init(
             pages: [String: Result<CatalogPage, Error>],
-            document: Result<String, Error> = .success("# body\n")
+            document: Result<String, Error> = .success("# body\n"),
+            repoInfo: Result<CatalogRepoMetadata, Error> = .success(
+                CatalogRepoMetadata(
+                    owner: "anthropics",
+                    repo: "skills",
+                    stars: 120,
+                    forks: 30,
+                    pushedAt: nil,
+                    license: "MIT",
+                    defaultBranch: "main"
+                )
+            )
         ) {
             self.pages = pages
             self.document = document
+            self.repoInfo = repoInfo
         }
 
         func fetchSkills(source: CatalogSource) async throws -> CatalogPage {
@@ -30,6 +44,10 @@ final class CatalogAppModelTests: XCTestCase {
 
         func fetchDocument(_ skill: CatalogSkill) async throws -> String {
             try nextDocument().get()
+        }
+
+        func fetchRepoInfo(source: CatalogSource) async throws -> CatalogRepoMetadata {
+            try nextRepoInfo().get()
         }
 
         private func nextSkillPage(for source: CatalogSource) -> Result<CatalogPage, Error> {
@@ -44,6 +62,13 @@ final class CatalogAppModelTests: XCTestCase {
             defer { lock.unlock() }
             documentFetchCount += 1
             return document
+        }
+
+        private func nextRepoInfo() -> Result<CatalogRepoMetadata, Error> {
+            lock.lock()
+            defer { lock.unlock() }
+            repoInfoFetchCount += 1
+            return repoInfo
         }
     }
 
@@ -145,6 +170,51 @@ final class CatalogAppModelTests: XCTestCase {
         let model = makeModel(fetcher: fetcher)
         await model.catalog.loadIfNeeded()
         XCTAssertEqual(model.catalog.state, .loaded(page(["pdf"]).skills, truncated: true))
+    }
+
+    func testPrefetchesRepoMetadataPerSource() async {
+        let fetcher = MockFetcher(pages: [
+            "anthropics/skills": .success(page(["pdf"])),
+            "obra/superpowers": .success(page([])),
+        ])
+        let model = makeModel(fetcher: fetcher)
+
+        await model.catalog.loadIfNeeded()
+        XCTAssertEqual(
+            fetcher.repoInfoFetchCount,
+            CatalogRegistry.sources.count,
+            "repo metadata is prefetched for every declared source"
+        )
+        XCTAssertEqual(
+            model.catalog.repoInfoBySourceID["anthropics/skills"]?.stars,
+            120
+        )
+        XCTAssertEqual(
+            model.catalog.repoInfoBySourceID["anthropics/skills"]?.license,
+            "MIT"
+        )
+    }
+
+    func testRepoInfoFailureIsTolerated() async {
+        // A failed repo-metadata prefetch must not fail the listing — the
+        // source simply shows no「仓库信息」section.
+        let fetcher = MockFetcher(
+            pages: [
+                "anthropics/skills": .success(page(["pdf"])),
+                "obra/superpowers": .success(page([])),
+            ],
+            repoInfo: .failure(CatalogError.rateLimited)
+        )
+        let model = makeModel(fetcher: fetcher)
+
+        await model.catalog.loadIfNeeded()
+        guard case .loaded = model.catalog.state else {
+            return XCTFail("a failing repo-metadata prefetch must not fail the load")
+        }
+        XCTAssertTrue(
+            model.catalog.repoInfoBySourceID.isEmpty,
+            "failed repo fetches leave no stale metadata behind"
+        )
     }
 
     func testSingleFailingSourceIsTolerated() async {

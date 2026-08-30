@@ -24,6 +24,9 @@ final class CatalogModel {
     /// background after a catalog load; rows fill them in progressively.
     /// Same memory-only discipline as the listing itself.
     var descriptions: [String: String] = [:]
+    /// Repository metadata keyed by source id, prefetched in the background
+    /// with the listing; the detail page's「仓库信息」section reads it.
+    var repoInfoBySourceID: [String: CatalogRepoMetadata] = [:]
 
     /// Catalog network boundary; injected for tests, immutable after init.
     @ObservationIgnored let fetcher: any CatalogFetching
@@ -35,6 +38,8 @@ final class CatalogModel {
     @ObservationIgnored var loadTask: Task<Void, Never>?
     /// In-flight description prefetch; cancelled by the next load.
     @ObservationIgnored var descriptionTask: Task<Void, Never>?
+    /// In-flight repo-metadata prefetch; cancelled by the next load.
+    @ObservationIgnored var repoInfoTask: Task<Void, Never>?
 
     init(
         fetcher: any CatalogFetching,
@@ -106,6 +111,7 @@ final class CatalogModel {
             loadTask = nil
         }
         await descriptionTask?.value
+        await repoInfoTask?.value
     }
 
     /// Fetches a skill's SKILL.md for the detail view. On-demand, capped
@@ -117,7 +123,9 @@ final class CatalogModel {
     private func performLoad() async {
         state = .loading
         descriptionTask?.cancel()
+        repoInfoTask?.cancel()
         descriptions = [:]
+        repoInfoBySourceID = [:]
         failedSourceIDs = []
         var pages: [String: CatalogPage] = [:]
         var failures: [String: Error] = [:]
@@ -156,6 +164,7 @@ final class CatalogModel {
         state = .loaded(skills, truncated: truncated)
         failedSourceIDs = sources.filter { failures[$0.id] != nil }.map(\.id)
         startDescriptionPrefetch(for: skills)
+        startRepoInfoPrefetch()
     }
 
     /// Imports a user marketplace source. Returns false when a source
@@ -283,6 +292,29 @@ final class CatalogModel {
             return .invalidResponse
         case nil:
             return .network
+        }
+    }
+
+    /// Fetches repository metadata for every source in the background —
+    /// one small `/repos/{owner}/{repo}` call per source. Failures are
+    /// tolerated: a source without metadata simply shows no「仓库信息」
+    /// section. Results are memory-only, like the listing.
+    private func startRepoInfoPrefetch() {
+        let fetcher = fetcher
+        let sources = sources
+        repoInfoTask = Task { [weak self] in
+            await withTaskGroup(of: (String, CatalogRepoMetadata?).self) { group in
+                for source in sources {
+                    group.addTask {
+                        let info = try? await fetcher.fetchRepoInfo(source: source)
+                        return (source.id, info)
+                    }
+                }
+                for await (id, info) in group {
+                    guard let self, !Task.isCancelled, let info else { continue }
+                    self.repoInfoBySourceID[id] = info
+                }
+            }
         }
     }
 }

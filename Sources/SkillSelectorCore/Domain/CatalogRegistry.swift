@@ -166,6 +166,41 @@ public struct CatalogPage: Hashable, Sendable {
     }
 }
 
+/// Repository-level metadata for a catalog source, decoded from GitHub's
+/// `/repos/{owner}/{repo}` endpoint. Every skill from a source shares it,
+/// so it is fetched once per source and cached in memory with the listing.
+public struct CatalogRepoMetadata: Hashable, Sendable {
+    /// Repository owner (the "author" in the GitHub sense).
+    public let owner: String
+    /// Repository name.
+    public let repo: String
+    public let stars: Int
+    public let forks: Int
+    /// Last push time — the closest GitHub proxy for "last updated".
+    public let pushedAt: Date?
+    /// SPDX license identifier, when the repo declares one.
+    public let license: String?
+    public let defaultBranch: String
+
+    public init(
+        owner: String,
+        repo: String,
+        stars: Int,
+        forks: Int,
+        pushedAt: Date?,
+        license: String?,
+        defaultBranch: String
+    ) {
+        self.owner = owner
+        self.repo = repo
+        self.stars = stars
+        self.forks = forks
+        self.pushedAt = pushedAt
+        self.license = license
+        self.defaultBranch = defaultBranch
+    }
+}
+
 public enum CatalogError: Error, Equatable {
     /// Non-200 response other than rate limiting.
     case http(status: Int)
@@ -182,6 +217,7 @@ public enum CatalogError: Error, Equatable {
 public protocol CatalogFetching: Sendable {
     func fetchSkills(source: CatalogSource) async throws -> CatalogPage
     func fetchDocument(_ skill: CatalogSkill) async throws -> String
+    func fetchRepoInfo(source: CatalogSource) async throws -> CatalogRepoMetadata
 }
 
 /// One user-imported marketplace source (「导入市场」). Persisted as plain
