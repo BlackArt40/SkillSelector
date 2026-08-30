@@ -5,11 +5,10 @@ import Textual
 
 /// Textual-backed rendering for Skill / rules / marketplace document bodies.
 ///
-/// The old `MarkdownRenderer` hand-rolled the block layout (soft-break
-/// hardening, block separators, link sanitizing) around Foundation's
-/// `AttributedString(markdown:)` parser. Textual wraps that same parser and
-/// owns the block layout; this type keeps only the two things that remain
-/// app concerns: hardening CommonMark soft breaks and the link policy.
+/// Textual wraps Foundation's `AttributedString(markdown:)` parser and owns
+/// the block layout (headings, lists, tables, code blocks, selection). This
+/// type keeps only the two things that remain app concerns: hardening
+/// CommonMark soft breaks and the http/https link policy.
 enum MarkdownBody {
     /// CommonMark soft line breaks (a single newline inside a paragraph) fold
     /// to spaces in Foundation's parser, jamming "workflow: …\ntopic: …" into

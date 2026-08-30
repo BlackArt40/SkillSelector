@@ -8,8 +8,7 @@ import XCTest
 /// pin the parts that are still app-owned and pure:
 ///
 /// - **body extraction** — the `FrontmatterParser.bodyLines` boundary
-///   detection the three document views feed the renderer with (formerly
-///   `MarkdownRenderer.extractBody`);
+///   detection the three document views feed the renderer with;
 /// - **soft-break hardening** — `MarkdownBody.hardenedText`, which keeps
 ///   CommonMark's "single newline → space" from jamming source line
 ///   structure (fenced code is left untouched);

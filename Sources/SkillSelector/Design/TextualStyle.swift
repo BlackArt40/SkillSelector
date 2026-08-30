@@ -1,12 +1,11 @@
 import SwiftUI
 import Textual
 
-/// The `StructuredText.Style` bound to the app's `AppTheme` tokens. Replaces
-/// the old hand-rolled `MarkdownRenderer` post-processing: Textual owns the
-/// block layout (headings, paragraphs, quotes, code blocks, lists, tables)
-/// and this type only maps the design tokens onto it. Layout (spacing,
-/// marker shapes, overflow) follows the GitHub preset; colors come from
-/// `AppTheme`.
+/// The `StructuredText.Style` bound to the app's `AppTheme` tokens: Textual
+/// owns the block layout (headings, paragraphs, quotes, code blocks, lists,
+/// tables) and this type only maps the design tokens onto it. Layout
+/// (spacing, marker shapes, overflow) follows the GitHub preset; colors come
+/// from `AppTheme`.
 struct AppMarkdownStyle: StructuredText.Style {
     let inlineStyle: InlineStyle = InlineStyle()
         .code(
