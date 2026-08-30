@@ -50,10 +50,10 @@ final class RulesAppModelTests: XCTestCase {
 
         await model.refresh()
 
-        XCTAssertEqual(model.rulesFiles.count, 3)
-        let homeClaude = model.rulesFiles.first { $0.path == home.appending(path: ".claude/CLAUDE.md").path }
-        let projectClaude = model.rulesFiles.first { $0.path == project.appending(path: "CLAUDE.md").path }
-        let cursorRules = model.rulesFiles.first { $0.path == project.appending(path: ".cursorrules").path }
+        XCTAssertEqual(model.rules.files.count, 3)
+        let homeClaude = model.rules.files.first { $0.path == home.appending(path: ".claude/CLAUDE.md").path }
+        let projectClaude = model.rules.files.first { $0.path == project.appending(path: "CLAUDE.md").path }
+        let cursorRules = model.rules.files.first { $0.path == project.appending(path: ".cursorrules").path }
         XCTAssertNotNil(homeClaude)
         XCTAssertNotNil(projectClaude)
         XCTAssertNotNil(cursorRules)
@@ -65,14 +65,60 @@ final class RulesAppModelTests: XCTestCase {
         XCTAssertEqual(cursorRules?.agentID, "cursor")
 
         // The validated reader loads the content.
-        let document = try await model.loadRulesDocument(projectClaude!)
+        let document = try await model.rules.loadDocument(projectClaude!)
         XCTAssertTrue(document.source.contains("# Project Rules"))
         XCTAssertEqual(document.fileURL.lastPathComponent, "CLAUDE.md")
 
         // Revoking the project root drops its rules files on reload.
         await model.revokeAuthorization(id: projectRoot.id)
-        XCTAssertEqual(model.rulesFiles.count, 1)
-        XCTAssertEqual(model.rulesFiles.first?.path, homeClaude?.path)
+        XCTAssertEqual(model.rules.files.count, 1)
+        XCTAssertEqual(model.rules.files.first?.path, homeClaude?.path)
+    }
+
+    func testLoadDocumentThrowsWhenProjectRootIsNotAuthorized() async throws {
+        let suite = "RulesNoRoot-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let container = try ModelContainer(
+            for: SkillRecord.self,
+            AuthorizedRootRecord.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let bookmarks = BookmarkStore(container: container, adapter: RulesPathBookmarkAdapter())
+        let index = SkillIndex(container: container)
+        let registry = BuiltInAgentRegistry.make()
+        let refresher = IndexRefresher(
+            registry: registry,
+            bookmarks: bookmarks,
+            index: index
+        )
+        let model = AppModel(
+            refresher: refresher,
+            index: index,
+            bookmarks: bookmarks,
+            registry: registry,
+            defaults: defaults
+        )
+
+        // A project rule whose project root is absent from the authorized
+        // list must be rejected before any disk read.
+        XCTAssertEqual(model.authorizedRoots, [])
+        let orphan = RulesFileDescriptor(
+            path: "/tmp/nowhere/CLAUDE.md",
+            filename: "CLAUDE.md",
+            agentID: "claude-code",
+            projectRootID: "missing-root",
+            fileSize: nil,
+            modificationDate: nil
+        )
+        do {
+            _ = try await model.rules.loadDocument(orphan)
+            XCTFail("expected DocumentAccessError.noAuthorizedRoot")
+        } catch let error as DocumentAccessError {
+            XCTAssertEqual(error, .noAuthorizedRoot)
+        } catch {
+            XCTFail("unexpected error: \(error)")
+        }
     }
 
     // MARK: Fixture

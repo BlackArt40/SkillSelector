@@ -332,33 +332,95 @@ final class AppModelTests: XCTestCase {
     /// pass leaves no server in the transient `.probing` state.
     func testProbeMcpServersOnlyProbesRequestedAgent() async throws {
         let model = makeModel()
-        model.mcpServers = [
+        model.mcps.servers = [
             probeServer(name: "a1", agentID: "agent-a"),
             probeServer(name: "b1", agentID: "agent-b"),
         ]
-        let a1 = try XCTUnwrap(model.mcpServers.first { $0.name == "a1" })
-        let b1 = try XCTUnwrap(model.mcpServers.first { $0.name == "b1" })
+        let a1 = try XCTUnwrap(model.mcps.servers.first { $0.name == "a1" })
+        let b1 = try XCTUnwrap(model.mcps.servers.first { $0.name == "b1" })
 
-        await model.probeMcpServers(agentID: "agent-a")
+        await model.mcps.probe(agentID: "agent-a")
 
         // Only agent-a's server was touched, and it resolved out of `.probing`.
-        XCTAssertNotNil(model.mcpProbeStatuses[a1.id])
-        XCTAssertNil(model.mcpProbeStatuses[b1.id], "other agents' servers must stay untouched")
-        XCTAssertTrue(model.mcpProbeStatuses[a1.id]?.isResolved ?? false)
+        XCTAssertNotNil(model.mcps.probeStatuses[a1.id])
+        XCTAssertNil(model.mcps.probeStatuses[b1.id], "other agents' servers must stay untouched")
+        XCTAssertTrue(model.mcps.probeStatuses[a1.id]?.isResolved ?? false)
     }
 
     /// The all-servers pass folds exactly one verdict per id.
     func testProbeAllMcpServersResolvesEveryServer() async throws {
         let model = makeModel()
-        model.mcpServers = [
+        model.mcps.servers = [
             probeServer(name: "a1", agentID: "agent-a"),
             probeServer(name: "b1", agentID: "agent-b"),
         ]
 
-        await model.probeAllMcpServers()
+        await model.mcps.probeAll()
 
-        XCTAssertEqual(model.mcpProbeStatuses.count, 2)
-        XCTAssertTrue(model.mcpProbeStatuses.values.allSatisfy(\.isResolved))
+        XCTAssertEqual(model.mcps.probeStatuses.count, 2)
+        XCTAssertTrue(model.mcps.probeStatuses.values.allSatisfy(\.isResolved))
+    }
+
+    /// Probe-scope: the single-sever pass touches only that server — the
+    /// other servers keep their `.unknown` (absent) status.
+    func testProbeSingleMcpServerResolvesOnlyThatServer() async throws {
+        let model = makeModel()
+        model.mcps.servers = [
+            probeServer(name: "a1", agentID: "agent-a"),
+            probeServer(name: "b1", agentID: "agent-b"),
+        ]
+        let a1 = try XCTUnwrap(model.mcps.servers.first { $0.name == "a1" })
+        let b1 = try XCTUnwrap(model.mcps.servers.first { $0.name == "b1" })
+
+        await model.mcps.probe(serverID: a1.id)
+
+        XCTAssertNotNil(model.mcps.probeStatuses[a1.id])
+        XCTAssertTrue(model.mcps.probeStatuses[a1.id]?.isResolved ?? false)
+        XCTAssertNil(model.mcps.probeStatuses[b1.id], "unprobed servers must stay untouched")
+    }
+
+    /// An authorized project root's `.mcp.json` must surface through the
+    /// same authorize → refresh chain that populates the rules list: the
+    /// MCP submodel reloads against the shared scoped-roots snapshot.
+    func testMcpReloadScansAuthorizedRootFixtures() async throws {
+        let project = FileManager.default.temporaryDirectory
+            .appending(path: "AppModelMcpProject-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: project) }
+        try """
+        {
+          "mcpServers": {
+            "filesystem": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "."] }
+          }
+        }
+        """.write(to: project.appending(path: ".mcp.json"), atomically: true, encoding: .utf8)
+
+        let suite = "AppModelMcpReloadTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(
+            for: SkillRecord.self,
+            AuthorizedRootRecord.self,
+            configurations: configuration
+        )
+        let bookmarks = BookmarkStore(container: container, adapter: AppModelBookmarkAdapter())
+        _ = try bookmarks.save(url: project, kind: .project)
+        let model = makeModel(
+            defaults: defaults,
+            container: container,
+            bookmarks: bookmarks
+        )
+
+        await model.refresh()
+
+        let fixture = model.mcps.servers.first {
+            $0.configFile == project.appending(path: ".mcp.json").path
+        }
+        XCTAssertNotNil(fixture, "project .mcp.json should be scanned into mcps.servers")
+        XCTAssertEqual(fixture?.agentID, "claude-code")
+        XCTAssertEqual(fixture?.name, "filesystem")
+        XCTAssertEqual(fixture?.command, "npx")
     }
 
     /// Missing-command stdio servers fail fast with a `.failed` verdict —

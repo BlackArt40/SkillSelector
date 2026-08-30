@@ -34,7 +34,7 @@ struct CatalogListView: View {
         return skills.filter { skill in
             Self.matches(
                 skill,
-                description: model.catalogDescriptions[skill.id],
+                description: model.catalog.descriptions[skill.id],
                 query: searchText
             )
         }
@@ -43,7 +43,7 @@ struct CatalogListView: View {
     private var displayedSections: [CatalogSection] {
         Self.sections(
             of: filteredSkills,
-            sources: model.catalogSources,
+            sources: model.catalog.sources,
             sourceID: selectedSourceID
         )
     }
@@ -81,11 +81,11 @@ struct CatalogListView: View {
         .sheet(isPresented: $showingAddSheet) {
             AddCatalogSourceSheet(
                 onImport: { custom in
-                    let added = model.addCatalogSource(custom)
+                    let added = model.catalog.addSource(custom)
                     showingAddSheet = false
                     if added {
                         selectedSourceID = nil
-                        Task { await model.refreshCatalog() }
+                        Task { await model.catalog.refresh() }
                     }
                     return added
                 },
@@ -133,7 +133,7 @@ struct CatalogListView: View {
     private var sourceFilterPicker: some View {
         Picker("Marketplace Source Filter", selection: $selectedSourceID) {
             Text(verbatim: L10n.string("All Sources")).tag(String?.none)
-            ForEach(model.catalogSources) { source in
+            ForEach(model.catalog.sources) { source in
                 Text(verbatim: source.displayName).tag(Optional(source.id))
             }
         }
@@ -185,7 +185,7 @@ struct CatalogListView: View {
                         if truncated {
                             truncatedBanner
                         }
-                        if !model.catalogFailedSourceIDs.isEmpty {
+                        if !model.catalog.failedSourceIDs.isEmpty {
                             partialFailureBanner
                         }
                         ForEach(displayedSections) { section in
@@ -194,7 +194,7 @@ struct CatalogListView: View {
                                     CatalogSkillRow(
                                         skill: skill,
                                         sourceName: section.source.displayName,
-                                        description: model.catalogDescriptions[skill.id],
+                                        description: model.catalog.descriptions[skill.id],
                                         isActive: selection == skill.id,
                                         onSelect: { onSelect?(skill) }
                                     )
@@ -248,8 +248,8 @@ struct CatalogListView: View {
             Spacer(minLength: 0)
             if section.source.isCustom {
                 Button {
-                    model.removeCatalogSource(id: section.source.id)
-                    Task { await model.refreshCatalog() }
+                    model.catalog.removeSource(id: section.source.id)
+                    Task { await model.catalog.refresh() }
                 } label: {
                     Image(systemName: "minus.circle")
                         .font(.system(size: 11))

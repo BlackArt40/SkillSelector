@@ -65,7 +65,7 @@ struct RootView: View {
         let detectedAgentIDs = BrowserSidebar.detectedAgentIDs(
             from: model.snapshots,
             hasAuthorization: model.hasAuthorization
-        ).union(BrowserSidebar.mcpAgentIDs(from: model.mcpServers))
+        ).union(BrowserSidebar.mcpAgentIDs(from: model.mcps.servers))
         let selectedSkill = model.selection.flatMap { selection in
             model.snapshots.first { $0.path == selection.path }
         }
@@ -122,7 +122,7 @@ struct RootView: View {
                     .frame(width: listColumnWidth)
                 } else if currentDestination == .rules {
                     RulesListView(
-                        files: model.rulesFiles,
+                        files: model.rules.files,
                         selection: rulesSelection,
                         agentNamesByID: agentNamesByID,
                         onSelect: { file in selectRules(file) },
@@ -132,8 +132,8 @@ struct RootView: View {
                     .frame(width: listColumnWidth)
                 } else if currentDestination == .mcp {
                     McpListView(
-                        servers: model.mcpServers,
-                        statuses: model.mcpProbeStatuses,
+                        servers: model.mcps.servers,
+                        statuses: model.mcps.probeStatuses,
                         selection: mcpSelection,
                         agentNamesByID: agentNamesByID,
                         isProbing: mcpProbingAll,
@@ -142,17 +142,17 @@ struct RootView: View {
                             model.recordNavigation(.sidebar(.mcp))
                         },
                         onProbeAll: { probeAllMcp() },
-                        onRevealConfig: { server in model.revealMcpConfigFile(server) }
+                        onRevealConfig: { server in model.mcps.revealConfigFile(server) }
                     )
                     .frame(width: listColumnWidth)
                 } else if currentDestination == .catalog {
                     CatalogListView(
-                        state: model.catalogState,
+                        state: model.catalog.state,
                         selection: catalogSelection,
                         onSelect: { skill in selectCatalog(skill) },
-                        onRefresh: { Task { await model.refreshCatalog() } }
+                        onRefresh: { Task { await model.catalog.refresh() } }
                     )
-                    .task { await model.loadCatalogIfNeeded() }
+                    .task { await model.catalog.loadIfNeeded() }
                     .frame(width: listColumnWidth)
                 } else {
                     let listTitle = currentDestination.title(
@@ -185,7 +185,7 @@ struct RootView: View {
 
                 if currentDestination == .rules {
                     RulesDetailView(
-                        file: model.rulesFiles.first { $0.id == rulesSelection },
+                        file: model.rules.files.first { $0.id == rulesSelection },
                         agentNamesByID: agentNamesByID,
                         onReveal: { file in revealRules(file) },
                         onOpen: { file in openRules(file) }
@@ -193,15 +193,15 @@ struct RootView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if currentDestination == .mcp {
                     McpDetailView(
-                        server: model.mcpServers.first { $0.id == mcpSelection },
-                        status: mcpSelection.flatMap { id in model.mcpProbeStatuses[id] } ?? .unknown,
+                        server: model.mcps.servers.first { $0.id == mcpSelection },
+                        status: mcpSelection.flatMap { id in model.mcps.probeStatuses[id] } ?? .unknown,
                         agentNamesByID: agentNamesByID,
                         onProbe: {
                             if let id = mcpSelection {
-                                Task { await model.probeMcpServer(id: id) }
+                                Task { await model.mcps.probe(serverID: id) }
                             }
                         },
-                        onRevealConfig: { server in model.revealMcpConfigFile(server) }
+                        onRevealConfig: { server in model.mcps.revealConfigFile(server) }
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if currentDestination == .catalog {
@@ -217,15 +217,15 @@ struct RootView: View {
                         agentID: agentID,
                         rootsByID: model.rootsByID,
                         agentNamesByID: agentNamesByID,
-                        mcpServers: model.mcpServers,
-                        mcpStatuses: model.mcpProbeStatuses,
+                        mcpServers: model.mcps.servers,
+                        mcpStatuses: model.mcps.probeStatuses,
                         onRevealInFinder: { skill in reveal(skill) },
                         onOpenInEditor: { skill in openInEditor(skill) },
                         onSelectMcp: { server in
                             mcpSelection = server.id
                             destination = .mcp
                         },
-                        onRevealConfig: { server in model.revealMcpConfigFile(server) },
+                        onRevealConfig: { server in model.mcps.revealConfigFile(server) },
                         onProbeAll: { probeAgentMcp(agentID: agentID) }
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -458,8 +458,8 @@ struct RootView: View {
         counts[.global] = SkillQuery(scope: .global).apply(to: model.snapshots, rootsByID: model.rootsByID).count
         counts[.duplicates] = DuplicateSkillGrouper.memberCount(in: model.duplicateGroups)
         counts[.links] = model.snapshots.filter { $0.resolvedTarget != nil }.count
-        counts[.rules] = model.rulesFiles.count
-        counts[.mcp] = model.mcpServers.count
+        counts[.rules] = model.rules.files.count
+        counts[.mcp] = model.mcps.servers.count
         let catalogSkillCount = catalogSkills.count
         if catalogSkillCount > 0 {
             counts[.catalog] = catalogSkillCount
@@ -477,7 +477,7 @@ struct RootView: View {
         for definition in model.agentDefinitions {
             let skillCount = SkillQuery(scope: .all, agentID: definition.id)
                 .apply(to: model.snapshots, rootsByID: model.rootsByID).count
-            let mcpCount = model.mcpServers.filter { $0.agentID == definition.id }.count
+            let mcpCount = model.mcps.servers.filter { $0.agentID == definition.id }.count
             // An Agent detected only through MCP (no Skills on disk) still
             // shows: the count reflects whatever it owns that is visible.
             counts[.agent(id: definition.id)] = skillCount > 0 ? skillCount : mcpCount
@@ -496,7 +496,7 @@ struct RootView: View {
         guard !mcpProbingAll else { return }
         mcpProbingAll = true
         Task {
-            await model.probeAllMcpServers()
+            await model.mcps.probeAll()
             mcpProbingAll = false
         }
     }
@@ -506,7 +506,7 @@ struct RootView: View {
         guard !mcpProbingAll else { return }
         mcpProbingAll = true
         Task {
-            await model.probeMcpServers(agentID: agentID)
+            await model.mcps.probe(agentID: agentID)
             mcpProbingAll = false
         }
     }
@@ -591,12 +591,12 @@ struct RootView: View {
     /// Loaded catalog skills — the loaded state doubles as the memory
     /// cache; empty until the first on-demand fetch lands.
     private var catalogSkills: [CatalogSkill] {
-        if case .loaded(let skills, _) = model.catalogState { return skills }
+        if case .loaded(let skills, _) = model.catalog.state { return skills }
         return []
     }
 
     private var catalogSourceNames: [String: String] {
-        Dictionary(uniqueKeysWithValues: model.catalogSources.map { ($0.id, $0.displayName) })
+        Dictionary(uniqueKeysWithValues: model.catalog.sources.map { ($0.id, $0.displayName) })
     }
 
     /// Selecting a catalog skill shows its detail and records the sidebar
@@ -615,7 +615,7 @@ struct RootView: View {
 
     private func revealRules(_ file: RulesFileDescriptor) {
         do {
-            try model.revealRulesFile(file)
+            try model.rules.revealFile(file)
         } catch {
             openError = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
         }
@@ -623,7 +623,7 @@ struct RootView: View {
 
     private func openRules(_ file: RulesFileDescriptor) {
         do {
-            try model.openRulesFileInEditor(file)
+            try model.rules.openFileInEditor(file)
         } catch {
             openError = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
         }

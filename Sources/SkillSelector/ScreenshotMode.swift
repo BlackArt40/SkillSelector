@@ -109,7 +109,7 @@ enum ScreenshotMode {
         // fetched live: the listing is public GitHub data and the shot is
         // meant to show what the ecosystem actually offers. Loaded before
         // hosting so the capture never shows a transient loading state.
-        await model.loadCatalogIfNeeded()
+        await model.catalog.loadIfNeeded()
         let catalog = hostedWindow(
             RootView(initialDestination: .catalog).environment(model),
             size: NSSize(width: 1440, height: 900)

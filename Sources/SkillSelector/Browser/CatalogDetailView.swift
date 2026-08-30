@@ -263,7 +263,7 @@ struct CatalogDetailView: View {
     private func load(_ skill: CatalogSkill) async {
         contentState = .loading
         do {
-            let source = try await model.loadCatalogDocument(skill)
+            let source = try await model.catalog.loadDocument(skill)
             try Task.checkCancellation()
             let body = MarkdownRenderer.extractBody(source)
             if let attributed = MarkdownRenderer.buildAttributedString(from: body) {

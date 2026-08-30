@@ -93,16 +93,16 @@ final class CatalogAppModelTests: XCTestCase {
         ])
         let model = makeModel(fetcher: fetcher)
 
-        XCTAssertEqual(model.catalogState, .idle)
-        await model.loadCatalogIfNeeded()
+        XCTAssertEqual(model.catalog.state, .idle)
+        await model.catalog.loadIfNeeded()
         XCTAssertEqual(
-            model.catalogState,
+            model.catalog.state,
             .loaded(page(["pdf", "pptx"]).skills + [], truncated: false)
         )
         XCTAssertEqual(fetcher.skillFetchCount, CatalogRegistry.sources.count, "every declared source is fetched")
 
         // A repeat activation must not refetch — the loaded state is the cache.
-        await model.loadCatalogIfNeeded()
+        await model.catalog.loadIfNeeded()
         XCTAssertEqual(fetcher.skillFetchCount, CatalogRegistry.sources.count)
     }
 
@@ -123,14 +123,14 @@ final class CatalogAppModelTests: XCTestCase {
         ])
         let model = makeModel(fetcher: fetcher)
 
-        await model.refreshCatalog()
-        guard case .loaded(let skills, truncated: false) = model.catalogState else {
-            return XCTFail("expected loaded, got \(model.catalogState)")
+        await model.catalog.refresh()
+        guard case .loaded(let skills, truncated: false) = model.catalog.state else {
+            return XCTFail("expected loaded, got \(model.catalog.state)")
         }
         XCTAssertEqual(skills.map(\.name), ["pdf", "brainstorming"], "declarative source order holds")
         XCTAssertEqual(fetcher.skillFetchCount, CatalogRegistry.sources.count)
 
-        await model.refreshCatalog()
+        await model.catalog.refresh()
         XCTAssertEqual(
             fetcher.skillFetchCount,
             CatalogRegistry.sources.count * 2,
@@ -143,8 +143,8 @@ final class CatalogAppModelTests: XCTestCase {
             "anthropics/skills": .success(CatalogPage(skills: page(["pdf"]).skills, truncated: true)),
         ])
         let model = makeModel(fetcher: fetcher)
-        await model.loadCatalogIfNeeded()
-        XCTAssertEqual(model.catalogState, .loaded(page(["pdf"]).skills, truncated: true))
+        await model.catalog.loadIfNeeded()
+        XCTAssertEqual(model.catalog.state, .loaded(page(["pdf"]).skills, truncated: true))
     }
 
     func testSingleFailingSourceIsTolerated() async {
@@ -156,12 +156,12 @@ final class CatalogAppModelTests: XCTestCase {
         ])
         let model = makeModel(fetcher: fetcher)
 
-        await model.loadCatalogIfNeeded()
-        guard case .loaded(let skills, _) = model.catalogState else {
+        await model.catalog.loadIfNeeded()
+        guard case .loaded(let skills, _) = model.catalog.state else {
             return XCTFail("a single failing source must not fail the load")
         }
         XCTAssertEqual(skills.map(\.name), ["pdf"])
-        XCTAssertEqual(model.catalogFailedSourceIDs, ["obra/superpowers"])
+        XCTAssertEqual(model.catalog.failedSourceIDs, ["obra/superpowers"])
     }
 
     func testAllSourcesFailingMapsToFailure() async {
@@ -170,10 +170,10 @@ final class CatalogAppModelTests: XCTestCase {
             pages[source.id] = .failure(CatalogError.rateLimited)
         }
         let model = makeModel(fetcher: MockFetcher(pages: pages))
-        await model.loadCatalogIfNeeded()
+        await model.catalog.loadIfNeeded()
         // Every source failed — that is a real load failure; the surfaced
         // reason comes from the first declared source's error.
-        XCTAssertEqual(model.catalogState, .failed(.rateLimited))
+        XCTAssertEqual(model.catalog.state, .failed(.rateLimited))
     }
 
     func testDescriptionsPrefetchedAfterLoad() async {
@@ -186,13 +186,13 @@ final class CatalogAppModelTests: XCTestCase {
         )
         let model = makeModel(fetcher: fetcher)
 
-        await model.loadCatalogIfNeeded()
+        await model.catalog.loadIfNeeded()
         XCTAssertEqual(
-            model.catalogDescriptions["s:pdf"],
+            model.catalog.descriptions["s:pdf"],
             "Read and create PDF files."
         )
         XCTAssertEqual(
-            model.catalogDescriptions["s:pptx"],
+            model.catalog.descriptions["s:pptx"],
             "Read and create PDF files."
         )
         XCTAssertEqual(fetcher.documentFetchCount, 2, "one document fetch per listed skill")
@@ -205,9 +205,9 @@ final class CatalogAppModelTests: XCTestCase {
         )
         let model = makeModel(fetcher: fetcher)
 
-        await model.loadCatalogIfNeeded()
-        XCTAssertTrue(model.catalogDescriptions.isEmpty, "failed prefetch must not crash the listing")
-        guard case .loaded = model.catalogState else {
+        await model.catalog.loadIfNeeded()
+        XCTAssertTrue(model.catalog.descriptions.isEmpty, "failed prefetch must not crash the listing")
+        guard case .loaded = model.catalog.state else {
             return XCTFail("listing itself must stay loaded")
         }
     }
@@ -276,16 +276,16 @@ final class CatalogAppModelTests: XCTestCase {
             catalogSourceStore: UserDefaultsCatalogSourceStore(defaults: defaults)
         )
 
-        XCTAssertEqual(model.catalogSources.count, CatalogRegistry.sources.count)
-        XCTAssertTrue(model.addCatalogSource(CustomCatalogSource(owner: "me", repo: "my-skills")))
-        XCTAssertEqual(model.catalogSources.count, CatalogRegistry.sources.count + 1)
+        XCTAssertEqual(model.catalog.sources.count, CatalogRegistry.sources.count)
+        XCTAssertTrue(model.catalog.addSource(CustomCatalogSource(owner: "me", repo: "my-skills")))
+        XCTAssertEqual(model.catalog.sources.count, CatalogRegistry.sources.count + 1)
         XCTAssertFalse(
-            model.addCatalogSource(CustomCatalogSource(owner: "me", repo: "my-skills")),
+            model.catalog.addSource(CustomCatalogSource(owner: "me", repo: "my-skills")),
             "duplicate ids are rejected"
         )
 
-        await model.loadCatalogIfNeeded()
-        guard case .loaded(let skills, _) = model.catalogState else {
+        await model.catalog.loadIfNeeded()
+        guard case .loaded(let skills, _) = model.catalog.state else {
             return XCTFail("expected loaded")
         }
         XCTAssertTrue(skills.contains { $0.name == "mine" }, "the imported source is listed")
@@ -303,13 +303,13 @@ final class CatalogAppModelTests: XCTestCase {
             catalogFetcher: fetcher,
             catalogSourceStore: UserDefaultsCatalogSourceStore(defaults: defaults)
         )
-        XCTAssertTrue(reopened.catalogSources.contains { $0.id == "me/my-skills" })
+        XCTAssertTrue(reopened.catalog.sources.contains { $0.id == "me/my-skills" })
 
-        reopened.removeCatalogSource(id: "me/my-skills")
-        XCTAssertFalse(reopened.catalogSources.contains { $0.id == "me/my-skills" })
-        reopened.removeCatalogSource(id: "anthropics/skills")
+        reopened.catalog.removeSource(id: "me/my-skills")
+        XCTAssertFalse(reopened.catalog.sources.contains { $0.id == "me/my-skills" })
+        reopened.catalog.removeSource(id: "anthropics/skills")
         XCTAssertEqual(
-            reopened.catalogSources.count,
+            reopened.catalog.sources.count,
             CatalogRegistry.sources.count,
             "built-in sources cannot be removed"
         )
@@ -341,14 +341,14 @@ final class CatalogAppModelTests: XCTestCase {
             catalogFetcher: fetcher,
             catalogSourceStore: UserDefaultsCatalogSourceStore(defaults: defaults)
         )
-        model.addCatalogSource(CustomCatalogSource(owner: "broken", repo: "source"))
+        model.catalog.addSource(CustomCatalogSource(owner: "broken", repo: "source"))
 
-        await model.loadCatalogIfNeeded()
-        guard case .loaded(let skills, _) = model.catalogState else {
+        await model.catalog.loadIfNeeded()
+        guard case .loaded(let skills, _) = model.catalog.state else {
             return XCTFail("a single failing source must not fail the load")
         }
         XCTAssertEqual(skills.map(\.name), ["pdf"])
-        XCTAssertEqual(model.catalogFailedSourceIDs, ["broken/source"])
+        XCTAssertEqual(model.catalog.failedSourceIDs, ["broken/source"])
     }
 
     func testMarketSearchMatching() {
@@ -400,7 +400,7 @@ final class CatalogAppModelTests: XCTestCase {
         )
         let model = makeModel(fetcher: fetcher)
         let skill = page(["pdf"]).skills[0]
-        let body = try await model.loadCatalogDocument(skill)
+        let body = try await model.catalog.loadDocument(skill)
         XCTAssertEqual(body, "---\nname: pdf\n---\n# PDF\n")
         XCTAssertEqual(fetcher.documentFetchCount, 1)
     }

@@ -258,7 +258,7 @@ struct RulesDetailView: View {
         actionError = nil
         contentState = .loading
         do {
-            let document = try await model.loadRulesDocument(file)
+            let document = try await model.rules.loadDocument(file)
             try Task.checkCancellation()
             let body = MarkdownRenderer.extractBody(document.source)
             let attributed = MarkdownRenderer.buildAttributedString(from: body)

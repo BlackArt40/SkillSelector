@@ -35,8 +35,7 @@ struct SkillSelection: Hashable, Identifiable {
 final class AppModel {
     private let refresher: IndexRefresher
     private let index: SkillIndex
-    /// `fileprivate(set)` so the MCP extension (same module, other file)
-    /// can resolve leases in `reloadMcpServers()`.
+    /// Authorized-roots store, also handed to the state submodels.
     private(set) var bookmarks: BookmarkStore?
     private(set) var registry: AgentRegistry
     private let builtInRegistry: AgentRegistry
@@ -60,39 +59,14 @@ final class AppModel {
     /// re-read them after every reload. Reset on refresh (files change).
     @ObservationIgnored private var shortSimilarityBodies: Set<String> = []
     @ObservationIgnored private var activeBodyIndexBuild: (id: UUID, task: Task<Void, Never>)?
-    /// MCP servers parsed from authorized roots, refreshed with the index.
-    /// Written only by AppModel+Mcp.swift's `reloadMcpServers()`; treated
-    /// as read-only everywhere else.
-    var mcpServers: [McpServerDescriptor] = []
-    /// Rules files (CLAUDE.md, AGENTS.md, …) found in the authorized roots,
-    /// refreshed with the index like MCP servers. Written only by
-    /// AppModel+Rules.swift's `reloadRulesFiles()`; treated as read-only
-    /// everywhere else — the app never edits these files.
-    var rulesFiles: [RulesFileDescriptor] = []
-    /// Last on-demand probe result per server id (see AppModel+Mcp.swift).
-    /// Written only by the probe methods in AppModel+Mcp.swift.
-    var mcpProbeStatuses: [String: McpProbeStatus] = [:]
-    /// Read-only marketplace catalog state (see AppModel+Catalog.swift).
-    /// Memory-only: fetched on demand from the declared sources, never
-    /// persisted, never polled. Written only by AppModel+Catalog.swift.
-    var catalogState: CatalogState = .idle
-    /// Effective catalog sources: the built-in table plus the user's
-    /// imported ones (UserDefaults-persisted, see AppModel+Catalog.swift).
-    var catalogSources: [CatalogSource] = CatalogRegistry.sources
-    /// Source ids whose last fetch failed while other sources loaded.
-    var catalogFailedSourceIDs: [String] = []
-    /// Frontmatter descriptions keyed by skill id, prefetched in the
-    /// background after a catalog load; rows fill them in progressively.
-    /// Same memory-only discipline as the listing itself.
-    var catalogDescriptions: [String: String] = [:]
-    /// Catalog network boundary; injected for tests, immutable after init.
-    @ObservationIgnored let catalogFetcher: any CatalogFetching
-    /// Persistence for user-imported sources; immutable after init.
-    @ObservationIgnored let catalogSourceStore: any CatalogSourceStoring
-    /// In-flight catalog load; guards duplicate concurrent loads.
-    @ObservationIgnored var catalogLoadTask: Task<Void, Never>?
-    /// In-flight description prefetch; cancelled by the next load.
-    @ObservationIgnored var catalogDescriptionTask: Task<Void, Never>?
+    /// MCP server detection state (probe statuses + server list), separated
+    /// from this type to keep AppModel a composition root (Brooks finding 2).
+    let mcps: McpStateModel
+    /// Rules-file discovery state (see `RulesStateModel`).
+    let rules: RulesStateModel
+    /// Marketplace catalog state (sources + listing), separated from this
+    /// type to keep AppModel a composition root (Brooks finding 2).
+    let catalog: CatalogModel
 
     var refreshState: RefreshState = .idle
     var selection: SkillSelection?
@@ -136,15 +110,18 @@ final class AppModel {
         self.refresher = refresher
         self.index = index
         self.bookmarks = bookmarks
+        self.mcps = McpStateModel(bookmarks: bookmarks)
+        self.rules = RulesStateModel(bookmarks: bookmarks)
         self.documentManager = DocumentManager(bookmarks: bookmarks)
         builtInRegistry = registry
         self.defaults = defaults
         self.diagnosticStore = diagnosticStore
         self.homeDirectory = homeDirectory
-        self.catalogFetcher = catalogFetcher ?? CatalogFetcher()
         let sourceStore = catalogSourceStore ?? UserDefaultsCatalogSourceStore(defaults: defaults)
-        self.catalogSourceStore = sourceStore
-        catalogSources = CatalogRegistry.sources + sourceStore.loadCustomSources().map(\.source)
+        self.catalog = CatalogModel(
+            fetcher: catalogFetcher ?? CatalogFetcher(),
+            sourceStore: sourceStore
+        )
         let store = customAgentStore ?? UserDefaultsAgentDefinitionStore(defaults: defaults)
         self.customAgentStore = store
         self.refreshHistoryStore = refreshHistoryStore
@@ -886,8 +863,8 @@ final class AppModel {
            !updatedSnapshots.contains(where: { $0.path == selection.path }) {
             self.selection = nil
         }
-        reloadMcpServers()
-        reloadRulesFiles()
+        mcps.reload(authorizedRoots: updatedRoots)
+        rules.reload(authorizedRoots: updatedRoots)
         scheduleFingerprintBackfillIfNeeded()
         scheduleBodySearchIndexRebuild()
     }
