@@ -31,6 +31,7 @@ struct RulesDetailView: View {
                     hero(file)
                     actionBar(file)
                     contentSection(file)
+                    comparisonSection(file)
                     metadataSection(file)
                 }
                 .padding(.horizontal, 32)
@@ -228,6 +229,26 @@ struct RulesDetailView: View {
         }
     }
 
+    // MARK: Same-name comparison
+
+    /// Lists rules files that share this file's name in another root
+    /// (typically the same-named file at global vs project scope), each
+    /// with a lazy line diff against the selected file.
+    @ViewBuilder
+    private func comparisonSection(_ file: RulesFileDescriptor) -> some View {
+        let counterparts = model.rules.files.filter {
+            $0.filename == file.filename && $0.id != file.id
+        }
+        if !counterparts.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionHeading(L10n.string("Same-Name Rules Comparison"))
+                ForEach(counterparts) { counterpart in
+                    RuleFileDiffCard(file: file, counterpart: counterpart)
+                }
+            }
+        }
+    }
+
     // MARK: Shared
 
     private func sectionHeading(_ title: String) -> some View {
@@ -302,5 +323,110 @@ struct RulesDetailView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// One same-named rules file in another root, with a lazy line diff against
+/// the selected file and an expandable diff view.
+private struct RuleFileDiffCard: View {
+    @Environment(AppModel.self) private var model
+    let file: RulesFileDescriptor
+    let counterpart: RulesFileDescriptor
+
+    @State private var diff: LineDiff?
+    @State private var isExpanded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button(action: { isExpanded.toggle() }) {
+                HStack(spacing: 8) {
+                    Image(systemName: "doc.on.doc")
+                        .font(.system(size: 12))
+                        .foregroundStyle(AppTheme.accent)
+                    Text(verbatim: counterpart.path)
+                        .font(AppTheme.mono(11.5))
+                        .foregroundStyle(AppTheme.foregroundSecondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    scopeBadge
+                    Spacer(minLength: 8)
+                    if let diff {
+                        summaryBadge(diff)
+                    } else {
+                        ProgressView()
+                            .controlSize(.mini)
+                    }
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 10))
+                        .foregroundStyle(AppTheme.meta)
+                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                }
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+
+            if isExpanded {
+                if let diff {
+                    if diff.rows.allSatisfy({ $0.kind == .same }) {
+                        Text(verbatim: L10n.string("Identical Content"))
+                            .font(AppTheme.body(11.5))
+                            .foregroundStyle(AppTheme.muted)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(12)
+                    } else {
+                        LineDiffView(diff: diff)
+                            .padding(12)
+                    }
+                }
+                Rectangle()
+                    .fill(AppTheme.borderSoft)
+                    .frame(height: 1)
+            }
+        }
+        .background(AppTheme.surfaceWarm, in: RoundedRectangle(cornerRadius: 10))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(AppTheme.borderSoft, lineWidth: 1)
+        }
+        .task(id: counterpart.id) {
+            diff = await model.rules.bodyDiff(file, counterpart)
+        }
+    }
+
+    private var scopeBadge: some View {
+        PillBadge(
+            text: counterpart.projectRootID != nil
+                ? L10n.string("Project")
+                : L10n.string("Global"),
+            style: .link
+        )
+    }
+
+    @ViewBuilder
+    private func summaryBadge(_ diff: LineDiff) -> some View {
+        if diff.rows.allSatisfy({ $0.kind == .same }) {
+            Text(verbatim: L10n.string("Identical Content"))
+                .font(AppTheme.body(11, weight: .medium))
+                .foregroundStyle(AppTheme.muted)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 1)
+                .background(AppTheme.surface, in: Capsule())
+                .overlay {
+                    Capsule().stroke(AppTheme.borderSoft, lineWidth: 1)
+                }
+        } else {
+            Text(verbatim: "+\(diff.addedCount) −\(diff.removedCount)")
+                .font(AppTheme.body(11, weight: .medium))
+                .foregroundStyle(
+                    diff.addedCount > 0 ? AppTheme.success : AppTheme.warn
+                )
+                .padding(.horizontal, 7)
+                .padding(.vertical, 1)
+                .background(AppTheme.surface, in: Capsule())
+                .overlay {
+                    Capsule().stroke(AppTheme.borderSoft, lineWidth: 1)
+                }
+        }
     }
 }

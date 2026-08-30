@@ -75,6 +75,61 @@ final class RulesAppModelTests: XCTestCase {
         XCTAssertEqual(model.rules.files.first?.filename, "CLAUDE.md")
     }
 
+    /// 「同名文件对比」：全局与项目同名的规则文件做行级 diff（复用 LineDiff）。
+    /// 两文件正文各有一行不同 → +1 −1；同一文件对自身 → 全 same。
+    func testBodyDiffComparesSameNamedFiles() async throws {
+        let home = FileManager.default.temporaryDirectory
+            .appending(path: "RulesDiffHome-\(UUID().uuidString)", directoryHint: .isDirectory)
+        let project = FileManager.default.temporaryDirectory
+            .appending(path: "RulesDiffProject-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer {
+            try? FileManager.default.removeItem(at: home)
+            try? FileManager.default.removeItem(at: project)
+        }
+        try write("# Home Rules\n\nHome-only line.\n", to: home.appending(path: ".claude/CLAUDE.md"))
+        try write("# Home Rules\n\nProject-only line.\n", to: project.appending(path: "CLAUDE.md"))
+
+        let suite = "RulesDiffTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let container = try ModelContainer(
+            for: SkillRecord.self,
+            AuthorizedRootRecord.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let bookmarks = BookmarkStore(container: container, adapter: RulesPathBookmarkAdapter())
+        _ = try bookmarks.save(url: home, kind: .home)
+        _ = try bookmarks.save(url: project, kind: .project)
+        let index = SkillIndex(container: container)
+        let registry = BuiltInAgentRegistry.make()
+        let refresher = IndexRefresher(registry: registry, bookmarks: bookmarks, index: index)
+        let model = AppModel(
+            refresher: refresher,
+            index: index,
+            bookmarks: bookmarks,
+            registry: registry,
+            defaults: defaults
+        )
+
+        await model.refresh()
+
+        let homeClaude = try XCTUnwrap(
+            model.rules.files.first { $0.path == home.appending(path: ".claude/CLAUDE.md").path }
+        )
+        let projectClaude = try XCTUnwrap(
+            model.rules.files.first { $0.path == project.appending(path: "CLAUDE.md").path }
+        )
+
+        // Differing bodies → one added + one removed line.
+        let diff = await model.rules.bodyDiff(homeClaude, projectClaude)
+        XCTAssertEqual(diff?.addedCount, 1)
+        XCTAssertEqual(diff?.removedCount, 1)
+
+        // A file against itself → every row is same.
+        let same = await model.rules.bodyDiff(homeClaude, homeClaude)
+        XCTAssertEqual(same?.rows.allSatisfy { $0.kind == .same }, true)
+    }
+
     /// 端到端验证共享项目规则文件的多 Agent 关联：项目根的一个 AGENTS.md
     /// 会被所有声明它的 Agent 共享，而不是只归给第一个声明者。
     ///

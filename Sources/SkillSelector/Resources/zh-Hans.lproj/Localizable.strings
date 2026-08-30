@@ -240,6 +240,8 @@
 "Select a Rules File" = "选择一个规则文件";
 "Select a Rules File Description" = "从左侧列表选择一个规则文件以查看内容。";
 "Rules Content" = "规则内容";
+"Same-Name Rules Comparison" = "同名文件对比";
+"Identical Content" = "内容一致";
 "Agent" = "Agent";
 "Size" = "大小";
 "Modified" = "修改时间";

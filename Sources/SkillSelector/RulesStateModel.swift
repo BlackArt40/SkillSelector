@@ -128,4 +128,20 @@ final class RulesStateModel {
             }
         }
     }
+
+    /// Line diff between two rules files' bodies (frontmatter-stripped) —
+    /// used by the same-name comparison (e.g. a project CLAUDE.md vs the
+    /// global one). Returns nil when either file cannot be read.
+    func bodyDiff(_ left: RulesFileDescriptor, _ right: RulesFileDescriptor) async -> LineDiff? {
+        guard let leftBody = try? await bodyLines(of: left),
+              let rightBody = try? await bodyLines(of: right) else {
+            return nil
+        }
+        return LineDiff.compute(leftBody, rightBody)
+    }
+
+    private func bodyLines(of file: RulesFileDescriptor) async throws -> [String] {
+        let document = try await loadDocument(file)
+        return FrontmatterParser.bodyLines(from: document.source)
+    }
 }

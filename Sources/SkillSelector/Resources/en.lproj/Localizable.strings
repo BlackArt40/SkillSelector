@@ -240,6 +240,8 @@
 "Select a Rules File" = "Select a Rules File";
 "Select a Rules File Description" = "Choose a rules file from the list to view its content.";
 "Rules Content" = "Rules Content";
+"Same-Name Rules Comparison" = "Same-Name Comparison";
+"Identical Content" = "Identical Content";
 "Agent" = "Agent";
 "Size" = "Size";
 "Modified" = "Modified";
