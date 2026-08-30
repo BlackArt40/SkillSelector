@@ -61,10 +61,10 @@ Roo Code 属于旧版兼容，只在检测到已有 Skill 或在设置里手动�
 2. 校验完整性（两个文件放同一目录）：
 
    ```zsh
-   shasum -a 256 -c SkillSelector-1.8.0.dmg.sha256
+   shasum -a 256 -c SkillSelector-1.7.1.dmg.sha256
    ```
 
-   输出必须是 `SkillSelector-1.8.0.dmg: OK`。不是就别装。
+   输出必须是 `SkillSelector-1.7.1.dmg: OK`。不是就别装。
 
 3. 挂载 `.dmg`，把 `SkillSelector.app` 拖进 Applications
 4. 右键点击应用 → 打开 → 确认打开
@@ -86,10 +86,10 @@ Gatekeeper 会拦截未公证的应用，这是预期行为。如果右键菜单
 
 ```zsh
 swift build
-zsh Scripts/package-dmg.sh 1.8.0
+zsh Scripts/package-dmg.sh 1.7.1
 ```
 
-产物：`dist/SkillSelector.app`、`dist/SkillSelector.dmg`、`dist/SkillSelector-1.8.0.dmg` 和对应的 `.sha256`。
+产物：`dist/SkillSelector.app`、`dist/SkillSelector.dmg`、`dist/SkillSelector-1.7.1.dmg` 和对应的 `.sha256`。
 
 第三方依赖只有 Yams（frontmatter 解析）。测试用 `swift test`，CI 在每个 PR 和 push 上都会跑。
 
