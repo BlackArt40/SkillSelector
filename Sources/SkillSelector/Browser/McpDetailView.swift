@@ -111,7 +111,7 @@ struct McpDetailView: View {
 
     private var statusSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeading(L10n.string("Status"))
+            DetailViewSupport.sectionHeading(L10n.string("Status"))
             HStack(spacing: 8) {
                 statusDot
                 Text(verbatim: statusText)
@@ -170,40 +170,25 @@ struct McpDetailView: View {
 
     private func configurationSection(_ server: McpServerDescriptor) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeading(L10n.string("Configuration"))
+            DetailViewSupport.sectionHeading(L10n.string("Configuration"))
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {
-                keyValue(L10n.string("Transport"), value: transportLabel(server.transport), monospaced: true)
+                DetailViewSupport.keyValueRow(L10n.string("Transport"), value: transportLabel(server.transport), monospaced: true)
                 switch server.transport {
                 case .stdio:
-                    keyValue(L10n.string("Command"), value: server.command ?? "", monospaced: true)
+                    DetailViewSupport.keyValueRow(L10n.string("Command"), value: server.command ?? "", monospaced: true)
                     if !server.arguments.isEmpty {
-                        keyValue(
+                        DetailViewSupport.keyValueRow(
                             L10n.string("Arguments"),
                             value: server.arguments.joined(separator: " "),
                             monospaced: true
                         )
                     }
                 case .http, .sse:
-                    keyValue(L10n.string("Endpoint"), value: server.url ?? "", monospaced: true)
+                    DetailViewSupport.keyValueRow(L10n.string("Endpoint"), value: server.url ?? "", monospaced: true)
                 }
-                keyValue(L10n.string("Scope"), value: scopeLabel(server), monospaced: false)
+                DetailViewSupport.keyValueRow(L10n.string("Scope"), value: scopeLabel(server), monospaced: false)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    private func keyValue(_ label: String, value: String, monospaced: Bool) -> some View {
-        GridRow(alignment: .firstTextBaseline) {
-            Text(verbatim: label)
-                .font(AppTheme.body(13))
-                .foregroundStyle(AppTheme.muted)
-                .frame(width: 108, alignment: .leading)
-            Text(verbatim: value)
-                .font(monospaced ? AppTheme.mono(12) : AppTheme.body(13))
-                .foregroundStyle(AppTheme.foreground)
-                .textSelection(.enabled)
-                .lineLimit(3)
-                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -220,14 +205,6 @@ struct McpDetailView: View {
         case .http: "HTTP (streamable)"
         case .sse: "SSE"
         }
-    }
-
-    // MARK: Shared
-
-    private func sectionHeading(_ title: String) -> some View {
-        Text(verbatim: title)
-            .font(AppTheme.display(14, weight: .semibold))
-            .foregroundStyle(AppTheme.foreground)
     }
 
     // MARK: Empty state

@@ -107,7 +107,7 @@ struct SkillDetailView: View {
 
     private func coreSection(_ skill: SkillSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeading(
+            DetailViewSupport.sectionHeading(
                 L10n.string("Core Role"),
                 badge: srcBadge(skill)
             )
@@ -132,7 +132,7 @@ struct SkillDetailView: View {
 
     private func documentSection(_ skill: SkillSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeading(L10n.string("Skill Document"))
+            DetailViewSupport.sectionHeading(L10n.string("Skill Document"))
             MarkdownDocumentView(skill: skill)
                 .id(skill.path)
         }
@@ -142,7 +142,7 @@ struct SkillDetailView: View {
 
     private func agentsSection(_ skill: SkillSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeading(L10n.string("Associated Agents"))
+            DetailViewSupport.sectionHeading(L10n.string("Associated Agents"))
             let names = skill.agentDisplayNames(by: agentNamesByID)
             if names.isEmpty {
                 Text(verbatim: L10n.string("None"))
@@ -158,32 +158,17 @@ struct SkillDetailView: View {
 
     private func locationsSection(_ skill: SkillSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeading(L10n.string("Locations"))
+            DetailViewSupport.sectionHeading(L10n.string("Locations"))
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {
-                keyValue(L10n.string("Level"), value: scopeLabel(skill), monospaced: false)
-                keyValue(L10n.string("Root"), value: rootLabel(skill), monospaced: true)
-                keyValue(L10n.string("Installation Path"), value: skill.path, monospaced: true)
+                DetailViewSupport.keyValueRow(L10n.string("Level"), value: scopeLabel(skill), monospaced: false)
+                DetailViewSupport.keyValueRow(L10n.string("Root"), value: rootLabel(skill), monospaced: true)
+                DetailViewSupport.keyValueRow(L10n.string("Installation Path"), value: skill.path, monospaced: true)
                 if let target = skill.resolvedTarget {
-                    keyValue(L10n.string("Link Target"), value: target, monospaced: true)
+                    DetailViewSupport.keyValueRow(L10n.string("Link Target"), value: target, monospaced: true)
                 }
-                keyValue(L10n.string("Entry File"), value: skill.entryFilename, monospaced: true)
+                DetailViewSupport.keyValueRow(L10n.string("Entry File"), value: skill.entryFilename, monospaced: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    private func keyValue(_ label: String, value: String, monospaced: Bool) -> some View {
-        GridRow(alignment: .firstTextBaseline) {
-            Text(verbatim: label)
-                .font(AppTheme.body(13))
-                .foregroundStyle(AppTheme.muted)
-                .frame(width: 108, alignment: .leading)
-            Text(verbatim: value)
-                .font(monospaced ? AppTheme.mono(12) : AppTheme.body(13))
-                .foregroundStyle(AppTheme.foreground)
-                .textSelection(.enabled)
-                .lineLimit(3)
-                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -200,25 +185,6 @@ struct SkillDetailView: View {
             return skill.rootIDs.joined(separator: ", ")
         }
         return root.url.path
-    }
-
-    // MARK: Shared
-
-    private func sectionHeading(_ title: String, badge: Text? = nil) -> some View {
-        HStack(spacing: 8) {
-            Text(verbatim: title)
-                .font(AppTheme.display(14, weight: .semibold))
-                .foregroundStyle(AppTheme.foreground)
-            if let badge {
-                badge
-                    .font(AppTheme.body(10.5, weight: .medium))
-                    .foregroundStyle(AppTheme.muted)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 1)
-                    .background(AppTheme.surface, in: Capsule())
-                    .overlay(Capsule().stroke(AppTheme.borderSoft, lineWidth: 1))
-            }
-        }
     }
 
     // MARK: Empty state

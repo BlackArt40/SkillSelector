@@ -127,9 +127,9 @@ struct RulesDetailView: View {
     @ViewBuilder
     private func contentSection(_ file: RulesFileDescriptor) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeading(L10n.string("Rules Content"))
+            DetailViewSupport.sectionHeading(L10n.string("Rules Content"))
             if let actionError {
-                errorShell(title: L10n.string("Unable to Open Skill Document"), detail: actionError)
+                DetailViewSupport.errorShell(title: L10n.string("Unable to Open Skill Document"), detail: actionError)
             }
             switch contentState {
             case .loading:
@@ -163,14 +163,14 @@ struct RulesDetailView: View {
                             .stroke(AppTheme.borderSoft, lineWidth: 1)
                     }
             case .tooLarge:
-                messageShell(
+                DetailViewSupport.messageShell(
                     title: L10n.string("Document Too Large to Render"),
                     detail: L10n.string("Documents larger than 1 MiB can be opened in the default editor.")
                 )
                 .padding(20)
                 .background(AppTheme.surfaceWarm, in: RoundedRectangle(cornerRadius: 12))
             case .failed(let detail):
-                errorShell(title: L10n.string("Unable to Load Skill Document"), detail: detail)
+                DetailViewSupport.errorShell(title: L10n.string("Unable to Load Skill Document"), detail: detail)
                     .padding(20)
                     .background(AppTheme.surfaceWarm, in: RoundedRectangle(cornerRadius: 12))
             }
@@ -181,19 +181,19 @@ struct RulesDetailView: View {
 
     private func metadataSection(_ file: RulesFileDescriptor) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeading(L10n.string("Configuration"))
+            DetailViewSupport.sectionHeading(L10n.string("Configuration"))
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {
-                keyValue(L10n.string("Level"), value: scopeLabel(file), monospaced: false)
-                keyValue(
+                DetailViewSupport.keyValueRow(L10n.string("Level"), value: scopeLabel(file), monospaced: false)
+                DetailViewSupport.keyValueRow(
                     L10n.string("Agent"),
                     value: agentNames.isEmpty
                         ? L10n.string("None")
                         : agentNames.joined(separator: ", "),
                     monospaced: false
                 )
-                keyValue(L10n.string("Path"), value: file.path, monospaced: true)
+                DetailViewSupport.keyValueRow(L10n.string("Path"), value: file.path, monospaced: true)
                 if let fileSize = file.fileSize {
-                    keyValue(
+                    DetailViewSupport.keyValueRow(
                         L10n.string("Size"),
                         value: ByteCountFormatter.string(
                             fromByteCount: Int64(fileSize),
@@ -203,7 +203,7 @@ struct RulesDetailView: View {
                     )
                 }
                 if let date = file.modificationDate {
-                    keyValue(
+                    DetailViewSupport.keyValueRow(
                         L10n.string("Modified"),
                         value: date.formatted(date: .abbreviated, time: .shortened),
                         monospaced: false
@@ -211,21 +211,6 @@ struct RulesDetailView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    private func keyValue(_ label: String, value: String, monospaced: Bool) -> some View {
-        GridRow(alignment: .firstTextBaseline) {
-            Text(verbatim: label)
-                .font(AppTheme.body(13))
-                .foregroundStyle(AppTheme.muted)
-                .frame(width: 108, alignment: .leading)
-            Text(verbatim: value)
-                .font(monospaced ? AppTheme.mono(12) : AppTheme.body(13))
-                .foregroundStyle(AppTheme.foreground)
-                .textSelection(.enabled)
-                .lineLimit(3)
-                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -241,42 +226,12 @@ struct RulesDetailView: View {
         }
         if !counterparts.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                sectionHeading(L10n.string("Same-Name Rules Comparison"))
+                DetailViewSupport.sectionHeading(L10n.string("Same-Name Rules Comparison"))
                 ForEach(counterparts) { counterpart in
                     RuleFileDiffCard(file: file, counterpart: counterpart)
                 }
             }
         }
-    }
-
-    // MARK: Shared
-
-    private func sectionHeading(_ title: String) -> some View {
-        Text(verbatim: title)
-            .font(AppTheme.display(14, weight: .semibold))
-            .foregroundStyle(AppTheme.foreground)
-    }
-
-    private func messageShell(title: String, detail: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(verbatim: title)
-                .font(.callout.weight(.medium))
-            Text(verbatim: detail)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private func errorShell(title: String, detail: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Label(title, systemImage: "exclamationmark.triangle")
-                .foregroundStyle(.orange)
-            Text(verbatim: detail)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .textSelection(.enabled)
-        }
-        .accessibilityElement(children: .combine)
     }
 
     @MainActor

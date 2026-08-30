@@ -23,7 +23,7 @@ struct MarkdownDocumentView: View {
         VStack(alignment: .leading, spacing: 0) {
             cardHead
             if let actionErrorDetail {
-                errorShell(
+                DetailViewSupport.errorShell(
                     title: L10n.string("Unable to Open Skill Document"),
                     detail: actionErrorDetail
                 )
@@ -106,13 +106,13 @@ struct MarkdownDocumentView: View {
                 }
             }
         case .tooLarge:
-            messageShell(
+            DetailViewSupport.messageShell(
                 title: L10n.string("Document Too Large to Render"),
                 detail: L10n.string("Documents larger than 1 MiB can be opened in the default editor.")
             )
             .padding(20)
         case .failed(let detail):
-            errorShell(title: L10n.string("Unable to Load Skill Document"), detail: detail)
+            DetailViewSupport.errorShell(title: L10n.string("Unable to Load Skill Document"), detail: detail)
                 .padding(20)
         }
     }
@@ -209,28 +209,6 @@ struct MarkdownDocumentView: View {
         .buttonStyle(.borderless)
         .help(label)
         .accessibilityLabel(label)
-    }
-
-    private func messageShell(title: String, detail: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(verbatim: title)
-                .font(.callout.weight(.medium))
-            Text(verbatim: detail)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private func errorShell(title: String, detail: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Label(title, systemImage: "exclamationmark.triangle")
-                .foregroundStyle(.orange)
-            Text(verbatim: detail)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .textSelection(.enabled)
-        }
-        .accessibilityElement(children: .combine)
     }
 
     private func localizedDocumentError(_ error: Error) -> String {

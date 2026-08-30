@@ -173,7 +173,7 @@ struct CatalogDetailView: View {
     /// index refreshes.
     private func localSection(_ skill: CatalogSkill) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeading(L10n.string("Compare with Local"))
+            DetailViewSupport.sectionHeading(L10n.string("Compare with Local"))
             let matches = LocalInstallationMatcher.localInstallations(
                 of: skill,
                 in: model.snapshots
@@ -265,7 +265,7 @@ struct CatalogDetailView: View {
     @ViewBuilder
     private func contentSection(_ skill: CatalogSkill) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeading(L10n.string("Marketplace Document Section"))
+            DetailViewSupport.sectionHeading(L10n.string("Marketplace Document Section"))
             switch contentState {
             case .loading:
                 HStack(spacing: 8) {
@@ -298,7 +298,7 @@ struct CatalogDetailView: View {
                             .stroke(AppTheme.borderSoft, lineWidth: 1)
                     }
             case .failed(let failure):
-                errorShell(
+                DetailViewSupport.errorShell(
                     title: L10n.string("Marketplace Document Failed"),
                     detail: CatalogFailureMessage.text(for: failure)
                 )
@@ -312,14 +312,14 @@ struct CatalogDetailView: View {
 
     private func metadataSection(_ skill: CatalogSkill) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeading(L10n.string("Configuration"))
+            DetailViewSupport.sectionHeading(L10n.string("Configuration"))
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {
-                keyValue(
+                DetailViewSupport.keyValueRow(
                     L10n.string("Source"),
                     value: sourceNamesByID[skill.sourceID] ?? skill.sourceID,
                     monospaced: false
                 )
-                keyValue(L10n.string("Path"), value: skill.skillPath, monospaced: true)
+                DetailViewSupport.keyValueRow(L10n.string("Path"), value: skill.skillPath, monospaced: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -334,22 +334,22 @@ struct CatalogDetailView: View {
     private func repositorySection(_ skill: CatalogSkill) -> some View {
         if let repo = model.catalog.repoInfoBySourceID[skill.sourceID] {
             VStack(alignment: .leading, spacing: 12) {
-                sectionHeading(L10n.string("Repository"))
+                DetailViewSupport.sectionHeading(L10n.string("Repository"))
                 Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {
-                    keyValue(
+                    DetailViewSupport.keyValueRow(
                         L10n.string("Repository Author"),
                         value: repo.owner,
                         monospaced: false
                     )
-                    keyValue(L10n.string("Stars"), value: repo.stars.formatted(), monospaced: true)
-                    keyValue(L10n.string("Forks"), value: repo.forks.formatted(), monospaced: true)
-                    keyValue(
+                    DetailViewSupport.keyValueRow(L10n.string("Stars"), value: repo.stars.formatted(), monospaced: true)
+                    DetailViewSupport.keyValueRow(L10n.string("Forks"), value: repo.forks.formatted(), monospaced: true)
+                    DetailViewSupport.keyValueRow(
                         L10n.string("Last Updated"),
                         value: repo.pushedAt?.formatted(date: .abbreviated, time: .omitted)
                             ?? "—",
                         monospaced: false
                     )
-                    keyValue(
+                    DetailViewSupport.keyValueRow(
                         L10n.string("License"),
                         value: repo.license ?? "—",
                         monospaced: false
@@ -358,39 +358,6 @@ struct CatalogDetailView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-    }
-
-    private func keyValue(_ label: String, value: String, monospaced: Bool) -> some View {
-        GridRow(alignment: .firstTextBaseline) {
-            Text(verbatim: label)
-                .font(AppTheme.body(13))
-                .foregroundStyle(AppTheme.muted)
-                .frame(width: 108, alignment: .leading)
-            Text(verbatim: value)
-                .font(monospaced ? AppTheme.mono(12) : AppTheme.body(13))
-                .foregroundStyle(AppTheme.foreground)
-                .textSelection(.enabled)
-                .lineLimit(3)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    private func sectionHeading(_ title: String) -> some View {
-        Text(verbatim: title)
-            .font(AppTheme.display(14, weight: .semibold))
-            .foregroundStyle(AppTheme.foreground)
-    }
-
-    private func errorShell(title: String, detail: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Label(title, systemImage: "exclamationmark.triangle")
-                .foregroundStyle(.orange)
-            Text(verbatim: detail)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .textSelection(.enabled)
-        }
-        .accessibilityElement(children: .combine)
     }
 
     @MainActor
