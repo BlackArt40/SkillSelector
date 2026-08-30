@@ -26,6 +26,10 @@ struct DuplicateGroupsView: View {
     /// Loads the read-only comparison between two members (documents +
     /// stat trees), for the compare sheet.
     var onLoadComparison: ((SkillSnapshot, SkillSnapshot) async throws -> SkillComparison)? = nil
+    /// Loads per-member body line differences within a near-duplicate
+    /// group (relative to its highest-similarity baseline), for the
+    /// "+N −M lines" badges.
+    var onLoadNearDiffs: ((NearDuplicateSkillGroup) async -> [String: LineDiffSummary])? = nil
     let onSelect: (String) -> Void
 
     @State private var mode: Mode = .exact
@@ -192,6 +196,7 @@ struct DuplicateGroupsView: View {
                                 onCompare: {
                                     presentCompare(group.members.map(\.snapshot))
                                 },
+                                onLoadDiffs: onLoadNearDiffs,
                                 onSelect: onSelect
                             )
                         }
@@ -339,7 +344,13 @@ private struct NearDuplicateGroupSection: View {
     var onOpenInEditor: ((SkillSnapshot) -> Void)?
     var onIgnoreGroup: ((NearDuplicateSkillGroup) -> Void)?
     var onCompare: () -> Void
+    /// Loads per-member body line differences relative to the group's
+    /// highest-similarity baseline; rendered as "+N −M lines" badges.
+    var onLoadDiffs: ((NearDuplicateSkillGroup) async -> [String: LineDiffSummary])?
     let onSelect: (String) -> Void
+
+    @State private var diffs: [String: LineDiffSummary] = [:]
+    @State private var hasLoadedDiffs = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -388,31 +399,55 @@ private struct NearDuplicateGroupSection: View {
                         onOpenInEditor: onOpenInEditor
                     )
                     .overlay(alignment: .topTrailing) {
-                        Text(verbatim: "≈\(member.similarityPercent)%")
-                            .font(AppTheme.body(10.5, weight: .medium))
-                            .foregroundStyle(
-                                member.similarityPercent >= 90
-                                    ? AppTheme.accentActive
-                                    : AppTheme.muted
-                            )
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 1)
-                            .background(
-                                member.similarityPercent >= 90
-                                    ? AppTheme.accentTint
-                                    : AppTheme.surface,
-                                in: Capsule()
-                            )
-                            .overlay {
-                                Capsule().stroke(AppTheme.borderSoft, lineWidth: 1)
-                            }
-                            .padding(.top, 8)
-                            .padding(.trailing, 8)
-                            .help(L10n.string("Similarity Estimate Help"))
+                        memberBadges(member)
                     }
                 }
             }
         }
+        .task(id: group.fingerprint) {
+            guard let onLoadDiffs, !hasLoadedDiffs else { return }
+            diffs = await onLoadDiffs(group)
+            hasLoadedDiffs = true
+        }
+    }
+
+    @ViewBuilder
+    private func memberBadges(_ member: NearDuplicateMember) -> some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            Text(verbatim: "≈\(member.similarityPercent)%")
+                .font(AppTheme.body(10.5, weight: .medium))
+                .foregroundStyle(
+                    member.similarityPercent >= 90
+                        ? AppTheme.accentActive
+                        : AppTheme.muted
+                )
+                .padding(.horizontal, 7)
+                .padding(.vertical, 1)
+                .background(
+                    member.similarityPercent >= 90
+                        ? AppTheme.accentTint
+                        : AppTheme.surface,
+                    in: Capsule()
+                )
+                .overlay {
+                    Capsule().stroke(AppTheme.borderSoft, lineWidth: 1)
+                }
+                .help(L10n.string("Similarity Estimate Help"))
+            if let summary = diffs[member.snapshot.path], !summary.isEmpty {
+                Text(verbatim: "+\(summary.added) −\(summary.removed)")
+                    .font(AppTheme.body(10.5, weight: .medium))
+                    .foregroundStyle(AppTheme.muted)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 1)
+                    .background(AppTheme.surface, in: Capsule())
+                    .overlay {
+                        Capsule().stroke(AppTheme.borderSoft, lineWidth: 1)
+                    }
+                    .help(L10n.string("Diff Lines Help"))
+            }
+        }
+        .padding(.top, 8)
+        .padding(.trailing, 8)
     }
 
     private var groupName: String {

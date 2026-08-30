@@ -108,6 +108,9 @@ struct RootView: View {
                         onLoadComparison: { left, right in
                             try await model.compareSnapshots(left, right)
                         },
+                        onLoadNearDiffs: { group in
+                            await model.nearBodyDiffs(in: group)
+                        },
                         onSelect: { path in selectSkill(path) }
                     )
                     .frame(width: listColumnWidth)

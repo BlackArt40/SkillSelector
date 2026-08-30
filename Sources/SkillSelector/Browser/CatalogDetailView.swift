@@ -23,6 +23,9 @@ struct CatalogDetailView: View {
 
     @State private var contentState: ContentState = .loading
     @State private var copied: FieldCopy?
+    /// Remote SKILL.md body (frontmatter stripped), kept alongside the
+    /// rendered state for the 「对照本地」version-difference comparison.
+    @State private var remoteBody: String?
 
     var body: some View {
         if let skill {
@@ -179,7 +182,7 @@ struct CatalogDetailView: View {
             } else {
                 VStack(spacing: 10) {
                     ForEach(matches) { match in
-                        localMatchCard(match)
+                        localMatchCard(match, remoteBody: remoteBody)
                     }
                 }
             }
@@ -190,7 +193,7 @@ struct CatalogDetailView: View {
         }
     }
 
-    private func localMatchCard(_ match: SkillSnapshot) -> some View {
+    private func localMatchCard(_ match: SkillSnapshot, remoteBody: String?) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "checkmark.circle.fill")
@@ -218,6 +221,9 @@ struct CatalogDetailView: View {
                 .lineLimit(2)
                 .truncationMode(.middle)
                 .textSelection(.enabled)
+            if let remoteBody, !remoteBody.isEmpty {
+                LocalMatchVersionRow(match: match, remoteBody: remoteBody)
+            }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -362,6 +368,7 @@ struct CatalogDetailView: View {
             let source = try await model.catalog.loadDocument(skill)
             try Task.checkCancellation()
             let body = MarkdownRenderer.extractBody(source)
+            remoteBody = body.joined(separator: "\n")
             if let attributed = MarkdownRenderer.buildAttributedString(from: body) {
                 contentState = .rendered(attributed)
             } else {
@@ -401,5 +408,66 @@ struct CatalogDetailView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// One line inside an installed-local card: compares the local SKILL.md
+/// body against the remote marketplace body and reports "identical" or a
+/// "+N −M lines" difference. Pure read-only — no writes, no commands.
+private struct LocalMatchVersionRow: View {
+    @Environment(AppModel.self) private var model
+    let match: SkillSnapshot
+    let remoteBody: String
+
+    private enum ComparisonState {
+        case loading
+        case identical
+        case differs(LineDiffSummary)
+        case unavailable
+    }
+
+    @State private var comparisonState: ComparisonState = .loading
+
+    var body: some View {
+        HStack(spacing: 6) {
+            switch comparisonState {
+            case .loading:
+                ProgressView()
+                    .controlSize(.mini)
+                Text(verbatim: L10n.string("Comparing With Marketplace"))
+                    .font(AppTheme.body(11.5))
+                    .foregroundStyle(AppTheme.muted)
+            case .identical:
+                Image(systemName: "checkmark.circle")
+                    .font(.system(size: 11))
+                    .foregroundStyle(AppTheme.success)
+                Text(verbatim: L10n.string("Matches Marketplace Version"))
+                    .font(AppTheme.body(11.5, weight: .medium))
+                    .foregroundStyle(AppTheme.success)
+            case .differs(let summary):
+                Image(systemName: "arrow.left.arrow.right")
+                    .font(.system(size: 11))
+                    .foregroundStyle(AppTheme.warn)
+                Text(verbatim: String.localizedStringWithFormat(
+                    L10n.string("Marketplace Version Diff Format"),
+                    summary.added, summary.removed
+                ))
+                .font(AppTheme.body(11.5, weight: .medium))
+                .foregroundStyle(AppTheme.warn)
+            case .unavailable:
+                EmptyView()
+            }
+        }
+        .help(L10n.string("Marketplace Version Diff Help"))
+        .task(id: match.path) {
+            guard let summary = await model.marketVsLocalBodyDiff(
+                marketBody: remoteBody,
+                local: match
+            ) else {
+                comparisonState = .unavailable
+                return
+            }
+            comparisonState = summary.isEmpty ? .identical : .differs(summary)
+        }
     }
 }

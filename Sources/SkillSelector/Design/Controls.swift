@@ -336,6 +336,13 @@ struct ListSearchBar: View {
                 .font(AppTheme.body(13))
                 .focused($searchFocused)
                 .accessibilityLabel(L10n.string(placeholderKey))
+                // Escape clears the term in every list's search bar (when
+                // the field is focused), matching NSSearchField behavior.
+                .onKeyPress(.escape) {
+                    guard !text.isEmpty else { return .ignored }
+                    text = ""
+                    return .handled
+                }
             if !text.isEmpty {
                 Button {
                     text = ""

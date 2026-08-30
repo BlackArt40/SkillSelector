@@ -18,7 +18,16 @@ struct RulesListView: View {
     private var displayedFiles: [RulesFileDescriptor] {
         let term = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !term.isEmpty else { return files }
-        return files.filter { $0.path.localizedCaseInsensitiveContains(term) }
+        return files
+            .filter { $0.path.localizedCaseInsensitiveContains(term) }
+            // Filename hits float above path-only hits (stable), matching
+            // the other list columns' name-first search.
+            .sorted { lhs, rhs in
+                let lhsHit = URL(fileURLWithPath: lhs.path).lastPathComponent.localizedCaseInsensitiveContains(term)
+                let rhsHit = URL(fileURLWithPath: rhs.path).lastPathComponent.localizedCaseInsensitiveContains(term)
+                if lhsHit != rhsHit { return lhsHit }
+                return false
+            }
     }
 
     var body: some View {

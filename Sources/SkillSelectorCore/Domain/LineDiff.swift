@@ -36,10 +36,10 @@ public struct LineDiff: Hashable, Sendable {
     }
 
     /// LCS-based diff. Common prefixes and suffixes are trimmed first (the
-    /// typical near-duplicate differs in one region), and the remaining
-    /// middle is diffed with a classic DP. Pathologically large middles
-    /// degrade to "everything replaced" rather than exhausting memory.
-    public static func compute(_ left: [String], _ right: [String]) -> LineDiff {
+/// typical near-duplicate differs in one region), and the remaining
+/// middle is diffed with a classic DP. Pathologically large middles
+/// degrade to "everything replaced" rather than exhausting memory.
+public static func compute(_ left: [String], _ right: [String]) -> LineDiff {
         var rows: [Row] = []
         var leftIndex = 0
         var rightIndex = 0
@@ -119,5 +119,19 @@ public struct LineDiff: Hashable, Sendable {
             j += 1
         }
         return rows
+    }
+}
+
+/// Compact added/removed counts of a line diff — what the near-duplicates
+/// list renders per member as "+N −M lines" against the group baseline.
+public struct LineDiffSummary: Hashable, Sendable {
+    public let added: Int
+    public let removed: Int
+
+    public var isEmpty: Bool { added == 0 && removed == 0 }
+
+    public init(diff: LineDiff) {
+        self.added = diff.addedCount
+        self.removed = diff.removedCount
     }
 }

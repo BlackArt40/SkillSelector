@@ -58,4 +58,24 @@ final class LineDiffTests: XCTestCase {
         XCTAssertEqual(diff.removedCount, 3000)
         XCTAssertTrue(diff.rows.allSatisfy { $0.kind != .same })
     }
+
+    /// `LineDiffSummary` counts the added/removed lines a near-duplicate
+    /// member drifted by, relative to its group baseline.
+    func testSummaryCountsAddedAndRemovedLines() {
+        let diff = LineDiff.compute(
+            ["head", "old", "tail", "gone"],
+            ["head", "new", "tail", "extra"]
+        )
+        let summary = LineDiffSummary(diff: diff)
+        XCTAssertEqual(summary.added, 2)
+        XCTAssertEqual(summary.removed, 2)
+        XCTAssertFalse(summary.isEmpty)
+    }
+
+    func testSummaryIsEmptyForIdenticalBodies() {
+        let summary = LineDiffSummary(diff: LineDiff.compute(["a", "b"], ["a", "b"]))
+        XCTAssertTrue(summary.isEmpty)
+        XCTAssertEqual(summary.added, 0)
+        XCTAssertEqual(summary.removed, 0)
+    }
 }

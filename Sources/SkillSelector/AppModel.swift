@@ -772,6 +772,88 @@ final class AppModel {
         }.value
     }
 
+    /// Per-member body line differences within a near-duplicate group,
+    /// keyed by member path, relative to the group's highest-similarity
+    /// baseline member. Lightweight — body read + line diff only, no stat
+    /// tree — and drives the "+N −M lines" badges in the near-duplicates
+    /// list. Runs off the main actor while the document leases stay held
+    /// here, same as `compareSnapshots`.
+    func nearBodyDiffs(
+        in group: NearDuplicateSkillGroup
+    ) async -> [String: LineDiffSummary] {
+        guard let baseline = group.members.max(by: { $0.similarityPercent < $1.similarityPercent }) else {
+            return [:]
+        }
+        var summaries: [String: LineDiffSummary] = [:]
+        for member in group.members where member.snapshot.path != baseline.snapshot.path {
+            if let summary = try? await bodyDiffSummary(baseline.snapshot, member.snapshot) {
+                summaries[member.snapshot.path] = summary
+            }
+        }
+        return summaries
+    }
+
+    private func bodyDiffSummary(
+        _ left: SkillSnapshot,
+        _ right: SkillSnapshot
+    ) async throws -> LineDiffSummary {
+        let leftAccess = try documentManager.resolveDocumentAccess(
+            for: left, authorizedRoots: authorizedRoots
+        )
+        let rightAccess = try documentManager.resolveDocumentAccess(
+            for: right, authorizedRoots: authorizedRoots
+        )
+        defer {
+            (leftAccess.leases + rightAccess.leases).forEach { $0.close() }
+        }
+        let leftRequest = leftAccess.request
+        let rightRequest = rightAccess.request
+        return try await Task.detached(priority: .utility) {
+            let reader = SkillDocumentReader()
+            let leftBody = FrontmatterParser.bodyLines(from: try reader.read(leftRequest).source)
+                .joined(separator: "\n")
+            let rightBody = FrontmatterParser.bodyLines(from: try reader.read(rightRequest).source)
+                .joined(separator: "\n")
+            let diff = LineDiff.compute(
+                leftBody.components(separatedBy: "\n"),
+                rightBody.components(separatedBy: "\n")
+            )
+            return LineDiffSummary(diff: diff)
+        }.value
+    }
+
+    /// Line difference between a local installation's SKILL.md body and a
+    /// remote marketplace body (already fetched), for the 「对照本地」section:
+    /// "+N −M" means the marketplace body adds N lines and drops M that the
+    /// local body has. Read-only; a read failure yields nil and the badge
+    /// stays hidden.
+    func marketVsLocalBodyDiff(
+        marketBody: String,
+        local: SkillSnapshot
+    ) async -> LineDiffSummary? {
+        do {
+            let access = try documentManager.resolveDocumentAccess(
+                for: local, authorizedRoots: authorizedRoots
+            )
+            defer {
+                access.leases.forEach { $0.close() }
+            }
+            let request = access.request
+            return try await Task.detached(priority: .utility) {
+                let reader = SkillDocumentReader()
+                let localBody = FrontmatterParser.bodyLines(from: try reader.read(request).source)
+                    .joined(separator: "\n")
+                let diff = LineDiff.compute(
+                    localBody.components(separatedBy: "\n"),
+                    marketBody.components(separatedBy: "\n")
+                )
+                return LineDiffSummary(diff: diff)
+            }.value
+        } catch {
+            return nil
+        }
+    }
+
     private static let autoScanHomeDefaultsKey = "SkillSelector.autoScanHome"
     private static let manuallyEnabledAgentsDefaultsKey = "SkillSelector.manuallyEnabledAgents"
     private static let rootNameDefaultsKeyPrefix = "SkillSelector.rootName."

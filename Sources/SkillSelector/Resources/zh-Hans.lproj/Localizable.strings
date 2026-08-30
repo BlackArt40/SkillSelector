@@ -149,6 +149,7 @@
 "Near Members Count" = "%d 份近似副本";
 "Similarity Range" = "相似度约 %d%%–%d%%";
 "Similarity Estimate Help" = "相似度为 SimHash 估算值，仅供参考。";
+"Diff Lines Help" = "相对组内最相似成员的正文行数差异（+新增 −删除）。";
 "Ignore Near Duplicate Group" = "忽略此近似组";
 
 /* Copy comparison */
@@ -293,6 +294,10 @@
 "No Associated Agent" = "未关联 Agent";
 "Not Installed Locally" = "本地未安装";
 "Not Installed Locally Hint" = "当前授权目录中未检测到同名 Skill；可复制上面的安装命令，在终端完成安装。";
+"Comparing With Marketplace" = "正在与市场版本对比…";
+"Matches Marketplace Version" = "与市场版本内容一致";
+"Marketplace Version Diff Format" = "正文与市场版本有差异（+%d −%d 行）";
+"Marketplace Version Diff Help" = "本地与市场版本的 SKILL.md 正文行差异（+市场多 −市场少）。";
 "Open in GitHub" = "在 GitHub 打开";
 "Copy Link" = "复制链接";
 "Copied" = "已复制";

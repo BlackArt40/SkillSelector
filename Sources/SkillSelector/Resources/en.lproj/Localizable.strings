@@ -149,6 +149,7 @@
 "Near Members Count" = "%d near copies";
 "Similarity Range" = "≈%d%%–%d%% similar";
 "Similarity Estimate Help" = "Similarity is a SimHash estimate, for guidance only.";
+"Diff Lines Help" = "Body line changes vs. the group's most-similar member (+added −removed).";
 "Ignore Near Duplicate Group" = "Ignore this near-duplicate group";
 
 /* Copy comparison */
@@ -292,6 +293,10 @@
 "No Associated Agent" = "No Associated Agent";
 "Not Installed Locally" = "Not Installed Locally";
 "Not Installed Locally Hint" = "No skill with this name was found in your authorized directories. Copy the install command above and run it in a terminal to install.";
+"Comparing With Marketplace" = "Comparing with the marketplace version…";
+"Matches Marketplace Version" = "Matches the marketplace version";
+"Marketplace Version Diff Format" = "Body differs from the marketplace version (+%d −%d lines)";
+"Marketplace Version Diff Help" = "SKILL.md body line differences vs. the marketplace version (+added −removed from the local side).";
 "Open in GitHub" = "Open on GitHub";
 "Copy Link" = "Copy Link";
 "Copied" = "Copied";
