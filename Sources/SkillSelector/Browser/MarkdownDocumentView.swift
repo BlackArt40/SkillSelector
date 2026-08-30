@@ -6,7 +6,7 @@ import SwiftUI
 struct MarkdownDocumentView: View {
     private enum LoadState {
         case loading
-        case rendered(AttributedString)
+        case rendered(String)
         case raw(String)
         case tooLarge
         case failed(String)
@@ -81,20 +81,16 @@ struct MarkdownDocumentView: View {
                     .foregroundStyle(AppTheme.muted)
             }
             .padding(20)
-        case .rendered(let attributed):
+        case .rendered(let text):
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     if let frontmatter {
                         frontmatterBlock(frontmatter)
                     }
-                    Text(attributed)
-                        .lineSpacing(4)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
+                    MarkdownBodyView(text: text)
                         .padding(20)
                 }
             }
-            .markdownLinkPolicy()
         case .raw(let source):
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
@@ -164,11 +160,10 @@ struct MarkdownDocumentView: View {
             try Task.checkCancellation()
             let source = document.source
             loadedSource = source
-            let body = MarkdownRenderer.extractBody(source)
-            let attributed = MarkdownRenderer.buildAttributedString(from: body)
+            let text = MarkdownBody.hardenedText(from: FrontmatterParser.bodyLines(from: source))
             try Task.checkCancellation()
-            if let attributed {
-                state = .rendered(attributed)
+            if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                state = .rendered(text)
             } else {
                 state = .raw(source)
             }

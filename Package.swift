@@ -16,13 +16,14 @@ let testTargets: [Target] = FileManager.default.fileExists(atPath: "Tests")
 let package = Package(
     name: "SkillSelector",
     defaultLocalization: "en",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS(.v15)],
     products: [
         .library(name: "SkillSelectorCore", targets: ["SkillSelectorCore"]),
         .executable(name: "SkillSelector", targets: ["SkillSelector"]),
     ],
     dependencies: [
         .package(url: "https://github.com/jpsim/Yams.git", from: "6.0.0"),
+        .package(url: "https://github.com/gonzalezreal/textual", from: "0.5.0"),
     ],
     targets: [
         .target(
@@ -31,7 +32,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "SkillSelector",
-            dependencies: ["SkillSelectorCore"],
+            dependencies: [
+                "SkillSelectorCore",
+                .product(name: "Textual", package: "textual"),
+            ],
             resources: [
                 .process("Resources"),
                 // SVG bundle: agent brand marks, loaded as template images.

@@ -55,7 +55,7 @@ Roo Code 属于旧版兼容，只在检测到已有 Skill 或在设置里手动�
 
 ## 安装
 
-需要 macOS 14 Sonoma 或更高，Universal 2（Apple Silicon 和 Intel）。
+需要 macOS 15 Sequoia 或更高，Universal 2（Apple Silicon 和 Intel）。
 
 1. 从 [GitHub Releases](https://github.com/BlackArt40/SkillSelector/releases) 下载 `.dmg` 和同名的 `.sha256`
 2. 校验完整性（两个文件放同一目录）：

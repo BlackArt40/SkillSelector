@@ -55,7 +55,7 @@ The local features run offline. No telemetry, no crash reporter, no file watcher
 
 ## Install
 
-Requires macOS 14 Sonoma or later; Universal 2 (Apple Silicon and Intel).
+Requires macOS 15 Sequoia or later; Universal 2 (Apple Silicon and Intel).
 
 1. Download the `.dmg` and its `.sha256` from [GitHub Releases](https://github.com/BlackArt40/SkillSelector/releases)
 2. Verify integrity (keep both files in the same directory):

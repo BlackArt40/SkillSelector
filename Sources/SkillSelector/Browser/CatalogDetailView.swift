@@ -16,7 +16,7 @@ struct CatalogDetailView: View {
 
     private enum ContentState {
         case loading
-        case rendered(AttributedString)
+        case rendered(String)
         case raw(String)
         case failed(CatalogLoadFailure)
     }
@@ -276,18 +276,14 @@ struct CatalogDetailView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(20)
                 .background(AppTheme.surfaceWarm, in: RoundedRectangle(cornerRadius: 12))
-            case .rendered(let attributed):
-                Text(attributed)
-                    .lineSpacing(4)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .textSelection(.enabled)
+            case .rendered(let text):
+                MarkdownBodyView(text: text)
                     .padding(20)
                     .background(AppTheme.surfaceWarm, in: RoundedRectangle(cornerRadius: 12))
                     .overlay {
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(AppTheme.borderSoft, lineWidth: 1)
                     }
-                    .markdownLinkPolicy()
             case .raw(let source):
                 Text(verbatim: source)
                     .font(AppTheme.mono(12))
@@ -367,10 +363,11 @@ struct CatalogDetailView: View {
         do {
             let source = try await model.catalog.loadDocument(skill)
             try Task.checkCancellation()
-            let body = MarkdownRenderer.extractBody(source)
+            let body = FrontmatterParser.bodyLines(from: source)
             remoteBody = body.joined(separator: "\n")
-            if let attributed = MarkdownRenderer.buildAttributedString(from: body) {
-                contentState = .rendered(attributed)
+            let text = MarkdownBody.hardenedText(from: body)
+            if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                contentState = .rendered(text)
             } else {
                 contentState = .raw(source)
             }
