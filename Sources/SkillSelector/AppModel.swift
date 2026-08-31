@@ -266,11 +266,18 @@ final class AppModel {
         }
         await waitForActiveRefresh()
         do {
-            // The home root is unique: the auto-scan already authorizes the
+            // The home root is unique: an auto-scan already authorized the
             // user's home directory, and scanning it covers every declared
-            // ~/.../skills folder. Importing another directory as .home would
-            // create a second, empty "Home Directory" entry.
-            if kind == .home, persistedHomeRoot != nil {
+            // ~/.../skills folder. While that root is *healthy*, a second
+            // `.home` import is refused — it would create a duplicate
+            // "Home Directory" entry. But an *unhealthy* home root (the
+            // re-authorization case: the directory moved) must fall through
+            // to `save`, which merges by path and replaces the stale
+            // bookmark data — otherwise the user's re-pick is discarded and
+            // the directory stays broken.
+            if kind == .home,
+               let existing = persistedHomeRoot,
+               !unhealthyRootIDs.contains(existing.id) {
                 try reloadAuthorizedRoots()
                 await refresh()
                 return

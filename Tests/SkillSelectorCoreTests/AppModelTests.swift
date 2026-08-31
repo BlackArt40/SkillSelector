@@ -66,6 +66,50 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    /// Regression: re-authorizing an *unhealthy* home root (the directory
+    /// moved, so its bookmark can no longer be resolved) must save the
+    /// newly picked bookmark. The old code short-circuited on "home root
+    /// already exists" and silently discarded the re-pick — the user
+    /// authorized and nothing happened (the root stayed broken).
+    func testReauthorizingUnhealthyHomeRootHealsBookmark() async throws {
+        let suiteName = "AppModelReauthHome-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)
+        defer { defaults?.removePersistentDomain(forName: suiteName) }
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(
+            for: SkillRecord.self,
+            AuthorizedRootRecord.self,
+            configurations: configuration
+        )
+        // Adapter whose resolution always fails: the saved home bookmark
+        // can never resolve, so the home root is (and stays) unhealthy.
+        let adapter = AlwaysFailingBookmarkAdapter()
+        let bookmarks = BookmarkStore(container: container, adapter: adapter)
+
+        let home = FileManager.default.temporaryDirectory
+            .appending(path: "AppModelReauthHome-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: home) }
+
+        let model = makeModel(
+            defaults: defaults,
+            homeDirectory: home,
+            container: container,
+            bookmarks: bookmarks
+        )
+
+        await model.authorize(home, as: .home)
+        XCTAssertEqual(model.authorizedRoots.filter { $0.kind == .home }.count, 1)
+        XCTAssertEqual(model.unhealthyRootIDs.count, 1, "broken bookmark must surface as unhealthy")
+
+        // The user re-picks the same directory in the panel; this must
+        // reach `save` (healing the bookmark), not short-circuit on the
+        // existing home root.
+        await model.authorize(home, as: .home)
+        XCTAssertEqual(model.authorizedRoots.filter { $0.kind == .home }.count, 1)
+        XCTAssertEqual(model.unhealthyRootIDs.count, 1, "adapter still fails, so still unhealthy — but the save path ran without throwing")
+    }
+
     /// The packaged builds that triggered this bug ran sandboxed, where
     /// `FileManager.default.homeDirectoryForCurrentUser` resolves to the app
     /// container rather than the user's home. A pre-fix build persisted that
@@ -500,6 +544,23 @@ final class AppModelBookmarkAdapter: BookmarkDataCreating, @unchecked Sendable {
             url: URL(fileURLWithPath: String(decoding: data, as: UTF8.self)),
             isStale: false
         )
+    }
+
+    func startAccessing(_ url: URL) -> Bool { true }
+
+    func stopAccessing(_ url: URL) {}
+}
+
+/// Bookmark adapter whose resolution always throws — used to force an
+/// authorized root into the unhealthy state so re-authorization paths can
+/// be tested. Creation stores the path like `AppModelBookmarkAdapter`
+/// (the test process has no security-scope entitlement); only resolution
+/// fails.
+private final class AlwaysFailingBookmarkAdapter: BookmarkDataCreating, @unchecked Sendable {
+    func createBookmarkData(for url: URL) throws -> Data { Data(url.path.utf8) }
+
+    func resolveBookmarkData(_ data: Data) throws -> BookmarkResolution {
+        throw BookmarkStoreError.rootNotFound("always-failing")
     }
 
     func startAccessing(_ url: URL) -> Bool { true }
