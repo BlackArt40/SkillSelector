@@ -338,11 +338,13 @@ struct MarkdownDocumentView: View {
     }
 
 
-    /// The translated body shown side by side with the original
-    /// (bilingual): the translation is primary on top, the source text
-    /// below, each rendered through the same markdown pipeline so
-    /// headings, lists, inline code and fenced code blocks keep their
-    /// structure in both languages.
+    /// The translated body shown with the original (bilingual): the
+    /// translation is primary on top (rendered through the markdown
+    /// pipeline), the source text below. The original renders through
+    /// `Text(AttributedString(markdown:))` — a second StructuredText
+    /// instance nested with the translated one collapsed to zero height in
+    /// some builds, and the source's job here is reference reading. Falls
+    /// back to the raw string if the source isn't valid markdown.
     @ViewBuilder
     private func translatedBodyView(_ original: String) -> some View {
         Group {
@@ -354,7 +356,7 @@ struct MarkdownDocumentView: View {
                         .fill(AppTheme.borderSoft)
                         .frame(height: 1)
                     bilingualLanguageTag(L10n.string("English"))
-                    MarkdownBodyView(text: original)
+                    originalTextView(original)
                 }
             } else if isTranslating {
                 HStack(spacing: 8) {
@@ -369,6 +371,30 @@ struct MarkdownDocumentView: View {
             }
         }
         .padding(20)
+    }
+
+    /// The English source pane: lightweight `AttributedString` markdown
+    /// (Apple's parser — independent of Textual, so it coexists with the
+    /// translated StructuredText pane), falling back to the plain string.
+    @ViewBuilder
+    private func originalTextView(_ original: String) -> some View {
+        if let attributed = try? AttributedString(
+            markdown: original,
+            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        ) {
+            Text(attributed)
+                .font(AppTheme.body(13))
+                .foregroundStyle(AppTheme.foregroundSecondary)
+                .lineSpacing(4)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+        } else {
+            Text(verbatim: original)
+                .font(AppTheme.mono(12))
+                .foregroundStyle(AppTheme.foregroundSecondary)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     /// Small muted language label above each bilingual pane
