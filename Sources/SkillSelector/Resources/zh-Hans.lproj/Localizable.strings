@@ -353,3 +353,4 @@
 "Translate Description" = "翻译简介";
 "Show Original" = "显示原文";
 "Translating" = "翻译中…";
+"Description Translation Timeout" = "翻译超时，已显示原文。请检查系统设置 > 通用 > 语言与地区 中是否已下载翻译语言。";

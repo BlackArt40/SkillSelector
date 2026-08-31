@@ -351,3 +351,4 @@
 "Translate Description" = "Translate Description";
 "Show Original" = "Show Original";
 "Translating" = "Translating…";
+"Description Translation Timeout" = "Translation timed out — showing the original. Check that translation languages are downloaded in System Settings > General > Language & Region.";

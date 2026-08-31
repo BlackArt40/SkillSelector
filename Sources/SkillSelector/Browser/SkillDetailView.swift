@@ -22,12 +22,24 @@ struct SkillDetailView: View {
 
     /// `true` shows the translated description instead of the original.
     @State private var isDescriptionTranslated = false
-    /// Drives `.translationTask` — set to kick off a translation.
-    @State private var descriptionTranslationRequest: TranslationSession.Configuration?
+    /// Translation session configuration. Kept non-nil with an explicit
+    /// en → zh-Hans pairing so `prepareTranslation()` can preload the
+    /// models on warm-up and `translate()` never has to auto-detect the
+    /// source language (auto-detection is a common failure/stall path).
+    /// Call `invalidate()` to re-run the task on the *same* session.
+    @State private var translationConfiguration = TranslationSession.Configuration(
+        source: Locale.Language(identifier: "en"),
+        target: Locale.Language(identifier: "zh-Hans")
+    )
+    /// Text queued for translation; nil means "warm-up only, nothing to do".
+    @State private var pendingDescription: String?
     /// Cached translation of the current description text.
     @State private var translatedDescription: String?
     /// True while a description translation request is in flight.
     @State private var isDescriptionTranslating = false
+    /// Last translation failure, shown under the description so a failed
+    /// or stalled translation is never silent.
+    @State private var descriptionTranslationError: String?
 
     var body: some View {
         Group {
@@ -54,82 +66,75 @@ struct SkillDetailView: View {
                     .background(AppTheme.background)
             }
         }
-        .translationTask(descriptionTranslationRequest) { session in
+        .translationTask(translationConfiguration) { session in
             // The @MainActor parameter annotation is required under Swift 6
             // (the translationTask closure itself is nonisolated; the
             // session is main-actor-isolated). Inline is the canonical
             // Translation framework usage.
             //
-            // The task runs once when the view appears even without a
-            // request — bail out unless the user actually tapped 翻译简介,
-            // otherwise every selection would kick off a hidden translation.
-            guard descriptionTranslationRequest != nil else {
-                isDescriptionTranslating = false
-                return
-            }
-            guard let skill else {
-                isDescriptionTranslating = false
-                return
-            }
-            let text = descriptionText(skill)
-            // Shared cache on AppModel: translations survive selection
-            // changes, so revisiting a skill is instant.
-            if let cached = model.descriptionTranslations[text] {
-                translatedDescription = cached
-                isDescriptionTranslated = true
-                isDescriptionTranslating = false
-                return
-            }
-            // Watchdog: never leave the user on an eternal spinner. If the
-            // system translation stalls (long descriptions are the usual
-            // trigger), fall back to the original text after 30 seconds.
-            let watchdog = Task { @MainActor in
-                try? await Task.sleep(for: .seconds(30))
-                if isDescriptionTranslating {
+            // One task for both jobs so warm-up and translation share the
+            // same session (and its loaded language models):
+            //  • view appearance (no pending text) → prepareTranslation()
+            //    preloads the models; a no-op once they're installed;
+            //  • user tap (pending text set + configuration invalidated)
+            //    → translate the description here, on the same session.
+            if let text = pendingDescription {
+                pendingDescription = nil
+                isDescriptionTranslating = true
+                descriptionTranslationError = nil
+                // Shared cache on AppModel: translations survive selection
+                // changes, so revisiting a skill is instant.
+                if let cached = model.descriptionTranslations[text] {
+                    translatedDescription = cached
+                    isDescriptionTranslated = true
                     isDescriptionTranslating = false
-                    isDescriptionTranslated = false
+                    return
                 }
+                // Watchdog: never leave the user on an eternal spinner. If
+                // the system translation stalls, fall back to the original
+                // text after 12 seconds and surface the timeout.
+                let watchdog = Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(12))
+                    if isDescriptionTranslating {
+                        isDescriptionTranslating = false
+                        descriptionTranslationError = L10n.string("Description Translation Timeout")
+                    }
+                }
+                defer { watchdog.cancel() }
+                do {
+                    // Split long descriptions into sentence-sized segments
+                    // and translate each individually — a single
+                    // translate() call with a long string stalls.
+                    let translated = try await translateDescriptionSegments(
+                        text,
+                        using: session
+                    )
+                    model.descriptionTranslations[text] = translated
+                    translatedDescription = translated
+                    isDescriptionTranslated = true
+                } catch {
+                    // Keep the original visible and say why.
+                    translatedDescription = nil
+                    isDescriptionTranslated = false
+                    descriptionTranslationError = localizedTranslationError(error)
+                }
+                isDescriptionTranslating = false
+            } else {
+                // Warm-up: preload the language models in the background
+                // (no-op when already installed).
+                try? await session.prepareTranslation()
             }
-            defer { watchdog.cancel() }
-            do {
-                // Split long descriptions into sentence-sized segments and
-                // translate them in one batch — a single translate() call
-                // with a long string stalls (the spinner never clears).
-                // translations(from:) keeps the response order.
-                let translated = try await translateDescriptionSegments(
-                    text,
-                    using: session
-                )
-                model.descriptionTranslations[text] = translated
-                translatedDescription = translated
-                isDescriptionTranslated = true
-            } catch {
-                // Keep the original visible.
-                translatedDescription = nil
-                isDescriptionTranslated = false
-            }
-            isDescriptionTranslating = false
-            descriptionTranslationRequest = nil
-        }
-        // Warm the en → zh-Hans language pair in the background when the
-        // detail column appears, so the first real translation is fast
-        // (model download/load is the slow part). prepareTranslation is a
-        // no-op when the models are already installed. Most SKILL.md
-        // descriptions are English, so en → zh-Hans covers the common
-        // case; auto-detected sessions reuse the downloaded target model.
-        .translationTask(
-            source: Locale.Language(identifier: "en"),
-            target: Locale.Language(identifier: "zh-Hans")
-        ) { session in
-            try? await session.prepareTranslation()
         }
         .onChange(of: skill?.path) { _, _ in
             // Per-skill translation state — reset when the selection moves.
-            // The shared descriptionTranslations cache is intentionally kept.
+            // translationConfiguration and the shared descriptionTranslations
+            // cache are intentionally kept, so the session and its loaded
+            // models are reused across selections.
             isDescriptionTranslated = false
             translatedDescription = nil
             isDescriptionTranslating = false
-            descriptionTranslationRequest = nil
+            pendingDescription = nil
+            descriptionTranslationError = nil
         }
     }
 
@@ -217,6 +222,13 @@ struct SkillDetailView: View {
                 .lineSpacing(4)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
+            if let descriptionTranslationError {
+                Label(descriptionTranslationError, systemImage: "exclamationmark.triangle")
+                    .font(AppTheme.body(11.5))
+                    .foregroundStyle(Color.orange)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -273,20 +285,24 @@ struct SkillDetailView: View {
             // Toggling back is instant — the original is always at hand.
             isDescriptionTranslated = false
         } else {
-            // Prefer the shared cache; otherwise kick off the system
-            // Translation session for this description.
+            // Prefer the shared cache; otherwise queue the text and re-run
+            // the translation task on the existing session (invalidate()
+            // keeps the session and its loaded models — never rebuilds it).
             if let cached = model.descriptionTranslations[text] {
                 translatedDescription = cached
                 isDescriptionTranslated = true
             } else {
-                isDescriptionTranslating = true
+                pendingDescription = text
                 translatedDescription = nil
-                descriptionTranslationRequest = TranslationSession.Configuration(
-                    source: nil, // auto-detect
-                    target: .init(identifier: "zh-Hans")
-                )
+                descriptionTranslationError = nil
+                isDescriptionTranslating = true
+                translationConfiguration.invalidate()
             }
         }
+    }
+
+    private func localizedTranslationError(_ error: Error) -> String {
+        (error as? LocalizedError)?.errorDescription ?? String(describing: error)
     }
 
     /// Translates a description segment by segment: split into
