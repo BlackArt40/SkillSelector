@@ -1,6 +1,7 @@
 import AppKit
 import SkillSelectorCore
 import SwiftUI
+@preconcurrency import Translation
 
 /// The right `.detail` column from the design: hero, action bar, and the
 /// 核心作用 / Skill 文档 / 关联 Agents / 位置 sections, capped at 720 pt.
@@ -17,28 +18,80 @@ struct SkillDetailView: View {
     @ScaledMetric(relativeTo: .largeTitle) private var heroTitleSize: CGFloat = 28
     @ScaledMetric(relativeTo: .body) private var bodySize: CGFloat = 14
 
+    // MARK: Description translation (system Translation → zh-Hans)
+
+    /// `true` shows the translated description instead of the original.
+    @State private var isDescriptionTranslated = false
+    /// Drives `.translationTask` — set to kick off a translation.
+    @State private var descriptionTranslationRequest: TranslationSession.Configuration?
+    /// Cached translation of the current description text.
+    @State private var translatedDescription: String?
+    /// Per-skill cache: description text → translation (cleared on skill change).
+    @State private var descriptionTranslationCache: [String: String] = [:]
+    /// True while a description translation request is in flight.
+    @State private var isDescriptionTranslating = false
+
     var body: some View {
-        if let skill {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 32) {
-                    hero(skill)
-                    actionBar(skill)
-                    coreSection(skill)
-                    documentSection(skill)
-                    agentsSection(skill)
-                    locationsSection(skill)
+        Group {
+            if let skill {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 32) {
+                        hero(skill)
+                        actionBar(skill)
+                        coreSection(skill)
+                        documentSection(skill)
+                        agentsSection(skill)
+                        locationsSection(skill)
+                    }
+                    .padding(.horizontal, 32)
+                    .padding(.top, 32)
+                    .padding(.bottom, 48)
+                    .frame(maxWidth: 720, alignment: .leading)
+                    .frame(maxWidth: .infinity)
                 }
-                .padding(.horizontal, 32)
-                .padding(.top, 32)
-                .padding(.bottom, 48)
-                .frame(maxWidth: 720, alignment: .leading)
-                .frame(maxWidth: .infinity)
-            }
-            .background(AppTheme.background)
-            .navigationTitle(skill.name)
-        } else {
-            emptyState
                 .background(AppTheme.background)
+                .navigationTitle(skill.name)
+            } else {
+                emptyState
+                    .background(AppTheme.background)
+            }
+        }
+        .translationTask(descriptionTranslationRequest) { session in
+            // The @MainActor parameter annotation is required under Swift 6
+            // (the translationTask closure itself is nonisolated; the
+            // session is main-actor-isolated). Inline is the canonical
+            // Translation framework usage.
+            guard let skill else {
+                isDescriptionTranslating = false
+                return
+            }
+            let text = descriptionText(skill)
+            if let cached = descriptionTranslationCache[text] {
+                translatedDescription = cached
+                isDescriptionTranslated = true
+                isDescriptionTranslating = false
+                return
+            }
+            do {
+                let translated = try await session.translate(text)
+                descriptionTranslationCache[text] = translated.targetText
+                translatedDescription = translated.targetText
+                isDescriptionTranslated = true
+            } catch {
+                // Keep the original visible.
+                translatedDescription = nil
+                isDescriptionTranslated = false
+            }
+            isDescriptionTranslating = false
+            descriptionTranslationRequest = nil
+        }
+        .onChange(of: skill?.path) { _, _ in
+            // Per-skill translation state — reset when the selection moves.
+            isDescriptionTranslated = false
+            translatedDescription = nil
+            isDescriptionTranslating = false
+            descriptionTranslationRequest = nil
+            descriptionTranslationCache = [:]
         }
     }
 
@@ -112,16 +165,89 @@ struct SkillDetailView: View {
 
     private func coreSection(_ skill: SkillSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            DetailViewSupport.sectionHeading(
-                L10n.string("Core Role"),
-                badge: srcBadge(skill)
-            )
-            Text(verbatim: descriptionText(skill))
+            HStack(alignment: .center, spacing: 8) {
+                DetailViewSupport.sectionHeading(
+                    L10n.string("Core Role"),
+                    badge: srcBadge(skill)
+                )
+                Spacer(minLength: 8)
+                descriptionTranslateButton(skill)
+            }
+            Text(verbatim: displayedDescription(skill))
                 .font(AppTheme.body(bodySize))
                 .foregroundStyle(AppTheme.foregroundSecondary)
                 .lineSpacing(4)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// The original description, or its translation once one is available.
+    private func displayedDescription(_ skill: SkillSnapshot) -> String {
+        if isDescriptionTranslated, let translatedDescription {
+            return translatedDescription
+        }
+        return descriptionText(skill)
+    }
+
+    /// 翻译/原文 toggle for the description (system Translation → zh-Hans).
+    /// Highlights while translated; shows a leading spinner while running.
+    private func descriptionTranslateButton(_ skill: SkillSnapshot) -> some View {
+        Button {
+            toggleDescriptionTranslation()
+        } label: {
+            HStack(spacing: 4) {
+                // Leading spinner while the translation runs; a clear
+                // placeholder keeps the button width stable.
+                if isDescriptionTranslating {
+                    ProgressView()
+                        .controlSize(.mini)
+                        .transition(.opacity)
+                } else {
+                    Color.clear
+                        .frame(width: 10, height: 10)
+                }
+                Image(systemName: isDescriptionTranslated ? "character.bubble.fill" : "character.bubble")
+                Text(verbatim: isDescriptionTranslated
+                    ? L10n.string("Show Original")
+                    : L10n.string("Translate Description"))
+            }
+            .font(AppTheme.mono(11))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(
+                isDescriptionTranslated ? AppTheme.accentTint : Color.clear,
+                in: RoundedRectangle(cornerRadius: 6)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .animation(.smooth(duration: 0.15), value: isDescriptionTranslating)
+        .help(L10n.string(isDescriptionTranslated ? "Show Original" : "Translate Description"))
+        .accessibilityLabel(L10n.string(isDescriptionTranslated ? "Show Original" : "Translate Description"))
+        .disabled(isDescriptionTranslating)
+    }
+
+    private func toggleDescriptionTranslation() {
+        guard let skill else { return }
+        let text = descriptionText(skill)
+        if isDescriptionTranslated {
+            // Toggling back is instant — the original is always at hand.
+            isDescriptionTranslated = false
+        } else {
+            // Prefer the cache; otherwise kick off the system Translation
+            // session for this description.
+            if let cached = descriptionTranslationCache[text] {
+                translatedDescription = cached
+                isDescriptionTranslated = true
+            } else {
+                isDescriptionTranslating = true
+                translatedDescription = nil
+                descriptionTranslationRequest = TranslationSession.Configuration(
+                    source: nil, // auto-detect
+                    target: .init(identifier: "zh-Hans")
+                )
+            }
         }
     }
 
