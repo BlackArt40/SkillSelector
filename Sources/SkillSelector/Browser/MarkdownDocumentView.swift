@@ -1,8 +1,12 @@
 import SkillSelectorCore
 import SwiftUI
+@preconcurrency import Translation
 
 /// The `.doc-card` from the design: warm surface card with a mono header
-/// row, the frontmatter block, and the rendered markdown body.
+/// row, the frontmatter block, and the rendered markdown body. The body
+/// can optionally be translated in place (macOS 15 system Translation)
+/// via a 翻译/原文 toggle in the header — the raw document is never
+/// modified, only the rendered copy.
 struct MarkdownDocumentView: View {
     private enum LoadState {
         case loading
@@ -18,6 +22,16 @@ struct MarkdownDocumentView: View {
     @State private var state: LoadState = .loading
     @State private var actionErrorDetail: String?
     @State private var loadedSource: String?
+    /// 翻译/原文 toggle state. `true` shows the translated body.
+    @State private var isTranslated = false
+    /// Drives `.translationTask` — set to kick off a translation.
+    @State private var translationRequest: TranslationSession.Configuration?
+    /// Cached translation of the current body text.
+    @State private var translatedText: String?
+    /// Per-document cache: body text → translation (cleared on skill change).
+    @State private var translationCache: [String: String] = [:]
+    /// True while a translation request is in flight.
+    @State private var isTranslating = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -39,6 +53,36 @@ struct MarkdownDocumentView: View {
         .task(id: DocumentLoadIdentity(snapshot: skill)) {
             await load()
         }
+        .translationTask(translationRequest) { session in
+            // The @MainActor parameter annotation is required under Swift 6
+            // (the translationTask closure itself is nonisolated; the
+            // session is main-actor-isolated). Inline is the canonical
+            // Translation framework usage.
+            guard case .rendered(let text) = state else {
+                isTranslating = false
+                return
+            }
+            if let cached = translationCache[text] {
+                translatedText = cached
+                isTranslated = true
+                isTranslating = false
+                return
+            }
+            do {
+                // Body only — frontmatter is intentionally excluded. The
+                // async translate hops off the main thread itself.
+                let response = try await session.translate(text)
+                translationCache[text] = response.targetText
+                translatedText = response.targetText
+                isTranslated = true
+            } catch {
+                // Keep the original visible; the toggle falls back to 原文.
+                translatedText = nil
+                isTranslated = false
+            }
+            isTranslating = false
+            translationRequest = nil
+        }
     }
 
     private var cardHead: some View {
@@ -48,6 +92,32 @@ struct MarkdownDocumentView: View {
             Text(verbatim: L10n.string("Doc Card Title", skill.entryFilename))
                 .lineLimit(1)
             Spacer(minLength: 8)
+            // 翻译/原文 toggle (body only). Highlights while the translated
+            // body is shown; disabled while loading / before the body loads.
+            if canTranslate {
+                Button {
+                    toggleTranslation()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: isTranslated ? "character.bubble.fill" : "character.bubble")
+                        Text(verbatim: isTranslated
+                            ? L10n.string("Show Original")
+                            : L10n.string("Translate Body"))
+                    }
+                    .font(AppTheme.mono(11.5))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(
+                        isTranslated ? AppTheme.accentTint : Color.clear,
+                        in: RoundedRectangle(cornerRadius: 6)
+                    )
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .help(L10n.string(isTranslated ? "Show Original" : "Translate Body"))
+                .accessibilityLabel(L10n.string(isTranslated ? "Show Original" : "Translate Body"))
+                .disabled(isTranslating || !bodyTextAvailable)
+            }
             iconButton(
                 systemName: "folder",
                 label: L10n.string("Reveal Skill Document in Finder"),
@@ -87,8 +157,12 @@ struct MarkdownDocumentView: View {
                     if let frontmatter {
                         frontmatterBlock(frontmatter)
                     }
-                    MarkdownBodyView(text: text)
-                        .padding(20)
+                    if isTranslated {
+                        translatedBodyView(text)
+                    } else {
+                        MarkdownBodyView(text: text)
+                            .padding(20)
+                    }
                 }
             }
         case .raw(let source):
@@ -150,11 +224,82 @@ struct MarkdownDocumentView: View {
         return (lines[0...boundary]).joined(separator: "\n")
     }
 
+    /// The document is loaded and rendered — only then is translating
+    /// meaningful (raw/tooLarge/failed states have no body to translate).
+    private var canTranslate: Bool {
+        if case .rendered = state { return true }
+        return false
+    }
+
+    /// Non-empty rendered body text to translate.
+    private var bodyTextAvailable: Bool {
+        if case .rendered(let text) = state {
+            return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        return false
+    }
+
+    private func toggleTranslation() {
+        guard case .rendered(let text) = state else { return }
+        if isTranslated {
+            // Toggling back is instant — the original is always at hand.
+            isTranslated = false
+        } else {
+            // Prefer the cache; otherwise kick off the system Translation
+            // session for this body.
+            if let cached = translationCache[text] {
+                translatedText = cached
+                isTranslated = true
+            } else {
+                isTranslating = true
+                translatedText = nil
+                translationRequest = TranslationSession.Configuration(
+                    source: nil, // auto-detect
+                    target: .init(identifier: "zh-Hans")
+                )
+            }
+        }
+    }
+
+
+    /// The translated body rendered as plain markdown-ish text (kept
+    /// simple: translation output is prose, not source markdown).
+    @ViewBuilder
+    private func translatedBodyView(_ original: String) -> some View {
+        Group {
+            if let translatedText {
+                Text(verbatim: translatedText)
+                    .font(AppTheme.body(13.5))
+                    .foregroundStyle(AppTheme.foregroundSecondary)
+                    .lineSpacing(4)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if isTranslating {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text(verbatim: L10n.string("Translating"))
+                        .foregroundStyle(AppTheme.muted)
+                }
+            } else {
+                // Translation failed — show the original.
+                MarkdownBodyView(text: original)
+            }
+        }
+        .padding(20)
+    }
+
     @MainActor
     private func load() async {
         actionErrorDetail = nil
         state = .loading
         loadedSource = nil
+        // Reset translation UI for the new document (per-skill state).
+        isTranslated = false
+        translatedText = nil
+        isTranslating = false
+        translationRequest = nil
+        translationCache = [:]
         do {
             let document = try await model.loadDocument(for: skill)
             try Task.checkCancellation()
