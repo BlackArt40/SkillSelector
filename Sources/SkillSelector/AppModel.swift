@@ -74,6 +74,11 @@ final class AppModel {
 
     var refreshState: RefreshState = .idle
     var selection: SkillSelection?
+    /// Cross-skill cache of description translations (key: the original
+    /// description text, value: the zh-Hans translation). Kept across
+    /// selection changes so revisiting a skill shows its translation
+    /// instantly instead of re-running the system translation session.
+    var descriptionTranslations: [String: String] = [:]
     /// Recent refreshes that changed something, newest first. Empty
     /// refreshes are not recorded — the history answers "what moved".
     private(set) var refreshHistory: [RefreshChangeEntry] = []

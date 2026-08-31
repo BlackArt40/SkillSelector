@@ -26,8 +26,6 @@ struct SkillDetailView: View {
     @State private var descriptionTranslationRequest: TranslationSession.Configuration?
     /// Cached translation of the current description text.
     @State private var translatedDescription: String?
-    /// Per-skill cache: description text → translation (cleared on skill change).
-    @State private var descriptionTranslationCache: [String: String] = [:]
     /// True while a description translation request is in flight.
     @State private var isDescriptionTranslating = false
 
@@ -61,12 +59,22 @@ struct SkillDetailView: View {
             // (the translationTask closure itself is nonisolated; the
             // session is main-actor-isolated). Inline is the canonical
             // Translation framework usage.
+            //
+            // The task runs once when the view appears even without a
+            // request — bail out unless the user actually tapped 翻译简介,
+            // otherwise every selection would kick off a hidden translation.
+            guard descriptionTranslationRequest != nil else {
+                isDescriptionTranslating = false
+                return
+            }
             guard let skill else {
                 isDescriptionTranslating = false
                 return
             }
             let text = descriptionText(skill)
-            if let cached = descriptionTranslationCache[text] {
+            // Shared cache on AppModel: translations survive selection
+            // changes, so revisiting a skill is instant.
+            if let cached = model.descriptionTranslations[text] {
                 translatedDescription = cached
                 isDescriptionTranslated = true
                 isDescriptionTranslating = false
@@ -74,7 +82,7 @@ struct SkillDetailView: View {
             }
             do {
                 let translated = try await session.translate(text)
-                descriptionTranslationCache[text] = translated.targetText
+                model.descriptionTranslations[text] = translated.targetText
                 translatedDescription = translated.targetText
                 isDescriptionTranslated = true
             } catch {
@@ -85,13 +93,25 @@ struct SkillDetailView: View {
             isDescriptionTranslating = false
             descriptionTranslationRequest = nil
         }
+        // Warm the en → zh-Hans language pair in the background when the
+        // detail column appears, so the first real translation is fast
+        // (model download/load is the slow part). prepareTranslation is a
+        // no-op when the models are already installed. Most SKILL.md
+        // descriptions are English, so en → zh-Hans covers the common
+        // case; auto-detected sessions reuse the downloaded target model.
+        .translationTask(
+            source: Locale.Language(identifier: "en"),
+            target: Locale.Language(identifier: "zh-Hans")
+        ) { session in
+            try? await session.prepareTranslation()
+        }
         .onChange(of: skill?.path) { _, _ in
             // Per-skill translation state — reset when the selection moves.
+            // The shared descriptionTranslations cache is intentionally kept.
             isDescriptionTranslated = false
             translatedDescription = nil
             isDescriptionTranslating = false
             descriptionTranslationRequest = nil
-            descriptionTranslationCache = [:]
         }
     }
 
@@ -235,9 +255,9 @@ struct SkillDetailView: View {
             // Toggling back is instant — the original is always at hand.
             isDescriptionTranslated = false
         } else {
-            // Prefer the cache; otherwise kick off the system Translation
-            // session for this description.
-            if let cached = descriptionTranslationCache[text] {
+            // Prefer the shared cache; otherwise kick off the system
+            // Translation session for this description.
+            if let cached = model.descriptionTranslations[text] {
                 translatedDescription = cached
                 isDescriptionTranslated = true
             } else {
