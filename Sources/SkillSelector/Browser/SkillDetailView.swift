@@ -265,10 +265,6 @@ struct SkillDetailView: View {
             .font(AppTheme.mono(11))
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
-            .background(
-                isDescriptionTranslated ? AppTheme.accentTint : Color.clear,
-                in: RoundedRectangle(cornerRadius: 6)
-            )
             .contentShape(Rectangle())
         }
         .buttonStyle(.borderless)
