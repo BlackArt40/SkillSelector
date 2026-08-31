@@ -280,7 +280,8 @@ struct SkillDetailView: View {
 
     private func toggleDescriptionTranslation() {
         guard let skill else { return }
-        let text = descriptionText(skill)
+        let text = translationSourceText(skill)
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         if isDescriptionTranslated {
             // Toggling back is instant — the original is always at hand.
             isDescriptionTranslated = false
@@ -299,6 +300,53 @@ struct SkillDetailView: View {
                 translationConfiguration.invalidate()
             }
         }
+    }
+
+    /// The text sent to the translator: the raw description with common
+    /// Markdown markers stripped, so the translation comes back as clean
+    /// plain text (raw markers like `**` and `[..](..)` would otherwise
+    /// survive the translation and show up in the result).
+    private func translationSourceText(_ skill: SkillSnapshot) -> String {
+        plainText(fromMarkdown: descriptionText(skill))
+    }
+
+    /// Strips common Markdown markers from a string, leaving plain text:
+    /// images keep their alt text, links keep their label, inline
+    /// code/emphasis markers are removed, and leading heading / quote /
+    /// list markers are dropped per line.
+    private func plainText(fromMarkdown text: String) -> String {
+        var result = text
+        // Images: ![alt](url) → alt
+        result = result.replacingOccurrences(
+            of: #"!\[([^\]]*)\]\([^)]*\)"#,
+            with: "$1",
+            options: .regularExpression
+        )
+        // Links: [label](url) → label
+        result = result.replacingOccurrences(
+            of: #"\[([^\]]*)\]\([^)]*\)"#,
+            with: "$1",
+            options: .regularExpression
+        )
+        // Inline code / emphasis markers: `code`, **bold**, *italic*, __, _
+        for marker in ["`", "**", "__", "*", "_"] {
+            result = result.replacingOccurrences(of: marker, with: "")
+        }
+        // Leading heading / quote / bullet markers and ordered list digits
+        let lines = result.components(separatedBy: "\n")
+        return lines.map { line in
+            let cleaned = line.replacingOccurrences(
+                of: #"^[#>*\-+]+(?:\s+|$)"#,
+                with: "",
+                options: .regularExpression
+            )
+            return cleaned.replacingOccurrences(
+                of: #"^\d+[.)]\s+"#,
+                with: "",
+                options: .regularExpression
+            )
+        }
+        .joined(separator: "\n")
     }
 
     private func localizedTranslationError(_ error: Error) -> String {
