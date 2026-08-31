@@ -7,6 +7,43 @@ import Darwin
 
 private let logger = Logger(subsystem: "com.SkillSelector", category: "App")
 
+/// Holds a flock on a lock file for the whole process lifetime. Two
+/// SkillSelector instances would otherwise open the same SwiftData store
+/// concurrently — SQLite WAL contention made the second process crash on
+/// launch (the "flash-exit after restarting the terminal app" report).
+private final class SingleInstanceLock {
+    private var fileDescriptor: Int32 = -1
+
+    init?() {
+        let lockURL = FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("SkillSelector", isDirectory: true)
+            .appendingPathComponent("instance.lock")
+        do {
+            try FileManager.default.createDirectory(
+                at: lockURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+        } catch {
+            logger.error("Single-instance lock directory creation failed: \(error.localizedDescription)")
+        }
+        fileDescriptor = open(lockURL.path, O_CREAT | O_RDWR, 0o644)
+        guard fileDescriptor >= 0 else { return nil }
+        if flock(fileDescriptor, LOCK_EX | LOCK_NB) != 0 {
+            close(fileDescriptor)
+            fileDescriptor = -1
+            return nil
+        }
+    }
+
+    deinit {
+        if fileDescriptor >= 0 {
+            flock(fileDescriptor, LOCK_UN)
+            close(fileDescriptor)
+        }
+    }
+}
+
 private final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
@@ -37,6 +74,10 @@ struct SkillSelectorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model: AppModel?
 
+    /// Held for the process lifetime; nil means another instance owns the
+    /// store (the app then terminates instead of racing it).
+    private let instanceLock: SingleInstanceLock?
+
     init() {
         if CommandLine.arguments.contains("--verify-localization-resource") {
             print(L10n.string("SkillSelector"))
@@ -45,9 +86,24 @@ struct SkillSelectorApp: App {
         #if DEBUG
         if ScreenshotMode.configureFromCommandLine() {
             _model = State(initialValue: ScreenshotMode.model)
+            instanceLock = nil
             return
         }
         #endif
+        // Grab the single-instance lock *before* touching the store. When a
+        // previous instance is still running (e.g. after restarting the
+        // terminal app without quitting it), acquiring fails and we exit
+        // cleanly instead of crashing on store contention.
+        instanceLock = SingleInstanceLock()
+        guard instanceLock != nil else {
+            logger.info("Another SkillSelector instance is already running; exiting.")
+            _model = State(wrappedValue: nil)
+            // Let the run loop flush once so the window never appears.
+            DispatchQueue.main.async {
+                NSApp.terminate(nil)
+            }
+            return
+        }
         _model = State(initialValue: Self.makeModel())
     }
 
@@ -83,9 +139,16 @@ struct SkillSelectorApp: App {
 
     private static func makeContainer() -> ModelContainer? {
         do {
+            // App-scoped store: the SwiftData default (a shared
+            // "default.store" in ~/Library/Application Support) collides
+            // with every other SwiftData app on the machine. A dedicated
+            // per-app directory keeps this app's store private.
+            let storeURL = Self.storeURL()
+            let configuration = ModelConfiguration(url: storeURL)
             return try ModelContainer(
                 for: SkillRecord.self,
-                AuthorizedRootRecord.self
+                AuthorizedRootRecord.self,
+                configurations: configuration
             )
         } catch {
             logger.fault("Persistent store initialization failed, falling back to in-memory: \(error.localizedDescription)")
@@ -95,6 +158,16 @@ struct SkillSelectorApp: App {
             AuthorizedRootRecord.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
+    }
+
+    /// `~/Library/Application Support/SkillSelector/SkillSelector.store` —
+    /// never the shared SwiftData default location.
+    private static func storeURL() -> URL {
+        let base = FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("SkillSelector", isDirectory: true)
+        try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        return base.appendingPathComponent("SkillSelector.store")
     }
 
     var body: some Scene {
