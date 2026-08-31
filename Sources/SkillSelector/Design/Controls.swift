@@ -324,6 +324,11 @@ struct ColumnResizer: View {
 struct ListSearchBar: View {
     let placeholderKey: String
     @Binding var text: String
+    /// True while background indexing runs — shows a small accent dot on
+    /// the right (spec §5.9 "background indexing" / §06 "body search
+    /// ready"), meaning search already works and hit counts will refresh
+    /// when the index lands. Optional so non-skill columns omit it.
+    var isIndexing: Bool = false
     @FocusState private var searchFocused: Bool
 
     var body: some View {
@@ -343,6 +348,14 @@ struct ListSearchBar: View {
                     text = ""
                     return .handled
                 }
+            if isIndexing {
+                // Background index in progress: search already works, hits
+                // will refresh when it lands (spec §5.9 / §06).
+                Circle()
+                    .fill(AppTheme.accent)
+                    .frame(width: 6, height: 6)
+                    .accessibilityLabel(L10n.string("Indexing"))
+            }
             if !text.isEmpty {
                 Button {
                     text = ""

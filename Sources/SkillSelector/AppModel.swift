@@ -50,6 +50,10 @@ final class AppModel {
     var environmentIsSandboxed: Bool?
     @ObservationIgnored private var activeRefresh: (id: UUID, task: Task<Void, Never>)?
     @ObservationIgnored private var activeFingerprintBackfill: (id: UUID, task: Task<Void, Never>)?
+    /// True while the deferred fingerprint backfill is running off the
+    /// main thread — drives the "background indexing" status dot in the
+    /// search field (spec §5.9 / §06).
+    private(set) var isBackfilling = false
     /// Paths whose deferred fingerprint failed to compute (unreadable
     /// content). They are not retried until the next refresh, when files
     /// may have changed — this keeps the schedule self-terminating.
@@ -629,6 +633,7 @@ final class AppModel {
         }) else { return }
         activeFingerprintBackfill?.task.cancel()
         let id = UUID()
+        isBackfilling = true
         let task = Task { [weak self] in
             await self?.backfillMissingFingerprints()
             self?.clearFingerprintBackfill(id: id)
@@ -646,6 +651,7 @@ final class AppModel {
     private func clearFingerprintBackfill(id: UUID) {
         guard activeFingerprintBackfill?.id == id else { return }
         activeFingerprintBackfill = nil
+        isBackfilling = false
     }
 
     // MARK: Body search index

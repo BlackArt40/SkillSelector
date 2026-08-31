@@ -22,6 +22,9 @@ struct SkillListView: View {
     /// In-memory folded body index by installation path — lets a row whose
     /// search hit landed only in the body show that snippet.
     let bodyTextsByPath: [String: String]
+    /// True while the deferred fingerprint backfill runs — the search bar
+    /// shows a small indexing dot (spec §5.9 / §06).
+    var isIndexing: Bool = false
     let onClearFilters: () -> Void
     let onImportProject: () -> Void
     let onImportHome: () -> Void
@@ -53,7 +56,11 @@ struct SkillListView: View {
     /// In-column search field — same design as the marketplace's, bound
     /// to RootView's query text (name, description, or indexed body).
     private var searchBar: some View {
-        ListSearchBar(placeholderKey: "Search Names Or Descriptions", text: $searchText)
+        ListSearchBar(
+            placeholderKey: "Search Names Or Descriptions",
+            text: $searchText,
+            isIndexing: isIndexing
+        )
     }
 
     private var header: some View {

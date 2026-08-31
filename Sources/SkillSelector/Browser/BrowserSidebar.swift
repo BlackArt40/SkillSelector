@@ -55,6 +55,9 @@ struct BrowserSidebar: View {
     var manuallyEnabledAgentIDs: Set<String> = []
     var unhealthyRootIDs: Set<String> = []
     let counts: [BrowserDestination: Int]
+    /// True while a scan runs — the sidebar footer shows a quiet one-line
+    /// "Scanning…" progress (spec §06 loading), no blocking overlay.
+    var isScanning: Bool = false
     var onAddProject: () -> Void
     var onReauthorize: ((AuthorizedRootSnapshot) -> Void)?
     var onRemoveRoot: ((AuthorizedRootSnapshot) -> Void)?
@@ -153,6 +156,9 @@ struct BrowserSidebar: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 12)
             }
+            if isScanning {
+                scanningFooter
+            }
         }
         .background(AppTheme.surface)
         .overlay(alignment: .trailing) {
@@ -163,6 +169,27 @@ struct BrowserSidebar: View {
     }
 
     // MARK: Sections
+
+    /// Quiet one-line scan progress at the sidebar's foot (spec §06):
+    /// caption text + small spinner, no blocking overlay. Shown only while
+    /// a refresh is in flight.
+    private var scanningFooter: some View {
+        HStack(spacing: 6) {
+            ProgressView()
+                .controlSize(.small)
+            Text(verbatim: L10n.string("Scanning"))
+                .font(AppTheme.body(11))
+                .foregroundStyle(AppTheme.muted)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(AppTheme.borderSoft)
+                .frame(height: 1)
+        }
+    }
 
     private var mainSection: some View {
         VStack(alignment: .leading, spacing: 0) {

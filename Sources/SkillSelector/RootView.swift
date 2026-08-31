@@ -129,6 +129,7 @@ struct RootView: View {
                     manuallyEnabledAgentIDs: model.manuallyEnabledAgentIDs,
                     unhealthyRootIDs: model.unhealthyRootIDs,
                     counts: sidebarCounts,
+                    isScanning: model.refreshState == .running,
                     onAddProject: { chooseDestinationRoot() },
                     onReauthorize: { root in reauthorize(root) },
                     onRemoveRoot: { root in removeRoot(root) }
@@ -231,13 +232,13 @@ struct RootView: View {
     private var windowToolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .navigation) {
             Button(action: goBack) {
-                Image(systemName: "chevron.backward")
+                Image(systemName: "chevron.compact.left")
             }
             .disabled(!model.canGoBack)
             .help(L10n.string("Go Back"))
             .accessibilityLabel(L10n.string("Go Back"))
             Button(action: goForward) {
-                Image(systemName: "chevron.forward")
+                Image(systemName: "chevron.compact.right")
             }
             .disabled(!model.canGoForward)
             .help(L10n.string("Go Forward"))
@@ -495,6 +496,7 @@ struct RootView: View {
                 refreshState: model.refreshState,
                 agentNamesByID: agentNamesByID,
                 bodyTextsByPath: model.bodySearchTextsByPath,
+                isIndexing: model.isBackfilling,
                 onClearFilters: clearFilters,
                 onImportProject: { chooseDestinationRoot() },
                 onImportHome: { chooseSystemRoot() },
