@@ -359,51 +359,73 @@ struct SkillDetailView: View {
     /// this loop (no nested async closure) so release-mode isolation
     /// checks accept it (a batch `translations(from:)` call is rejected
     /// because `[Request]` isn't Sendable under Swift 6).
+    ///
+    /// Rejoining: blank lines stay newlines, but sentence segments of the
+    /// same paragraph are joined with a single space — the original had
+    /// no line break there, so the translation must not introduce one
+    /// (the split point is invisible in the output).
     private func translateDescriptionSegments(
         _ text: String,
         using session: TranslationSession
     ) async throws -> String {
-        let segments = descriptionSegments(text)
-        var result = segments
-        for (index, segment) in segments.enumerated() {
-            guard !segment.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
-            let translated = try await session.translate(segment)
-            result[index] = translated.targetText
-        }
-        return result.joined(separator: "\n")
-    }
-
-    /// Splits a description into translatable segments: paragraphs
-    /// first, then paragraphs longer than 200 characters broken at
-    /// sentence boundaries so no single request carries too much text.
-    /// Blank lines are preserved as structure and skipped by the
-    /// translator (empty requests would throw).
-    private func descriptionSegments(_ text: String) -> [String] {
         let paragraphs = text.components(separatedBy: "\n")
-        var segments: [String] = []
+        var translatedParagraphs: [String] = []
         for paragraph in paragraphs {
             if paragraph.trimmingCharacters(in: .whitespaces).isEmpty {
-                segments.append(paragraph)
+                translatedParagraphs.append(paragraph)
             } else if paragraph.count > 200 {
-                segments.append(contentsOf: sentenceSegments(paragraph))
+                let sentences = sentenceSegments(paragraph)
+                var translatedSentences: [String] = []
+                for sentence in sentences {
+                    guard !sentence.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
+                    let translated = try await session.translate(sentence)
+                    translatedSentences.append(translated.targetText)
+                }
+                translatedParagraphs.append(translatedSentences.joined(separator: " "))
             } else {
-                segments.append(paragraph)
+                let translated = try await session.translate(paragraph)
+                translatedParagraphs.append(translated.targetText)
             }
         }
-        return segments
+        return translatedParagraphs.joined(separator: "\n")
     }
 
+    /// Closing delimiters absorbed into the sentence that ends with
+    /// sentence-ending punctuation — "standards?) and" splits as
+    /// "standards?) " + "and", never "standards?" + ") and".
+    private static let sentenceClosingDelimiters: [Character] = [")", "\"", "'", "]", "}"]
+
     /// Breaks a long paragraph at sentence-ending punctuation, keeping
-    /// the punctuation attached; any still-huge sentence is hard-split.
+    /// the punctuation attached. Closing delimiters right after the
+    /// punctuation stay with the sentence, and one following space is
+    /// dropped — the caller rejoins with a single space, so the split
+    /// point is invisible in the output. Any still-huge sentence is
+    /// hard-split.
     private func sentenceSegments(_ text: String) -> [String] {
         var sentences: [String] = []
         var current = ""
-        for character in text {
+        var index = text.startIndex
+        while index < text.endIndex {
+            let character = text[index]
             current.append(character)
             if "!.?".contains(character) {
+                // Absorb closing delimiters immediately after the punctuation.
+                var lookahead = text.index(after: index)
+                while lookahead < text.endIndex,
+                      Self.sentenceClosingDelimiters.contains(text[lookahead]) {
+                    current.append(text[lookahead])
+                    lookahead = text.index(after: lookahead)
+                }
+                // Drop one following space — the joiner supplies it.
+                if lookahead < text.endIndex, text[lookahead] == " " {
+                    lookahead = text.index(after: lookahead)
+                }
                 sentences.append(current)
                 current = ""
+                index = lookahead
+                continue
             }
+            index = text.index(after: index)
         }
         if !current.isEmpty {
             sentences.append(current)
