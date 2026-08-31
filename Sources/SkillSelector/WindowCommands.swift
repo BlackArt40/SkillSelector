@@ -21,11 +21,6 @@ extension Notification.Name {
     /// Posted by the View menu's Appearance item (⌘⌥T); RootView flips the
     /// light/dark mode.
     static let performToggleAppearance = Notification.Name("SkillSelector.performToggleAppearance")
-    /// Posted by the View menu's column-focus items (⌘1 / ⌘2 / ⌘3);
-    /// RootView routes keyboard focus to the sidebar / list / detail.
-    static let performFocusSidebar = Notification.Name("SkillSelector.performFocusSidebar")
-    static let performFocusList = Notification.Name("SkillSelector.performFocusList")
-    static let performFocusDetail = Notification.Name("SkillSelector.performFocusDetail")
     /// Posted when the toolbar search field gained keyboard focus by being
     /// clicked (AppKit path); RootView syncs its FocusState.
     static let searchFocusStarted = Notification.Name("SkillSelector.searchFocusStarted")
@@ -88,26 +83,12 @@ struct WindowCommands: Commands {
             .keyboardShortcut("o", modifiers: .command)
         }
 
-        // View menu: ⌘⌥T flips the appearance like the toolbar toggle;
-        // ⌘1/⌘2/⌘3 route keyboard focus to the three columns.
+        // View menu: ⌘⌥T flips the appearance like the toolbar toggle.
         CommandGroup(after: .toolbar) {
             Button(L10n.string("Toggle Appearance")) {
                 NotificationCenter.default.post(name: .performToggleAppearance, object: nil)
             }
             .keyboardShortcut("t", modifiers: [.command, .option])
-            Divider()
-            Button(L10n.string("Focus Sidebar")) {
-                NotificationCenter.default.post(name: .performFocusSidebar, object: nil)
-            }
-            .keyboardShortcut("1", modifiers: .command)
-            Button(L10n.string("Focus List")) {
-                NotificationCenter.default.post(name: .performFocusList, object: nil)
-            }
-            .keyboardShortcut("2", modifiers: .command)
-            Button(L10n.string("Focus Detail")) {
-                NotificationCenter.default.post(name: .performFocusDetail, object: nil)
-            }
-            .keyboardShortcut("3", modifiers: .command)
         }
     }
 }

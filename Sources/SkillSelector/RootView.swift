@@ -24,13 +24,6 @@ struct RootView: View {
     @State private var sort: SkillQuery.Sort = .default
     @State private var openError: String?
     @FocusState private var searchFocused: Bool
-    /// ⌘1/⌘2/⌘3 column focus. Sidebar and detail panes have no text field,
-    /// so the focus lands on the pane itself (the sidebar's first
-    /// interactive row via focusability, the detail's scroll content) —
-    /// enough for VoiceOver / full keyboard access to reach them. The list
-    /// column focuses its search field, the same target as ⌘F.
-    @FocusState private var sidebarFocused: Bool
-    @FocusState private var detailFocused: Bool
     /// Searchable middle-column width, adjustable by dragging the resizer.
     @State private var listColumnWidth: CGFloat = 400
     /// Local event monitor resigning the toolbar search field on outside
@@ -83,10 +76,7 @@ struct RootView: View {
                 onRefresh: { Task { await model.refresh() } },
                 onRevealSelection: { revealCurrentSelection() },
                 onOpenSelection: { openCurrentSelection() },
-                onToggleAppearance: { toggleAppearance() },
-                onFocusSidebar: { sidebarFocused = true },
-                onFocusList: { searchFocused = true },
-                onFocusDetail: { detailFocused = true }
+                onToggleAppearance: { toggleAppearance() }
             ))
             .onAppear { onAppear() }
             .onDisappear { onDisappear() }
@@ -140,22 +130,12 @@ struct RootView: View {
                     onRemoveRoot: { root in removeRoot(root) }
                 )
                 .frame(width: 240)
-                // ⌘1 target: the sidebar is a button list; focusing the
-                // container lets full-keyboard-access / VoiceOver land in
-                // the pane and tab through its rows.
-                .focused($sidebarFocused)
-                .focusable()
 
                 listPane
 
                 ColumnResizer(width: $listColumnWidth, range: 300...620)
 
-                // ⌘3 target: the detail pane. Wrapped in a group so one
-                // focused() covers every detail variant; focusability lets
-                // full-keyboard-access land in the pane and scroll it.
                 detailPane
-                    .focused($detailFocused)
-                    .focusable()
             }
         }
         .frame(minWidth: 960, minHeight: 600)
@@ -932,8 +912,8 @@ extension BrowserDestination {
 }
 
 /// Routes menu-bar command notifications (⌘F / ⌘[ / ⌘] / ⌘R / ⌘↩ / ⌘O /
-/// ⌘⌥T / ⌘1 / ⌘2 / ⌘3) into RootView's handlers. Bundled as one modifier
-/// so the root view's body chain stays type-checkable.
+/// ⌘⌥T) into RootView's handlers. Bundled as one modifier so the root
+/// view's body chain stays type-checkable.
 private struct WindowCommandHandling: ViewModifier {
     let onGoBack: () -> Void
     let onGoForward: () -> Void
@@ -942,9 +922,6 @@ private struct WindowCommandHandling: ViewModifier {
     let onRevealSelection: () -> Void
     let onOpenSelection: () -> Void
     let onToggleAppearance: () -> Void
-    let onFocusSidebar: () -> Void
-    let onFocusList: () -> Void
-    let onFocusDetail: () -> Void
 
     func body(content: Content) -> some View {
         content
@@ -955,8 +932,5 @@ private struct WindowCommandHandling: ViewModifier {
             .onReceive(NotificationCenter.default.publisher(for: .performRevealSelection)) { _ in onRevealSelection() }
             .onReceive(NotificationCenter.default.publisher(for: .performOpenSelection)) { _ in onOpenSelection() }
             .onReceive(NotificationCenter.default.publisher(for: .performToggleAppearance)) { _ in onToggleAppearance() }
-            .onReceive(NotificationCenter.default.publisher(for: .performFocusSidebar)) { _ in onFocusSidebar() }
-            .onReceive(NotificationCenter.default.publisher(for: .performFocusList)) { _ in onFocusList() }
-            .onReceive(NotificationCenter.default.publisher(for: .performFocusDetail)) { _ in onFocusDetail() }
     }
 }
