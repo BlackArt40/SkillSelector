@@ -38,6 +38,10 @@ struct RootView: View {
     @State private var mcpProbingAll = false
     /// True while the refresh history popover is presented.
     @State private var isShowingRefreshHistory = false
+    /// Set when the user dismisses the refresh-complete banner; reset on
+    /// the next refresh so a later change re-shows it (spec §5.7: a banner
+    /// stays hidden after dismissal until re-triggered).
+    @State private var dismissedRefreshBanner = false
 
     init(
         initialDestination: BrowserDestination = .all,
@@ -80,6 +84,9 @@ struct RootView: View {
         VStack(spacing: 0) {
             if !model.unhealthyRootIDs.isEmpty {
                 authorizationBanner
+            }
+            if let summary = finishedRefreshSummary, !summary.isEmpty, !dismissedRefreshBanner {
+                refreshCompleteBanner(summary)
             }
             HStack(spacing: 0) {
                 BrowserSidebar(
@@ -320,6 +327,13 @@ struct RootView: View {
         .onReceive(NotificationCenter.default.publisher(for: .performToggleAppearance)) { _ in
             toggleAppearance()
         }
+        // A new refresh re-arms the completion banner: dismissing it only
+        // silences the current refresh's result, not future ones.
+        .onChange(of: model.refreshState) { _, newState in
+            if case .running = newState {
+                dismissedRefreshBanner = false
+            }
+        }
         .languageReloading()
         .themedAppearance()
         .toolbar {
@@ -447,6 +461,33 @@ struct RootView: View {
 
     // MARK: Re-authorization banner
 
+    /// The most recent refresh summary, when a refresh actually finished
+    /// (drives the green "refresh complete" banner).
+    private var finishedRefreshSummary: RefreshSummary? {
+        if case .finished(let summary) = model.refreshState {
+            return summary
+        }
+        return nil
+    }
+
+    /// Green success banner shown right after a refresh that changed
+    /// something: "新增 N · 变更 M · 移除 K" with a link to the change
+    /// history. Dismissible; reappears on the next refresh that changes
+    /// something.
+    private func refreshCompleteBanner(_ summary: RefreshSummary) -> some View {
+        Banner(
+            tone: .success,
+            icon: "checkmark.circle.fill",
+            text: String.localizedStringWithFormat(
+                L10n.string("Refresh Complete Banner"),
+                summary.added, summary.changed, summary.removed
+            ),
+            actionTitle: L10n.string("View Changes"),
+            action: { isShowingRefreshHistory = true },
+            onDismiss: { dismissedRefreshBanner = true }
+        )
+    }
+
     /// Top-of-window banner shown while any authorized root's bookmark no
     /// longer resolves. With a single broken root the button goes straight
     /// to the authorization panel (pre-selected to the lost directory) so
@@ -460,10 +501,9 @@ struct RootView: View {
             icon: "exclamationmark.triangle.fill",
             text: L10n.string("Authorization Lost Banner"),
             actionTitle: L10n.string("Re-authorize…"),
+            action: { reauthorizeUnhealthyRoots() },
             actionHelp: L10n.string("Re-authorize Directory")
-        ) {
-            reauthorizeUnhealthyRoots()
-        }
+        )
     }
 
     /// Routes the banner's re-authorization: a single broken root opens the
