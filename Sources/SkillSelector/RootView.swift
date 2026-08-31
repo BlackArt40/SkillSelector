@@ -44,6 +44,10 @@ struct RootView: View {
     @State private var mcpProbingAll = false
     /// True while the refresh history popover is presented.
     @State private var isShowingRefreshHistory = false
+    /// Unread change count shown as the history button's badge (spec §4:
+    /// badge on the history button, zeroed once the popover is opened).
+    /// Set from the latest refresh summary; cleared on open.
+    @State private var unreadChangeCount = 0
     /// Set when the user dismisses the refresh-complete banner; reset on
     /// the next refresh so a later change re-shows it (spec §5.7: a banner
     /// stays hidden after dismissal until re-triggered).
@@ -131,7 +135,13 @@ struct RootView: View {
                 )
                 .frame(width: 240)
 
+                // Spec §2 motion: switching sidebar destinations cross-fades
+                // the list column over 220 ms (opacity only — no geometry
+                // transforms). `.id(destination)` re-creates the pane so the
+                // transition actually fires on every switch.
                 listPane
+                    .id(destination)
+                    .transition(.opacity)
 
                 ColumnResizer(width: $listColumnWidth, range: 300...620)
 
@@ -139,6 +149,7 @@ struct RootView: View {
             }
         }
         .frame(minWidth: 960, minHeight: 600)
+        .animation(.smooth(duration: 0.22), value: destination)
         .navigationTitle(title)
     }
 
@@ -207,6 +218,10 @@ struct RootView: View {
     private func refreshStateChanged(_ newState: RefreshState) {
         if case .running = newState {
             dismissedRefreshBanner = false
+        } else if case .finished(let summary) = newState {
+            // Re-arm the badge with this refresh's change total; it clears
+            // when the popover is opened.
+            unreadChangeCount = summary.added + summary.changed + summary.removed
         }
     }
 
@@ -282,16 +297,35 @@ struct RootView: View {
     /// Recent refresh changes, anchored to the history button.
     private var historyButton: some View {
         Button {
+            // Opening the popover clears the badge (spec §4: zeroed once
+            // viewed).
+            unreadChangeCount = 0
             isShowingRefreshHistory = true
         } label: {
             Image(systemName: "clock.arrow.circlepath")
                 .font(.system(size: 14))
                 .frame(width: 30, height: 30)
                 .contentShape(Rectangle())
+                .overlay(alignment: .topTrailing) {
+                    if unreadChangeCount > 0 {
+                        Text(verbatim: "\(min(unreadChangeCount, 99))")
+                            .font(AppTheme.body(9, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(AppTheme.danger, in: Capsule())
+                            .offset(x: 4, y: -4)
+                            .accessibilityHidden(true)
+                    }
+                }
         }
         .buttonStyle(.borderless)
         .help(L10n.string("Change History"))
-        .accessibilityLabel(L10n.string("Change History"))
+        .accessibilityLabel(
+            unreadChangeCount > 0
+                ? L10n.string("Change History") + " \(unreadChangeCount)"
+                : L10n.string("Change History")
+        )
         .popover(isPresented: $isShowingRefreshHistory, arrowEdge: .bottom) {
             RefreshHistoryPopover(history: model.refreshHistory)
         }
