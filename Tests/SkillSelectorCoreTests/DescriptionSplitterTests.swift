@@ -140,6 +140,33 @@ final class DescriptionSplitterTests: XCTestCase {
         XCTAssertEqual(usa.joined(separator: " "), "Works in the U.S.A. today.")
     }
 
+    /// A comma right after a quoted question belongs to the sentence —
+    /// `"is this accessible?", or when…` never splits before the comma.
+    func testCommaAfterQuotedQuestionStaysWithSentence() {
+        let text = #"Trigger with "audit accessibility", "check a11y", "is this accessible?", or when reviewing a design for color contrast."#
+        let segments = DescriptionSplitter.sentenceSegments(text)
+        XCTAssertEqual(segments.count, 2)
+        XCTAssertTrue(segments[0].hasSuffix("accessible?\","), "逗号应留在问号句末尾")
+        XCTAssertFalse(segments[1].hasPrefix(","), "下一段不应以逗号开头")
+        XCTAssertEqual(segments.joined(separator: " "), text)
+    }
+
+    /// A mid-word period in a hard-split window ("SKILL.md") is never a
+    /// cut boundary — the chunk must not end with "SKILL." or start with
+    /// "md".
+    func testHardCutKeepsMidWordPeriodIntact() {
+        let text = String(repeating: "字", count: 160) + "SKILL.md" + String(repeating: "字", count: 40)
+        XCTAssertGreaterThan(text.count, DescriptionSplitter.maxSegmentLength)
+
+        let chunks = DescriptionSplitter.lengthSegments(text)
+        XCTAssertGreaterThan(chunks.count, 1)
+        for chunk in chunks {
+            XCTAssertFalse(chunk.hasSuffix("SKILL."), "不应切断 SKILL.md")
+            XCTAssertFalse(chunk.hasPrefix("md"), "不应切断 SKILL.md")
+            XCTAssertLessThanOrEqual(chunk.count, DescriptionSplitter.maxSegmentLength)
+        }
+    }
+
     /// Every segment must stay within the length cap that keeps the
     /// system translation session responsive.
     func testAllSegmentsWithinCap() {

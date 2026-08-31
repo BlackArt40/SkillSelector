@@ -19,6 +19,12 @@ enum DescriptionSplitter {
     /// "standards?) " + "and", never "standards?" + ") and".
     static let sentenceClosingDelimiters: [Character] = [")", "\"", "'", "]", "}"]
 
+    /// Commas and colons right after the sentence-ending punctuation are
+    /// absorbed too — a comma can never start a new sentence, so
+    /// `"is this accessible?", or when…` stays one segment instead of
+    /// splitting before the comma.
+    static let sentenceContinuationPunctuation: [Character] = [",", ";", ":", "，", "；", "：", "、"]
+
     /// Breaks a paragraph at sentence-ending punctuation (`.`, `!`, `?`),
     /// keeping the punctuation attached. A period only ends a sentence
     /// when whitespace or end-of-text follows (possibly after closing
@@ -50,12 +56,14 @@ enum DescriptionSplitter {
                         continue
                     }
                 }
-                // Absorb closing delimiters and further sentence-ending
-                // punctuation immediately after — "for?)." stays whole.
+                // Absorb closing delimiters, further sentence-ending
+                // punctuation, and continuation commas immediately after
+                // — "for?)." and `"accessible?",` each stay whole.
                 var lookahead = text.index(after: index)
                 while lookahead < text.endIndex,
                       sentenceClosingDelimiters.contains(text[lookahead])
-                        || "!.?".contains(text[lookahead]) {
+                        || "!.?".contains(text[lookahead])
+                        || sentenceContinuationPunctuation.contains(text[lookahead]) {
                     current.append(text[lookahead])
                     lookahead = text.index(after: lookahead)
                 }
@@ -76,11 +84,22 @@ enum DescriptionSplitter {
         return sentences.flatMap { $0.count > maxSegmentLength ? lengthSegments($0) : [$0] }
     }
 
+    /// Punctuation a hard-split may cut after when no space is within the
+    /// lookback window — keeps space-less text (Chinese/Japanese) from
+    /// being split mid-word ("底层" never becomes "底" + "层"). A period
+    /// is handled separately: only a sentence-ending period is a valid
+    /// boundary, never a mid-word one ("SKILL.md" stays whole).
+    static let hardCutPunctuation: [Character] = [
+        ",", ";", ":", "!", "?",
+        "，", "。", "；", "：", "！", "？", "、",
+    ]
+
     /// Hard-splits a still-overlong string into ≤ `maxSegmentLength`
-    /// chunks, backing up to the nearest space (within a 40-char window)
-    /// so breaks land on word boundaries — the split point stays
-    /// invisible in the rejoined output instead of cutting mid-word or
-    /// right before a trailing period.
+    /// chunks. Breaks land on word boundaries: the nearest space (or
+    /// newline) within a 40-char window is preferred, then sentence
+    /// punctuation — so the split point stays invisible in the rejoined
+    /// output instead of cutting mid-word or right before a trailing
+    /// period. Falls back to a raw cut only for a long unbroken token.
     static func lengthSegments(_ text: String) -> [String] {
         let lookbackLimit = 40
         var chunks: [String] = []
@@ -89,15 +108,33 @@ enum DescriptionSplitter {
             let end = text.index(start, offsetBy: maxSegmentLength, limitedBy: text.endIndex) ?? text.endIndex
             var boundary = end
             if end < text.endIndex {
-                // Back up to the last space before the cap and cut before
-                // it — the space is skipped so the joiner's single space
-                // applies. Fall back to the hard cut when no space is
-                // found (a long unbroken token).
                 var lookback = 0
                 while lookback < lookbackLimit, boundary > start {
                     let previous = text.index(before: boundary)
-                    if text[previous] == " " {
+                    if text[previous] == " " || text[previous].isNewline {
+                        boundary = previous // cut before the space; the joiner supplies it
+                        break
+                    }
+                    if text[previous] == "." {
+                        // A period is a boundary only when it ends a
+                        // sentence (whitespace or end follows, possibly
+                        // after closing delimiters) — "SKILL.md" never
+                        // splits into "SKILL." + "md".
+                        var after = text.index(after: previous)
+                        while after < text.endIndex,
+                              sentenceClosingDelimiters.contains(text[after]) {
+                            after = text.index(after: after)
+                        }
+                        if after == text.endIndex || text[after].isWhitespace {
+                            boundary = text.index(after: previous)
+                            break
+                        }
                         boundary = previous
+                        lookback += 1
+                        continue
+                    }
+                    if Self.hardCutPunctuation.contains(text[previous]) {
+                        boundary = text.index(after: previous) // cut after the punctuation
                         break
                     }
                     boundary = previous
