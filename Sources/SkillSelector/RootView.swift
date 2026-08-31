@@ -455,27 +455,14 @@ struct RootView: View {
     /// cannot silently re-acquire a broken bookmark — macOS requires the
     /// user to re-pick the directory in the open panel.
     private var authorizationBanner: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 13))
-                .foregroundStyle(AppTheme.warn)
-            Text(verbatim: L10n.string("Authorization Lost Banner"))
-                .font(AppTheme.body(13))
-                .foregroundStyle(AppTheme.foreground)
-            Spacer(minLength: 12)
-            Button(L10n.string("Re-authorize…")) {
-                reauthorizeUnhealthyRoots()
-            }
-            .buttonStyle(SettingsButtonStyle())
-            .help(L10n.string("Re-authorize Directory"))
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(AppTheme.warn.opacity(0.12))
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(AppTheme.borderSoft)
-                .frame(height: 1)
+        Banner(
+            tone: .warning,
+            icon: "exclamationmark.triangle.fill",
+            text: L10n.string("Authorization Lost Banner"),
+            actionTitle: L10n.string("Re-authorize…"),
+            actionHelp: L10n.string("Re-authorize Directory")
+        ) {
+            reauthorizeUnhealthyRoots()
         }
     }
 

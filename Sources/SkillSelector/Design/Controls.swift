@@ -454,3 +454,145 @@ struct NoResultsView: View {
         )
     }
 }
+
+/// The moving highlight band shared by every skeleton block: a soft
+/// gradient sweeps left-to-right on a 1.4 s cycle (spec §5.8), then
+/// restarts — the classic native-feeling shimmer, no easing bounce.
+private struct ShimmerHighlight: View {
+    @State private var phase: CGFloat = 0
+
+    var body: some View {
+        GeometryReader { proxy in
+            let bandWidth = proxy.size.width * 0.55
+            LinearGradient(
+                colors: [.clear, AppTheme.borderSoft.opacity(0.55), .clear],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(width: bandWidth)
+            .offset(x: -bandWidth + phase * (proxy.size.width + bandWidth))
+        }
+        .onAppear {
+            withAnimation(.linear(duration: 1.4).repeatForever(autoreverses: false)) {
+                phase = 1
+            }
+        }
+    }
+}
+
+/// One rounded placeholder bar with the shimmer sweep. Sized by the
+/// caller; used only inside loading skeletons.
+struct SkeletonBlock: View {
+    var cornerRadius: CGFloat = 6
+    var width: CGFloat? = nil
+    var height: CGFloat = 12
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .fill(AppTheme.surface)
+            .frame(width: width, height: height)
+            .overlay(ShimmerHighlight())
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+    }
+}
+
+/// Marketplace loading placeholder (spec §5.8): three skill-row-shaped
+/// skeletons — tile, title bar, description bar, agent badge — with a
+/// shared shimmer so the column reads "content is coming" instead of
+/// showing a bare spinner. VoiceOver announces the loading state.
+struct MarketplaceSkeleton: View {
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(0..<3, id: \.self) { _ in
+                HStack(spacing: 10) {
+                    SkeletonBlock(cornerRadius: 9, width: 34, height: 34)
+                    VStack(alignment: .leading, spacing: 7) {
+                        SkeletonBlock(width: 150, height: 13)
+                        SkeletonBlock(width: 230, height: 11)
+                    }
+                    Spacer(minLength: 0)
+                    SkeletonBlock(cornerRadius: 8, width: 64, height: 18)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(L10n.string("Marketplace Loading"))
+    }
+}
+
+/// Shared top-of-window banner (spec §5.7): icon + message + optional
+/// action + optional dismiss. The tint follows the tone — warning (amber)
+/// for re-authorization, info (accent) for retryable failures, success
+/// (green) for refresh completions. Full-width, hairline bottom border.
+enum BannerTone {
+    case warning
+    case info
+    case success
+}
+
+struct Banner: View {
+    let tone: BannerTone
+    let icon: String
+    let text: String
+    var actionTitle: String? = nil
+    var action: (() -> Void)? = nil
+    var actionHelp: String? = nil
+    var onDismiss: (() -> Void)? = nil
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 13))
+                .foregroundStyle(tint)
+            Text(verbatim: text)
+                .font(AppTheme.body(13))
+                .foregroundStyle(AppTheme.foreground)
+            Spacer(minLength: 12)
+            if let actionTitle, let action {
+                Button(actionTitle, action: action)
+                    .buttonStyle(SettingsButtonStyle())
+                    .help(actionHelp ?? actionTitle)
+            }
+            if let onDismiss {
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppTheme.muted)
+                        .frame(width: 20, height: 20)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(L10n.string("Dismiss"))
+                .accessibilityLabel(L10n.string("Dismiss"))
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(backgroundTint)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(AppTheme.borderSoft)
+                .frame(height: 1)
+        }
+    }
+
+    private var tint: Color {
+        switch tone {
+        case .warning: AppTheme.warn
+        case .info: AppTheme.accent
+        case .success: AppTheme.success
+        }
+    }
+
+    private var backgroundTint: Color {
+        switch tone {
+        case .warning: AppTheme.warn.opacity(0.12)
+        case .info: AppTheme.accent.opacity(0.10)
+        case .success: AppTheme.success.opacity(0.12)
+        }
+    }
+}

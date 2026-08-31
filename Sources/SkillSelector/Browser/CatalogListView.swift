@@ -283,16 +283,7 @@ struct CatalogListView: View {
     }
 
     private var loadingState: some View {
-        VStack(spacing: 8) {
-            Spacer(minLength: 48)
-            ProgressView()
-                .controlSize(.small)
-            Text(verbatim: L10n.string("Marketplace Loading"))
-                .font(AppTheme.body(13))
-                .foregroundStyle(AppTheme.muted)
-            Spacer(minLength: 48)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        MarketplaceSkeleton()
     }
 
     private var emptyState: some View {
