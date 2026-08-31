@@ -99,7 +99,11 @@ struct SkillRow: View {
                     title: skillTileLetter(for: skill.name),
                     size: 34,
                     cornerRadius: 9,
-                    active: isActive
+                    active: isActive,
+                    // Symlink hint sits on the avatar's top-right (spec §5.2
+                    // + visual baseline: a 9 pt triangle, matching the
+                    // design's "link" affordance).
+                    symbolLink: skill.resolvedTarget != nil
                 )
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 6) {
@@ -117,17 +121,17 @@ struct SkillRow: View {
                                 dot: AnyView(Circle().fill(AppTheme.warn).frame(width: 6, height: 6))
                             )
                         }
-                        if let target = skill.resolvedTarget {
-                            BadgeDot(
-                                text: L10n.string("Link Badge"),
-                                color: AppTheme.muted,
-                                dot: AnyView(
-                                    RoundedRectangle(cornerRadius: 2)
-                                        .stroke(AppTheme.meta, lineWidth: 1.5)
-                                        .frame(width: 5, height: 5)
-                                )
-                            )
-                            .help(target)
+                        if skill.resolvedTarget != nil {
+                            // The visual hint now lives on the avatar (see
+                            // SkillTileView's symbolLink overlay); keep an
+                            // accessibility-only affordance in the row so
+                            // VoiceOver still announces the link target.
+                            Image(systemName: "link")
+                                .font(.system(size: 9))
+                                .foregroundStyle(AppTheme.muted)
+                                .accessibilityLabel(L10n.string("Link Badge"))
+                                .accessibilityValue(skill.resolvedTarget ?? "")
+                                .accessibilityHidden(false)
                         }
                     }
                     descriptionLine

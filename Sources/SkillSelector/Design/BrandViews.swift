@@ -115,25 +115,45 @@ struct SkillTileView: View {
     var size: CGFloat = 34
     var cornerRadius: CGFloat = 9
     var active = false
+    /// Symlink affordance: a small triangle in the avatar's top-right
+    /// corner (spec §5.2 — "link 9pt Symbol"; the visual baseline uses
+    /// an upward-right triangle, matching the design's "linked" cue).
+    var symbolLink: Bool = false
 
     var body: some View {
-        RoundedRectangle(cornerRadius: cornerRadius)
-            .fill(
-                LinearGradient(
-                    colors: active
-                        ? [AppTheme.tileActiveTop, AppTheme.tileActiveBottom]
-                        : [AppTheme.tileTop, AppTheme.tileBottom],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
+        ZStack(alignment: .topTrailing) {
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .fill(
+                    LinearGradient(
+                        colors: active
+                            ? [AppTheme.tileActiveTop, AppTheme.tileActiveBottom]
+                            : [AppTheme.tileTop, AppTheme.tileBottom],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
                 )
-            )
-            .frame(width: size, height: size)
-            .overlay {
-                Text(verbatim: title)
-                    .font(AppTheme.display(size * 0.42, weight: .semibold))
+                .frame(width: size, height: size)
+                .overlay {
+                    Text(verbatim: title)
+                        .font(AppTheme.display(size * 0.42, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+                .accessibilityHidden(true)
+            if symbolLink {
+                // 9pt triangle pinned to the top-right; inset so the tip
+                // touches the avatar's edge for a crisp "chip" feel.
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(.white)
+                    .padding(2)
+                    .background(
+                        Circle().fill(AppTheme.accentChipText).frame(width: 14, height: 14),
+                        alignment: .topTrailing
+                    )
+                    .offset(x: 4, y: -4)
+                    .accessibilityHidden(true)
             }
-            .accessibilityHidden(true)
+        }
     }
 }
 
