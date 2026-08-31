@@ -125,6 +125,7 @@ struct SkillListView: View {
     private var content: some View {
         if case .failed(let message) = refreshState {
             listEmpty(
+                icon: "exclamationmark.triangle",
                 title: L10n.string("Refresh Failed"),
                 message: message,
                 actionTitle: nil,
@@ -178,6 +179,7 @@ struct SkillListView: View {
     private var emptyState: some View {
         if hasActiveFilters {
             listEmpty(
+                icon: "magnifyingglass",
                 title: L10n.string("No Matching Skills"),
                 message: L10n.string("No Matching Skills Description"),
                 actionTitle: L10n.string("Clear Search"),
@@ -185,6 +187,7 @@ struct SkillListView: View {
             )
         } else if !hasAuthorization {
             listEmpty(
+                icon: "folder.badge.questionmark",
                 title: L10n.string("No Skills in Scope"),
                 message: L10n.string("No Skills in Scope Description"),
                 actionTitle: nil,
@@ -196,6 +199,7 @@ struct SkillListView: View {
             }
         } else if allSkillCount == 0 {
             listEmpty(
+                icon: "folder.badge.questionmark",
                 title: L10n.string("No Skills in Scope"),
                 message: L10n.string("No Skills in Scope Description"),
                 actionTitle: nil,
@@ -207,6 +211,7 @@ struct SkillListView: View {
             }
         } else {
             listEmpty(
+                icon: "magnifyingglass",
                 title: L10n.string("No Skills in Scope"),
                 message: L10n.string("No Skills in Scope Description"),
                 actionTitle: L10n.string("Clear Search"),
@@ -235,32 +240,22 @@ struct SkillListView: View {
         .accessibilityLabel(title)
     }
 
-    /// `.list-empty` centered state with the design's typography.
+    /// `.list-empty` centered state, converging on the shared `EmptyState`
+    /// component so every list column renders empty screens identically.
     private func listEmpty(
+        icon: String?,
         title: String,
         message: String,
         actionTitle: String?,
         action: (() -> Void)?
     ) -> some View {
-        VStack(spacing: 8) {
-            Spacer(minLength: 48)
-            Text(verbatim: title)
-                .font(AppTheme.display(17, weight: .semibold))
-                .foregroundStyle(AppTheme.foreground)
-                .lineLimit(1)
-            Text(verbatim: message)
-                .font(AppTheme.body(13))
-                .foregroundStyle(AppTheme.muted)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 24)
-            if let actionTitle, let action {
-                textButton(actionTitle, action: action)
-                    .padding(.top, 8)
-            }
-            Spacer(minLength: 48)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        EmptyState(
+            icon: icon,
+            title: title,
+            message: message,
+            actionTitle: actionTitle,
+            action: action
+        )
     }
 }
 

@@ -90,23 +90,11 @@ struct RulesListView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 8) {
-            Spacer(minLength: 48)
-            Image(systemName: "text.document")
-                .font(.system(size: 26))
-                .foregroundStyle(AppTheme.meta)
-            Text(verbatim: L10n.string("No Rules Files"))
-                .font(AppTheme.display(17, weight: .semibold))
-                .foregroundStyle(AppTheme.foreground)
-            Text(verbatim: L10n.string("No Rules Files Description"))
-                .font(AppTheme.body(13))
-                .foregroundStyle(AppTheme.muted)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 24)
-            Spacer(minLength: 48)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        EmptyState(
+            icon: "text.document",
+            title: L10n.string("No Rules Files"),
+            message: L10n.string("No Rules Files Description")
+        )
     }
 }
 

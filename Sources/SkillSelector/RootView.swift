@@ -307,6 +307,19 @@ struct RootView: View {
                 (NSApp.keyWindow?.firstResponder as? NSTextView)?.selectAll(nil)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .performRefresh)) { _ in
+            // ⌘R mirrors the toolbar refresh button exactly.
+            Task { await model.refresh() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .performRevealSelection)) { _ in
+            revealCurrentSelection()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .performOpenSelection)) { _ in
+            openCurrentSelection()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .performToggleAppearance)) { _ in
+            toggleAppearance()
+        }
         .languageReloading()
         .themedAppearance()
         .toolbar {
@@ -406,10 +419,7 @@ struct RootView: View {
     /// `.themeBtn`: moon in light mode, sun in dark mode; toggles between
     /// the two like the HTML prototype's `ss.theme` flip.
     private var themeToggle: some View {
-        Button {
-            let dark = ThemePreference.effectiveDark(mode: themeMode)
-            themeMode = dark ? "light" : "dark"
-        } label: {
+        Button(action: toggleAppearance) {
             Image(systemName: ThemePreference.effectiveDark(mode: themeMode) ? "sun.max" : "moon")
                 .font(.system(size: 14))
                 .frame(width: 30, height: 30)
@@ -426,6 +436,13 @@ struct RootView: View {
                 ? L10n.string("Switch to Light Mode")
                 : L10n.string("Switch to Dark Mode")
         )
+    }
+
+    /// Flips the persisted appearance between light and dark — the shared
+    /// implementation behind the toolbar toggle and the ⌘⌥T menu item.
+    private func toggleAppearance() {
+        let dark = ThemePreference.effectiveDark(mode: themeMode)
+        themeMode = dark ? "light" : "dark"
     }
 
     // MARK: Re-authorization banner
@@ -598,6 +615,29 @@ struct RootView: View {
     }
 
     // MARK: Reveal / open
+
+    /// The Skill behind the current primary selection, if any — the target
+    /// of the ⌘↩ / ⌘O menu actions.
+    private var selectedSkillSnapshot: SkillSnapshot? {
+        model.selection.flatMap { selection in
+            model.snapshots.first { $0.path == selection.path }
+        }
+    }
+
+    /// ⌘↩ handler: reveals the currently selected Skill in Finder. Falls
+    /// back gracefully when nothing is selected — the menu item is active
+    /// app-wide, but the action needs a concrete path to act on.
+    private func revealCurrentSelection() {
+        guard let skill = selectedSkillSnapshot else { return }
+        reveal(skill)
+    }
+
+    /// ⌘O handler: opens the selected Skill's SKILL.md in the default
+    /// editor. Same fallback as `revealCurrentSelection`.
+    private func openCurrentSelection() {
+        guard let skill = selectedSkillSnapshot else { return }
+        openInEditor(skill)
+    }
 
     private func reveal(_ skill: SkillSnapshot) {
         do {

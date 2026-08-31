@@ -354,6 +354,14 @@ struct ListSearchBar: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(L10n.string("Clear Search"))
+            } else if !searchFocused {
+                // Empty-and-idle hint for the ⌘F shortcut (HIG: discoverable
+                // but unobtrusive); it disappears as soon as the caret lands.
+                Text("⌘F")
+                    .font(AppTheme.body(11, weight: .medium))
+                    .foregroundStyle(AppTheme.meta)
+                    .padding(.trailing, 4)
+                    .accessibilityHidden(true)
             }
         }
         .padding(.horizontal, 10)
@@ -368,19 +376,81 @@ struct ListSearchBar: View {
 }
 
 
-/// "No matching results" state for filtered list columns.
-struct NoResultsView: View {
+/// Shared list-column empty state (`.list-empty`): optional icon, title,
+/// message, and an optional text action. Every list column converges on
+/// this component so empty screens look and behave identically across
+/// All Skills, Duplicates, Symlinks, Rules, MCP, and the Marketplace.
+struct EmptyState: View {
+    var icon: String? = nil
+    let title: String
+    var message: String? = nil
+    var actionTitle: String? = nil
+    var action: (() -> Void)? = nil
+
     var body: some View {
         VStack(spacing: 8) {
             Spacer(minLength: 48)
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 26))
-                .foregroundStyle(AppTheme.meta)
-            Text(verbatim: L10n.string("No Matching Results"))
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 26))
+                    .foregroundStyle(AppTheme.meta)
+            }
+            Text(verbatim: title)
                 .font(AppTheme.display(17, weight: .semibold))
                 .foregroundStyle(AppTheme.foreground)
+                .lineLimit(1)
+            if let message {
+                Text(verbatim: message)
+                    .font(AppTheme.body(13))
+                    .foregroundStyle(AppTheme.muted)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 24)
+            }
+            if let actionTitle, let action {
+                Button(action: action) {
+                    Text(verbatim: actionTitle)
+                        .font(AppTheme.body(13, weight: .medium))
+                        .foregroundStyle(AppTheme.accent)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(EmptyStateActionStyle())
+                .padding(.top, 8)
+                .accessibilityLabel(actionTitle)
+            }
             Spacer(minLength: 48)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// Faint accent fill on hover, matching the design's text-button behavior.
+private struct EmptyStateActionStyle: ButtonStyle {
+    @State private var isHovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background {
+                if isHovering && !configuration.isPressed {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(AppTheme.accentTintFaint)
+                }
+            }
+            .onHover { hovering in
+                isHovering = hovering
+            }
+    }
+}
+
+/// "No matching results" — the search-filtered variant of `EmptyState`,
+/// kept as a convenience wrapper for filtered list columns.
+struct NoResultsView: View {
+    var body: some View {
+        EmptyState(
+            icon: "magnifyingglass",
+            title: L10n.string("No Matching Results")
+        )
     }
 }

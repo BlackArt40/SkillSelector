@@ -10,6 +10,17 @@ extension Notification.Name {
     static let performGoForward = Notification.Name("SkillSelector.performGoForward")
     /// Posted by the Find item (⌘F); RootView focuses its search field.
     static let focusSearchField = Notification.Name("SkillSelector.focusSearchField")
+    /// Posted by the File menu's Refresh item (⌘R); RootView runs a scan.
+    static let performRefresh = Notification.Name("SkillSelector.performRefresh")
+    /// Posted by the File menu's Reveal item (⌘↩); RootView reveals the
+    /// selected Skill in Finder.
+    static let performRevealSelection = Notification.Name("SkillSelector.performRevealSelection")
+    /// Posted by the File menu's Open item (⌘O); RootView opens the selected
+    /// Skill in the default editor.
+    static let performOpenSelection = Notification.Name("SkillSelector.performOpenSelection")
+    /// Posted by the View menu's Appearance item (⌘⌥T); RootView flips the
+    /// light/dark mode.
+    static let performToggleAppearance = Notification.Name("SkillSelector.performToggleAppearance")
     /// Posted when the toolbar search field gained keyboard focus by being
     /// clicked (AppKit path); RootView syncs its FocusState.
     static let searchFocusStarted = Notification.Name("SkillSelector.searchFocusStarted")
@@ -50,6 +61,34 @@ struct WindowCommands: Commands {
                 NotificationCenter.default.post(name: .focusSearchField, object: nil)
             }
             .keyboardShortcut("f", modifiers: .command)
+        }
+
+        // The File menu carries the only two file-touching actions plus
+        // refresh: ⌘R rescans, ⌘↩ reveals the selected Skill's directory in
+        // Finder, and ⌘O opens its SKILL.md in the default editor.
+        CommandGroup(after: .saveItem) {
+            Divider()
+            Button(L10n.string("Refresh Now")) {
+                NotificationCenter.default.post(name: .performRefresh, object: nil)
+            }
+            .keyboardShortcut("r", modifiers: .command)
+            Divider()
+            Button(L10n.string("Reveal Skill Document in Finder")) {
+                NotificationCenter.default.post(name: .performRevealSelection, object: nil)
+            }
+            .keyboardShortcut(.return, modifiers: .command)
+            Button(L10n.string("Open in Default Editor")) {
+                NotificationCenter.default.post(name: .performOpenSelection, object: nil)
+            }
+            .keyboardShortcut("o", modifiers: .command)
+        }
+
+        // View menu: ⌘⌥T flips the appearance like the toolbar toggle.
+        CommandGroup(after: .toolbar) {
+            Button(L10n.string("Toggle Appearance")) {
+                NotificationCenter.default.post(name: .performToggleAppearance, object: nil)
+            }
+            .keyboardShortcut("t", modifiers: [.command, .option])
         }
     }
 }

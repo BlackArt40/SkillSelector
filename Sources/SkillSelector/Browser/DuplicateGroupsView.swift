@@ -214,20 +214,11 @@ struct DuplicateGroupsView: View {
     }
 
     private func emptyState(title: String, message: String) -> some View {
-        VStack(spacing: 8) {
-            Spacer(minLength: 48)
-            Text(verbatim: title)
-                .font(AppTheme.display(17, weight: .semibold))
-                .foregroundStyle(AppTheme.foreground)
-            Text(verbatim: message)
-                .font(AppTheme.body(13))
-                .foregroundStyle(AppTheme.muted)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 24)
-            Spacer(minLength: 48)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        EmptyState(
+            icon: "doc.on.doc",
+            title: title,
+            message: message
+        )
     }
 }
 

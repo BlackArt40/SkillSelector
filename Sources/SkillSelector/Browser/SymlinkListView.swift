@@ -69,20 +69,11 @@ struct SymlinkListView: View {
     @ViewBuilder
     private var content: some View {
         if links.isEmpty {
-            VStack(spacing: 8) {
-                Spacer(minLength: 48)
-                Text(verbatim: L10n.string("No Symbolic Links"))
-                    .font(AppTheme.display(17, weight: .semibold))
-                    .foregroundStyle(AppTheme.foreground)
-                Text(verbatim: L10n.string("No Symbolic Links Description"))
-                    .font(AppTheme.body(13))
-                    .foregroundStyle(AppTheme.muted)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 24)
-                Spacer(minLength: 48)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            EmptyState(
+                icon: "link",
+                title: L10n.string("No Symbolic Links"),
+                message: L10n.string("No Symbolic Links Description")
+            )
         } else if displayedLinks.isEmpty {
             NoResultsView()
         } else {

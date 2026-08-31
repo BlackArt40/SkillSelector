@@ -296,23 +296,11 @@ struct CatalogListView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 8) {
-            Spacer(minLength: 48)
-            Image(systemName: "sparkles")
-                .font(.system(size: 26))
-                .foregroundStyle(AppTheme.meta)
-            Text(verbatim: L10n.string("No Marketplace Skills"))
-                .font(AppTheme.display(17, weight: .semibold))
-                .foregroundStyle(AppTheme.foreground)
-            Text(verbatim: L10n.string("No Marketplace Skills Description"))
-                .font(AppTheme.body(13))
-                .foregroundStyle(AppTheme.muted)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 24)
-            Spacer(minLength: 48)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        EmptyState(
+            icon: "sparkles",
+            title: L10n.string("No Marketplace Skills"),
+            message: L10n.string("No Marketplace Skills Description")
+        )
     }
 
     private var searchBar: some View {
