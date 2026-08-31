@@ -317,14 +317,24 @@ struct MarkdownDocumentView: View {
     }
 
 
-    /// The translated body. Rendered through the same markdown pipeline as
-    /// the original (`MarkdownBodyView`), so headings, lists, inline code
-    /// and fenced code blocks keep their structure after translation.
+    /// The translated body shown side by side with the original
+    /// (bilingual): the translation is primary on top, the source text
+    /// below, each rendered through the same markdown pipeline so
+    /// headings, lists, inline code and fenced code blocks keep their
+    /// structure in both languages.
     @ViewBuilder
     private func translatedBodyView(_ original: String) -> some View {
         Group {
             if let translatedText {
-                MarkdownBodyView(text: translatedText)
+                VStack(alignment: .leading, spacing: 16) {
+                    bilingualLanguageTag(L10n.string("Chinese"))
+                    MarkdownBodyView(text: translatedText)
+                    Rectangle()
+                        .fill(AppTheme.borderSoft)
+                        .frame(height: 1)
+                    bilingualLanguageTag(L10n.string("English"))
+                    MarkdownBodyView(text: original)
+                }
             } else if isTranslating {
                 HStack(spacing: 8) {
                     ProgressView()
@@ -338,6 +348,15 @@ struct MarkdownDocumentView: View {
             }
         }
         .padding(20)
+    }
+
+    /// Small muted language label above each bilingual pane
+    /// ("中文" / "English").
+    private func bilingualLanguageTag(_ label: String) -> some View {
+        Text(verbatim: label)
+            .font(AppTheme.body(11, weight: .semibold))
+            .foregroundStyle(AppTheme.meta)
+            .textCase(.uppercase)
     }
 
     @MainActor
