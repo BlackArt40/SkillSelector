@@ -71,9 +71,18 @@ struct MarkdownDocumentView: View {
             do {
                 // Body only — frontmatter is intentionally excluded. The
                 // async translate hops off the main thread itself.
-                let response = try await session.translate(text)
-                translationCache[text] = response.targetText
-                translatedText = response.targetText
+                //
+                // Markdown-aware translation: fenced code blocks (``` / ~~~)
+                // keep their content untouched — code is not prose — while
+                // everything outside fences is translated. The result is
+                // recombined with the fences intact and rendered as markdown
+                // by MarkdownBodyView.
+                let translated = try await translateMarkdownPreservingFences(
+                    text,
+                    using: session
+                )
+                translationCache[text] = translated
+                translatedText = translated
                 isTranslated = true
             } catch {
                 // Keep the original visible; the toggle falls back to 原文.
@@ -83,6 +92,52 @@ struct MarkdownDocumentView: View {
             isTranslating = false
             translationRequest = nil
         }
+    }
+
+    /// Translates markdown body text while leaving fenced code blocks
+    /// verbatim. Each non-fence chunk is translated as a unit so headings,
+    /// emphasis and inline code markers survive the round trip and the
+    /// translated body still renders as markdown.
+    private func translateMarkdownPreservingFences(
+        _ text: String,
+        using session: TranslationSession
+    ) async throws -> String {
+        let lines = text.components(separatedBy: "\n")
+        var result: [String] = []
+        var pending: [String] = []   // prose lines awaiting translation
+        var inFence = false
+        var fenceMarker = ""
+
+        func flushProse() async throws {
+            guard !pending.isEmpty else { return }
+            let chunk = pending.joined(separator: "\n")
+            let translated = try await session.translate(chunk)
+            result.append(translated.targetText)
+            pending = []
+        }
+
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") {
+                try await flushProse()
+                if inFence {
+                    result.append(line)          // closing fence, verbatim
+                    inFence = false
+                } else {
+                    fenceMarker = trimmed
+                    result.append(line)          // opening fence, verbatim
+                    inFence = true
+                }
+                continue
+            }
+            if inFence {
+                result.append(line)              // code content, verbatim
+            } else {
+                pending.append(line)
+            }
+        }
+        try await flushProse()
+        return result.joined(separator: "\n")
     }
 
     private var cardHead: some View {
@@ -262,18 +317,14 @@ struct MarkdownDocumentView: View {
     }
 
 
-    /// The translated body rendered as plain markdown-ish text (kept
-    /// simple: translation output is prose, not source markdown).
+    /// The translated body. Rendered through the same markdown pipeline as
+    /// the original (`MarkdownBodyView`), so headings, lists, inline code
+    /// and fenced code blocks keep their structure after translation.
     @ViewBuilder
     private func translatedBodyView(_ original: String) -> some View {
         Group {
             if let translatedText {
-                Text(verbatim: translatedText)
-                    .font(AppTheme.body(13.5))
-                    .foregroundStyle(AppTheme.foregroundSecondary)
-                    .lineSpacing(4)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
+                MarkdownBodyView(text: translatedText)
             } else if isTranslating {
                 HStack(spacing: 8) {
                     ProgressView()
