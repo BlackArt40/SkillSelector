@@ -80,10 +80,28 @@ struct SkillDetailView: View {
                 isDescriptionTranslating = false
                 return
             }
+            // Watchdog: never leave the user on an eternal spinner. If the
+            // system translation stalls (long descriptions are the usual
+            // trigger), fall back to the original text after 30 seconds.
+            let watchdog = Task { @MainActor in
+                try? await Task.sleep(for: .seconds(30))
+                if isDescriptionTranslating {
+                    isDescriptionTranslating = false
+                    isDescriptionTranslated = false
+                }
+            }
+            defer { watchdog.cancel() }
             do {
-                let translated = try await session.translate(text)
-                model.descriptionTranslations[text] = translated.targetText
-                translatedDescription = translated.targetText
+                // Split long descriptions into sentence-sized segments and
+                // translate them in one batch — a single translate() call
+                // with a long string stalls (the spinner never clears).
+                // translations(from:) keeps the response order.
+                let translated = try await translateDescriptionSegments(
+                    text,
+                    using: session
+                )
+                model.descriptionTranslations[text] = translated
+                translatedDescription = translated
                 isDescriptionTranslated = true
             } catch {
                 // Keep the original visible.
@@ -269,6 +287,80 @@ struct SkillDetailView: View {
                 )
             }
         }
+    }
+
+    /// Translates a description segment by segment: split into
+    /// sentence-sized segments (paragraphs first, then long paragraphs at
+    /// sentence boundaries), translate each non-empty segment with
+    /// `translate(String)`, and rejoin preserving the original blank-line
+    /// structure. A single `translate()` call on a long string stalls the
+    /// system session — the spinner never clears. Segments stay short so
+    /// each call returns quickly; the translate call stays directly in
+    /// this loop (no nested async closure) so release-mode isolation
+    /// checks accept it (a batch `translations(from:)` call is rejected
+    /// because `[Request]` isn't Sendable under Swift 6).
+    private func translateDescriptionSegments(
+        _ text: String,
+        using session: TranslationSession
+    ) async throws -> String {
+        let segments = descriptionSegments(text)
+        var result = segments
+        for (index, segment) in segments.enumerated() {
+            guard !segment.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
+            let translated = try await session.translate(segment)
+            result[index] = translated.targetText
+        }
+        return result.joined(separator: "\n")
+    }
+
+    /// Splits a description into translatable segments: paragraphs
+    /// first, then paragraphs longer than 200 characters broken at
+    /// sentence boundaries so no single request carries too much text.
+    /// Blank lines are preserved as structure and skipped by the
+    /// translator (empty requests would throw).
+    private func descriptionSegments(_ text: String) -> [String] {
+        let paragraphs = text.components(separatedBy: "\n")
+        var segments: [String] = []
+        for paragraph in paragraphs {
+            if paragraph.trimmingCharacters(in: .whitespaces).isEmpty {
+                segments.append(paragraph)
+            } else if paragraph.count > 200 {
+                segments.append(contentsOf: sentenceSegments(paragraph))
+            } else {
+                segments.append(paragraph)
+            }
+        }
+        return segments
+    }
+
+    /// Breaks a long paragraph at sentence-ending punctuation, keeping
+    /// the punctuation attached; any still-huge sentence is hard-split.
+    private func sentenceSegments(_ text: String) -> [String] {
+        var sentences: [String] = []
+        var current = ""
+        for character in text {
+            current.append(character)
+            if "!.?".contains(character) {
+                sentences.append(current)
+                current = ""
+            }
+        }
+        if !current.isEmpty {
+            sentences.append(current)
+        }
+        return sentences.flatMap { $0.count > 200 ? lengthSegments($0) : [$0] }
+    }
+
+    /// Hard-splits a still-overlong string into ≤200-character chunks.
+    private func lengthSegments(_ text: String) -> [String] {
+        var chunks: [String] = []
+        var start = text.startIndex
+        while start < text.endIndex {
+            let end = text.index(start, offsetBy: 200, limitedBy: text.endIndex) ?? text.endIndex
+            chunks.append(String(text[start..<end]))
+            start = end
+        }
+        return chunks
     }
 
     private func descriptionText(_ skill: SkillSnapshot) -> String {
