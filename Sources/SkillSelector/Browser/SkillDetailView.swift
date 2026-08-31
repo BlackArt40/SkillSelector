@@ -374,7 +374,7 @@ struct SkillDetailView: View {
             if paragraph.trimmingCharacters(in: .whitespaces).isEmpty {
                 translatedParagraphs.append(paragraph)
             } else if paragraph.count > 200 {
-                let sentences = sentenceSegments(paragraph)
+                let sentences = DescriptionSplitter.sentenceSegments(paragraph)
                 var translatedSentences: [String] = []
                 for sentence in sentences {
                     guard !sentence.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
@@ -388,64 +388,6 @@ struct SkillDetailView: View {
             }
         }
         return translatedParagraphs.joined(separator: "\n")
-    }
-
-    /// Closing delimiters absorbed into the sentence that ends with
-    /// sentence-ending punctuation — "standards?) and" splits as
-    /// "standards?) " + "and", never "standards?" + ") and".
-    private static let sentenceClosingDelimiters: [Character] = [")", "\"", "'", "]", "}"]
-
-    /// Breaks a long paragraph at sentence-ending punctuation, keeping
-    /// the punctuation attached. Closing delimiters and any further
-    /// sentence-ending punctuation right after stay with the sentence
-    /// ("asked for?)." is one segment, never "asked for?)" + "."), and
-    /// following spaces are dropped — the caller rejoins with a single
-    /// space, so the split point is invisible in the output. Any
-    /// still-huge sentence is hard-split.
-    private func sentenceSegments(_ text: String) -> [String] {
-        var sentences: [String] = []
-        var current = ""
-        var index = text.startIndex
-        while index < text.endIndex {
-            let character = text[index]
-            current.append(character)
-            if "!.?".contains(character) {
-                // Absorb closing delimiters and further sentence-ending
-                // punctuation immediately after — "for?)." stays whole.
-                var lookahead = text.index(after: index)
-                while lookahead < text.endIndex,
-                      Self.sentenceClosingDelimiters.contains(text[lookahead])
-                        || "!.?".contains(text[lookahead]) {
-                    current.append(text[lookahead])
-                    lookahead = text.index(after: lookahead)
-                }
-                // Drop following spaces — the joiner supplies one.
-                while lookahead < text.endIndex, text[lookahead] == " " {
-                    lookahead = text.index(after: lookahead)
-                }
-                sentences.append(current)
-                current = ""
-                index = lookahead
-                continue
-            }
-            index = text.index(after: index)
-        }
-        if !current.isEmpty {
-            sentences.append(current)
-        }
-        return sentences.flatMap { $0.count > 200 ? lengthSegments($0) : [$0] }
-    }
-
-    /// Hard-splits a still-overlong string into ≤200-character chunks.
-    private func lengthSegments(_ text: String) -> [String] {
-        var chunks: [String] = []
-        var start = text.startIndex
-        while start < text.endIndex {
-            let end = text.index(start, offsetBy: 200, limitedBy: text.endIndex) ?? text.endIndex
-            chunks.append(String(text[start..<end]))
-            start = end
-        }
-        return chunks
     }
 
     private func descriptionText(_ skill: SkillSnapshot) -> String {
