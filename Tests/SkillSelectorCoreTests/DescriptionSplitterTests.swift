@@ -83,7 +83,8 @@ final class DescriptionSplitterTests: XCTestCase {
     }
 
     /// A still-huge single sentence is hard-split into ≤200-char chunks
-    /// whose concatenation equals the original.
+    /// that rejoin (with a single space) to the original — never a lone
+    /// "." or a torn word at the boundary.
     func testLongSentenceHardSplit() {
         let long = String(repeating: "word ", count: 60) + "end." // 301 chars
         XCTAssertGreaterThan(long.count, DescriptionSplitter.maxSegmentLength)
@@ -93,7 +94,50 @@ final class DescriptionSplitterTests: XCTestCase {
         for segment in segments {
             XCTAssertLessThanOrEqual(segment.count, DescriptionSplitter.maxSegmentLength)
         }
-        XCTAssertEqual(segments.joined(), long)
+        // Every cut lands on a single-space boundary, so single-space
+        // rejoining reproduces the original exactly.
+        XCTAssertEqual(segments.joined(separator: " "), long)
+    }
+
+    /// The real-world case the sweep flagged: a 201-char sentence whose
+    /// 200-char hard cut would land right before the final period. The
+    /// word-boundary lookback keeps "research." whole — no lone ".".
+    func testHardSplitBacksUpToWordBoundary() {
+        let text = #"Trigger with "user research plan", "interview guide", "usability test", "survey design", "research questions", or when the user needs help with any aspect of understanding their users through research."#
+        XCTAssertEqual(text.count, 201)
+        XCTAssertGreaterThan(text.count, DescriptionSplitter.maxSegmentLength)
+
+        let segments = DescriptionSplitter.sentenceSegments(text)
+        for segment in segments {
+            XCTAssertLessThanOrEqual(segment.count, DescriptionSplitter.maxSegmentLength)
+            XCTAssertFalse(segment == ".", "句末句号不应被切出为孤立段")
+            XCTAssertFalse(segment.hasPrefix(" "), "段首不应有空格")
+        }
+        XCTAssertEqual(segments.joined(separator: " "), text)
+    }
+
+    /// Domains and abbreviations with internal periods ("qq.com",
+    /// "e.g.", "1.2.3") must never be torn apart by the splitter.
+    func testMidWordPeriodsDoNotSplit() {
+        XCTAssertEqual(
+            DescriptionSplitter.sentenceSegments("Deploy to docs.qq.com and verify."),
+            ["Deploy to docs.qq.com and verify."]
+        )
+        XCTAssertEqual(
+            DescriptionSplitter.sentenceSegments("Use e.g. dist/ and i.e. src/."),
+            ["Use e.g.", "dist/ and i.e.", "src/."]
+        )
+        XCTAssertEqual(
+            DescriptionSplitter.sentenceSegments("Version 1.2.3 is ready."),
+            ["Version 1.2.3 is ready."]
+        )
+        // U.S.A.: the inner periods are mid-word (never "U. S. A."), the
+        // trailing "A." followed by a space is a sentence boundary — the
+        // abbreviation stays one segment and rejoining reproduces the
+        // original exactly.
+        let usa = DescriptionSplitter.sentenceSegments("Works in the U.S.A. today.")
+        XCTAssertEqual(usa, ["Works in the U.S.A.", "today."])
+        XCTAssertEqual(usa.joined(separator: " "), "Works in the U.S.A. today.")
     }
 
     /// Every segment must stay within the length cap that keeps the
