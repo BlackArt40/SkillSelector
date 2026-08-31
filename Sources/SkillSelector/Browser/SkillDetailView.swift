@@ -396,11 +396,12 @@ struct SkillDetailView: View {
     private static let sentenceClosingDelimiters: [Character] = [")", "\"", "'", "]", "}"]
 
     /// Breaks a long paragraph at sentence-ending punctuation, keeping
-    /// the punctuation attached. Closing delimiters right after the
-    /// punctuation stay with the sentence, and one following space is
-    /// dropped — the caller rejoins with a single space, so the split
-    /// point is invisible in the output. Any still-huge sentence is
-    /// hard-split.
+    /// the punctuation attached. Closing delimiters and any further
+    /// sentence-ending punctuation right after stay with the sentence
+    /// ("asked for?)." is one segment, never "asked for?)" + "."), and
+    /// following spaces are dropped — the caller rejoins with a single
+    /// space, so the split point is invisible in the output. Any
+    /// still-huge sentence is hard-split.
     private func sentenceSegments(_ text: String) -> [String] {
         var sentences: [String] = []
         var current = ""
@@ -409,15 +410,17 @@ struct SkillDetailView: View {
             let character = text[index]
             current.append(character)
             if "!.?".contains(character) {
-                // Absorb closing delimiters immediately after the punctuation.
+                // Absorb closing delimiters and further sentence-ending
+                // punctuation immediately after — "for?)." stays whole.
                 var lookahead = text.index(after: index)
                 while lookahead < text.endIndex,
-                      Self.sentenceClosingDelimiters.contains(text[lookahead]) {
+                      Self.sentenceClosingDelimiters.contains(text[lookahead])
+                        || "!.?".contains(text[lookahead]) {
                     current.append(text[lookahead])
                     lookahead = text.index(after: lookahead)
                 }
-                // Drop one following space — the joiner supplies it.
-                if lookahead < text.endIndex, text[lookahead] == " " {
+                // Drop following spaces — the joiner supplies one.
+                while lookahead < text.endIndex, text[lookahead] == " " {
                     lookahead = text.index(after: lookahead)
                 }
                 sentences.append(current)
