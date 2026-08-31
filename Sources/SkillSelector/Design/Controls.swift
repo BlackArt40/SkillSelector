@@ -459,6 +459,7 @@ struct NoResultsView: View {
 /// gradient sweeps left-to-right on a 1.4 s cycle (spec §5.8), then
 /// restarts — the classic native-feeling shimmer, no easing bounce.
 private struct ShimmerHighlight: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var phase: CGFloat = 0
 
     var body: some View {
@@ -473,9 +474,23 @@ private struct ShimmerHighlight: View {
             .offset(x: -bandWidth + phase * (proxy.size.width + bandWidth))
         }
         .onAppear {
-            withAnimation(.linear(duration: 1.4).repeatForever(autoreverses: false)) {
-                phase = 1
+            // Respect "reduce motion": the skeleton shows a static band
+            // instead of sweeping, so the loading state stays calm.
+            guard !reduceMotion else { return }
+            startSweep()
+        }
+        .onChange(of: reduceMotion) { _, reduced in
+            if reduced {
+                withAnimation(.easeOut(duration: 0.15)) { phase = 0 }
+            } else {
+                startSweep()
             }
+        }
+    }
+
+    private func startSweep() {
+        withAnimation(.linear(duration: 1.4).repeatForever(autoreverses: false)) {
+            phase = 1
         }
     }
 }

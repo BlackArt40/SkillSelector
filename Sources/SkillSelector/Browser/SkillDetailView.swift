@@ -12,6 +12,11 @@ struct SkillDetailView: View {
     var onRevealInFinder: ((SkillSnapshot) -> Void)?
     var onOpenInEditor: ((SkillSnapshot) -> Void)?
 
+    /// Dynamic Type scaling for the hero title (28 → ~34) and the core /
+    /// document section bodies (14 → ~17 at the largest supported size).
+    @ScaledMetric(relativeTo: .largeTitle) private var heroTitleSize: CGFloat = 28
+    @ScaledMetric(relativeTo: .body) private var bodySize: CGFloat = 14
+
     var body: some View {
         if let skill {
             ScrollView {
@@ -50,7 +55,7 @@ struct SkillDetailView: View {
             .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
             VStack(alignment: .leading, spacing: 0) {
                 Text(verbatim: skill.name)
-                    .font(AppTheme.display(28, weight: .semibold))
+                    .font(AppTheme.display(heroTitleSize, weight: .semibold))
                     .foregroundStyle(AppTheme.foreground)
                     .lineLimit(1)
                     .textSelection(.enabled)
@@ -112,7 +117,7 @@ struct SkillDetailView: View {
                 badge: srcBadge(skill)
             )
             Text(verbatim: descriptionText(skill))
-                .font(AppTheme.body(14))
+                .font(AppTheme.body(bodySize))
                 .foregroundStyle(AppTheme.foregroundSecondary)
                 .lineSpacing(4)
                 .textSelection(.enabled)
@@ -194,10 +199,10 @@ struct SkillDetailView: View {
             AppIconView(size: 96)
                 .opacity(0.9)
             Text(verbatim: L10n.string("Select a Skill"))
-                .font(AppTheme.display(28, weight: .semibold))
+                .font(AppTheme.display(heroTitleSize, weight: .semibold))
                 .foregroundStyle(AppTheme.foreground)
             Text(verbatim: L10n.string("Select a Skill Description"))
-                .font(AppTheme.body(14))
+                .font(AppTheme.body(bodySize))
                 .foregroundStyle(AppTheme.muted)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 340)

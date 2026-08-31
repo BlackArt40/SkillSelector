@@ -18,6 +18,11 @@ struct SkillRow: View {
     var onRevealInFinder: ((SkillSnapshot) -> Void)?
     var onOpenInEditor: ((SkillSnapshot) -> Void)?
 
+    /// Dynamic Type scaling: name 13.5 → ~16, description 12 → ~14 at the
+    /// largest supported size, while rows keep their visual hierarchy.
+    @ScaledMetric(relativeTo: .body) private var nameSize: CGFloat = 13.5
+    @ScaledMetric(relativeTo: .body) private var descriptionSize: CGFloat = 12
+
     private var descriptionText: String {
         skill.localDescription ?? skill.name
     }
@@ -37,7 +42,7 @@ struct SkillRow: View {
             HighlightedText(
                 text: displayed,
                 query: highlightQuery,
-                font: AppTheme.body(12),
+                font: AppTheme.body(descriptionSize),
                 baseColor: AppTheme.muted
             )
             .lineLimit(1)
@@ -45,7 +50,7 @@ struct SkillRow: View {
             HighlightedText(
                 text: description,
                 query: highlightQuery,
-                font: AppTheme.body(12),
+                font: AppTheme.body(descriptionSize),
                 baseColor: AppTheme.muted
             )
             .lineLimit(1)
@@ -101,7 +106,7 @@ struct SkillRow: View {
                         HighlightedText(
                             text: skill.name,
                             query: highlightQuery,
-                            font: AppTheme.display(13.5, weight: .semibold),
+                            font: AppTheme.display(nameSize, weight: .semibold),
                             baseColor: AppTheme.foreground
                         )
                         .lineLimit(1)

@@ -24,6 +24,13 @@ struct RootView: View {
     @State private var sort: SkillQuery.Sort = .default
     @State private var openError: String?
     @FocusState private var searchFocused: Bool
+    /// ⌘1/⌘2/⌘3 column focus. Sidebar and detail panes have no text field,
+    /// so the focus lands on the pane itself (the sidebar's first
+    /// interactive row via focusability, the detail's scroll content) —
+    /// enough for VoiceOver / full keyboard access to reach them. The list
+    /// column focuses its search field, the same target as ⌘F.
+    @FocusState private var sidebarFocused: Bool
+    @FocusState private var detailFocused: Bool
     /// Searchable middle-column width, adjustable by dragging the resizer.
     @State private var listColumnWidth: CGFloat = 400
     /// Local event monitor resigning the toolbar search field on outside
@@ -62,31 +69,56 @@ struct RootView: View {
     var body: some View {
         @Bindable var model = model
         let currentDestination = destination
-        let query = SkillQuery(
-            scope: currentDestination.queryScope,
-            agentID: currentDestination.agentID,
-            searchText: searchText,
-            sort: sort
-        )
-        let agentNamesByID = Dictionary(
-            model.agentDefinitions.map { ($0.id, $0.displayName) },
-            uniquingKeysWith: { first, _ in first }
-        )
-        let filteredSkills = query.apply(
-            to: model.snapshots,
-            rootsByID: model.rootsByID,
-            agentNamesByID: agentNamesByID,
-            bodyTextsByPath: model.bodySearchTextsByPath
-        )
         let detectedAgentIDs = BrowserSidebar.detectedAgentIDs(
             from: model.snapshots,
             hasAuthorization: model.hasAuthorization
         ).union(BrowserSidebar.mcpAgentIDs(from: model.mcps.servers))
-        let selectedSkill = model.selection.flatMap { selection in
-            model.snapshots.first { $0.path == selection.path }
-        }
-        let symlinkSkills = model.snapshots.filter { $0.resolvedTarget != nil }
+        let title = currentDestination.title(rootsByID: model.rootsByID, definitions: model.agentDefinitions)
 
+        mainContent(detectedAgentIDs: detectedAgentIDs, title: title)
+            .modifier(WindowCommandHandling(
+                onGoBack: { goBack() },
+                onGoForward: { goForward() },
+                onFocusSearch: { focusSearchField() },
+                onRefresh: { Task { await model.refresh() } },
+                onRevealSelection: { revealCurrentSelection() },
+                onOpenSelection: { openCurrentSelection() },
+                onToggleAppearance: { toggleAppearance() },
+                onFocusSidebar: { sidebarFocused = true },
+                onFocusList: { searchFocused = true },
+                onFocusDetail: { detailFocused = true }
+            ))
+            .onAppear { onAppear() }
+            .onDisappear { onDisappear() }
+            .onChange(of: destination) { _, newValue in
+                destinationChanged(newValue)
+            }
+            .onChange(of: searchFocused) { _, focused in
+                searchFocusChanged(focused)
+            }
+            .onChange(of: searchText) { _, newValue in
+                searchTextChanged(newValue)
+            }
+            .onChange(of: model.refreshState) { _, newState in
+                refreshStateChanged(newState)
+            }
+            .languageReloading()
+            .themedAppearance()
+            .toolbar { windowToolbar }
+            .alert(
+                L10n.string("Unable to Open"),
+                isPresented: openErrorBinding
+            ) {
+                Button(L10n.string("OK")) { openError = nil }
+            } message: {
+                Text(verbatim: openError ?? "")
+            }
+    }
+
+    /// The three-column layout: banners, sidebar, list column, resizer, and
+    /// detail pane. Kept separate from `body` so the root view's modifier
+    /// chain stays type-checkable.
+    private func mainContent(detectedAgentIDs: Set<String>, title: String) -> some View {
         VStack(spacing: 0) {
             if !model.unhealthyRootIDs.isEmpty {
                 authorizationBanner
@@ -108,275 +140,136 @@ struct RootView: View {
                     onRemoveRoot: { root in removeRoot(root) }
                 )
                 .frame(width: 240)
+                // ⌘1 target: the sidebar is a button list; focusing the
+                // container lets full-keyboard-access / VoiceOver land in
+                // the pane and tab through its rows.
+                .focused($sidebarFocused)
+                .focusable()
 
-                if currentDestination == .duplicates {
-                    DuplicateGroupsView(
-                        groups: model.duplicateGroups,
-                        nearGroups: model.nearDuplicateGroups,
-                        selection: model.selection,
-                        agentNamesByID: agentNamesByID,
-                        hasAuthorization: model.hasAuthorization,
-                        onRevealInFinder: { skill in reveal(skill) },
-                        onOpenInEditor: { skill in openInEditor(skill) },
-                        onIgnoreGroup: { fingerprint in
-                            _ = try? model.setDuplicateGroupIgnored(fingerprint: fingerprint, ignored: true)
-                        },
-                        onIgnoreNearGroup: { group in
-                            _ = try? model.setNearDuplicateGroupIgnored(group, ignored: true)
-                        },
-                        onLoadComparison: { left, right in
-                            try await model.compareSnapshots(left, right)
-                        },
-                        onLoadNearDiffs: { group in
-                            await model.nearBodyDiffs(in: group)
-                        },
-                        onSelect: { path in selectSkill(path) }
-                    )
-                    .frame(width: listColumnWidth)
-                } else if currentDestination == .links {
-                    SymlinkListView(
-                        links: symlinkSkills,
-                        selection: model.selection,
-                        agentNamesByID: agentNamesByID,
-                        onRevealInFinder: { skill in reveal(skill) },
-                        onSelect: { path in selectSkill(path) }
-                    )
-                    .frame(width: listColumnWidth)
-                } else if currentDestination == .rules {
-                    RulesListView(
-                        files: model.rules.files,
-                        selection: rulesSelection,
-                        agentNamesByID: agentNamesByID,
-                        onSelect: { file in selectRules(file) },
-                        onReveal: { file in revealRules(file) },
-                        onOpen: { file in openRules(file) }
-                    )
-                    .frame(width: listColumnWidth)
-                } else if currentDestination == .mcp {
-                    McpListView(
-                        servers: model.mcps.servers,
-                        statuses: model.mcps.probeStatuses,
-                        selection: mcpSelection,
-                        agentNamesByID: agentNamesByID,
-                        isProbing: mcpProbingAll,
-                        onSelect: { server in
-                            mcpSelection = server.id
-                            model.recordNavigation(.sidebar(.mcp))
-                        },
-                        onProbeAll: { probeAllMcp() },
-                        onRevealConfig: { server in model.mcps.revealConfigFile(server) }
-                    )
-                    .frame(width: listColumnWidth)
-                } else if currentDestination == .catalog {
-                    CatalogListView(
-                        state: model.catalog.state,
-                        selection: catalogSelection,
-                        onSelect: { skill in selectCatalog(skill) },
-                        onRefresh: { Task { await model.catalog.refresh() } }
-                    )
-                    .task { await model.catalog.loadIfNeeded() }
-                    .frame(width: listColumnWidth)
-                } else {
-                    let listTitle = currentDestination.title(
-                        rootsByID: model.rootsByID,
-                        definitions: model.agentDefinitions
-                    )
-                    SkillListView(
-                        selection: model.selection,
-                        searchText: $searchText,
-                        sort: $sort,
-                        searchFocused: $searchFocused,
-                        title: listTitle,
-                        skills: filteredSkills,
-                        allSkillCount: model.snapshots.count,
-                        hasAuthorization: model.hasAuthorization,
-                        hasActiveFilters: hasActiveFilters,
-                        refreshState: model.refreshState,
-                        agentNamesByID: agentNamesByID,
-                        bodyTextsByPath: model.bodySearchTextsByPath,
-                        onClearFilters: clearFilters,
-                        onImportProject: { chooseDestinationRoot() },
-                        onImportHome: { chooseSystemRoot() },
-                        onRevealInFinder: { skill in reveal(skill) },
-                        onOpenInEditor: { skill in openInEditor(skill) },
-                        onPrimarySelect: { path in selectSkill(path) },
-                        onArrowSelect: { path in model.selectOnly(path) }
-                    )
-                    .frame(width: listColumnWidth)
-                }
+                listPane
+
                 ColumnResizer(width: $listColumnWidth, range: 300...620)
 
-                if currentDestination == .rules {
-                    RulesDetailView(
-                        file: model.rules.files.first { $0.id == rulesSelection },
-                        agentNamesByID: agentNamesByID,
-                        onReveal: { file in revealRules(file) },
-                        onOpen: { file in openRules(file) }
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if currentDestination == .mcp {
-                    McpDetailView(
-                        server: model.mcps.servers.first { $0.id == mcpSelection },
-                        status: mcpSelection.flatMap { id in model.mcps.probeStatuses[id] } ?? .unknown,
-                        agentNamesByID: agentNamesByID,
-                        onProbe: {
-                            if let id = mcpSelection {
-                                Task { await model.mcps.probe(serverID: id) }
-                            }
-                        },
-                        onRevealConfig: { server in model.mcps.revealConfigFile(server) }
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if currentDestination == .catalog {
-                    CatalogDetailView(
-                        skill: catalogSkills.first { $0.id == catalogSelection },
-                        sourceNamesByID: catalogSourceNames,
-                        agentNamesByID: agentNamesByID
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if let agentID = currentDestination.agentID {
-                    // Agent detail: Skill and MCP stacked vertically.
-                    AgentDetailView(
-                        skill: selectedSkill,
-                        agentID: agentID,
-                        rootsByID: model.rootsByID,
-                        agentNamesByID: agentNamesByID,
-                        mcpServers: model.mcps.servers,
-                        mcpStatuses: model.mcps.probeStatuses,
-                        onRevealInFinder: { skill in reveal(skill) },
-                        onOpenInEditor: { skill in openInEditor(skill) },
-                        onSelectMcp: { server in
-                            mcpSelection = server.id
-                            destination = .mcp
-                        },
-                        onRevealConfig: { server in model.mcps.revealConfigFile(server) },
-                        onProbeAll: { probeAgentMcp(agentID: agentID) }
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    SkillDetailView(
-                        skill: selectedSkill,
-                        rootsByID: model.rootsByID,
-                        agentNamesByID: agentNamesByID,
-                        onRevealInFinder: { skill in reveal(skill) },
-                        onOpenInEditor: { skill in openInEditor(skill) }
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
+                // ⌘3 target: the detail pane. Wrapped in a group so one
+                // focused() covers every detail variant; focusability lets
+                // full-keyboard-access land in the pane and scroll it.
+                detailPane
+                    .focused($detailFocused)
+                    .focusable()
             }
         }
-        .frame(minWidth: 1080, minHeight: 700)
-        .navigationTitle(currentDestination.title(rootsByID: model.rootsByID, definitions: model.agentDefinitions))
-        .onAppear {
-            installEditingEndMonitor()
-            installSwipeNavigationMonitor()
-            // The stack bottom is the launch default destination; seed it
-            // once so back can traverse all the way to it.
-            guard !didSeedHistory else { return }
-            didSeedHistory = true
-            model.recordNavigation(.sidebar(destination))
+        .frame(minWidth: 960, minHeight: 600)
+        .navigationTitle(title)
+    }
+
+    // MARK: Lifecycle & command handlers
+
+    /// View-appear: install event monitors and seed the history stack
+    /// bottom once with the launch destination.
+    private func onAppear() {
+        installEditingEndMonitor()
+        installSwipeNavigationMonitor()
+        guard !didSeedHistory else { return }
+        didSeedHistory = true
+        model.recordNavigation(.sidebar(destination))
+    }
+
+    /// View-disappear: tear down both event monitors.
+    private func onDisappear() {
+        if let monitor = editEndMonitor {
+            NSEvent.removeMonitor(monitor)
+            editEndMonitor = nil
         }
-        .onDisappear {
-            if let monitor = editEndMonitor {
-                NSEvent.removeMonitor(monitor)
-                editEndMonitor = nil
+        if let monitor = swipeMonitor {
+            NSEvent.removeMonitor(monitor)
+            swipeMonitor = nil
+        }
+    }
+
+    /// Destination change: record a sidebar history step (suppressed while
+    /// a back/forward navigation is restoring state).
+    private func destinationChanged(_ newValue: BrowserDestination) {
+        guard !suppressingHistory else { return }
+        model.recordNavigation(.sidebar(newValue))
+    }
+
+    /// Search-focus change: opening the field starts a search session
+    /// (one history step); dismissing it ends the session (AC-15).
+    private func searchFocusChanged(_ focused: Bool) {
+        guard !suppressingHistory else { return }
+        if focused {
+            model.recordNavigation(.search(searchText))
+        } else {
+            model.endSearchIfNeeded()
+        }
+    }
+
+    /// Search-term change: rewrite the in-flight search entry in place,
+    /// never a second stack push.
+    private func searchTextChanged(_ newValue: String) {
+        guard !suppressingHistory, searchFocused else { return }
+        if case .search = model.backEntries.last {
+            model.recordNavigation(.search(newValue))
+        }
+    }
+
+    /// ⌘F / Search item: focus the field and select the existing query so
+    /// typing replaces it.
+    private func focusSearchField() {
+        searchFocused = true
+        DispatchQueue.main.async {
+            (NSApp.keyWindow?.firstResponder as? NSTextView)?.selectAll(nil)
+        }
+    }
+
+    /// Refresh-state change: a new refresh re-arms the completion banner —
+    /// dismissing it only silences the current refresh's result.
+    private func refreshStateChanged(_ newState: RefreshState) {
+        if case .running = newState {
+            dismissedRefreshBanner = false
+        }
+    }
+
+    /// The window toolbar: back/forward navigation group and the primary
+    /// action group (refresh, history, appearance, settings).
+    @ToolbarContentBuilder
+    private var windowToolbar: some ToolbarContent {
+        ToolbarItemGroup(placement: .navigation) {
+            Button(action: goBack) {
+                Image(systemName: "chevron.backward")
             }
-            if let monitor = swipeMonitor {
-                NSEvent.removeMonitor(monitor)
-                swipeMonitor = nil
+            .disabled(!model.canGoBack)
+            .help(L10n.string("Go Back"))
+            .accessibilityLabel(L10n.string("Go Back"))
+            Button(action: goForward) {
+                Image(systemName: "chevron.forward")
             }
+            .disabled(!model.canGoForward)
+            .help(L10n.string("Go Forward"))
+            .accessibilityLabel(L10n.string("Go Forward"))
         }
-        .onChange(of: destination) { _, newValue in
-            guard !suppressingHistory else { return }
-            model.recordNavigation(.sidebar(newValue))
+        ToolbarItemGroup(placement: .primaryAction) {
+            refreshButton
+            historyButton
+            themeToggle
+            settingsButton
         }
-        .onChange(of: searchFocused) { _, focused in
-            guard !suppressingHistory else { return }
-            if focused {
-                model.recordNavigation(.search(searchText))
-            } else {
-                // Dismissing the field ends the search session (AC-15): the
-                // session's single history entry is removed.
-                model.endSearchIfNeeded()
-            }
-        }
-        .onChange(of: searchText) { _, newValue in
-            guard !suppressingHistory, searchFocused else { return }
-            // Intermediate search-word changes rewrite the in-flight search
-            // entry in place — never a second stack push.
-            if case .search = model.backEntries.last {
-                model.recordNavigation(.search(newValue))
-            }
-        }
-        // ⌘F / ⌘[ / ⌘] arrive from WindowCommands' menu bar items; the view
-        // applies them with the same restore logic as the toolbar buttons.
-        .onReceive(NotificationCenter.default.publisher(for: .performGoBack)) { _ in
-            goBack()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .performGoForward)) { _ in
-            goForward()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .focusSearchField)) { _ in
-            // The field lives in the list column now, so @FocusState works
-            // natively (the old workaround targeted toolbar-hosted fields).
-            searchFocused = true
-            // ⌘F convention: select the existing query so typing replaces it.
-            DispatchQueue.main.async {
-                (NSApp.keyWindow?.firstResponder as? NSTextView)?.selectAll(nil)
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .performRefresh)) { _ in
-            // ⌘R mirrors the toolbar refresh button exactly.
-            Task { await model.refresh() }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .performRevealSelection)) { _ in
-            revealCurrentSelection()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .performOpenSelection)) { _ in
-            openCurrentSelection()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .performToggleAppearance)) { _ in
-            toggleAppearance()
-        }
-        // A new refresh re-arms the completion banner: dismissing it only
-        // silences the current refresh's result, not future ones.
-        .onChange(of: model.refreshState) { _, newState in
-            if case .running = newState {
-                dismissedRefreshBanner = false
-            }
-        }
-        .languageReloading()
-        .themedAppearance()
-        .toolbar {
-            ToolbarItemGroup(placement: .navigation) {
-                Button(action: goBack) {
-                    Image(systemName: "chevron.backward")
-                }
-                .disabled(!model.canGoBack)
-                .help(L10n.string("Go Back"))
-                .accessibilityLabel(L10n.string("Go Back"))
-                Button(action: goForward) {
-                    Image(systemName: "chevron.forward")
-                }
-                .disabled(!model.canGoForward)
-                .help(L10n.string("Go Forward"))
-                .accessibilityLabel(L10n.string("Go Forward"))
-            }
-            ToolbarItemGroup(placement: .primaryAction) {
-                refreshButton
-                historyButton
-                themeToggle
-                settingsButton
-            }
-        }
-        .alert(
-            L10n.string("Unable to Open"),
-            isPresented: openErrorBinding
-        ) {
-            Button(L10n.string("OK")) { openError = nil }
-        } message: {
-            Text(verbatim: openError ?? "")
-        }
+    }
+
+    /// history. Dismissible; reappears on the next refresh that changes
+    /// something.
+    private func refreshCompleteBanner(_ summary: RefreshSummary) -> some View {
+        Banner(
+            tone: .success,
+            icon: "checkmark.circle.fill",
+            text: String.localizedStringWithFormat(
+                L10n.string("Refresh Complete Banner"),
+                summary.added, summary.changed, summary.removed
+            ),
+            actionTitle: L10n.string("View Changes"),
+            action: { isShowingRefreshHistory = true },
+            onDismiss: { dismissedRefreshBanner = true }
+        )
     }
 
     // MARK: Toolbar
@@ -470,7 +363,200 @@ struct RootView: View {
         themeMode = dark ? "light" : "dark"
     }
 
-    // MARK: Re-authorization banner
+    // MARK: Detail pane
+
+    /// Display names keyed by agent id — same dictionary `body` builds
+    /// locally, hoisted so the extracted `detailPane` can use it too.
+    private var agentNamesByID: [String: String] {
+        Dictionary(
+            model.agentDefinitions.map { ($0.id, $0.displayName) },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
+
+    /// The middle column's filtered rows for the current destination,
+    /// mirroring the query `body` previously built inline.
+    private var filteredSkills: [SkillSnapshot] {
+        SkillQuery(
+            scope: destination.queryScope,
+            agentID: destination.agentID,
+            searchText: searchText,
+            sort: sort
+        ).apply(
+            to: model.snapshots,
+            rootsByID: model.rootsByID,
+            agentNamesByID: agentNamesByID,
+            bodyTextsByPath: model.bodySearchTextsByPath
+        )
+    }
+
+    /// Skills that resolve through a symbolic link.
+    private var symlinkSkills: [SkillSnapshot] {
+        model.snapshots.filter { $0.resolvedTarget != nil }
+    }
+
+    /// The middle column, switching on the current destination. Extracted
+    /// from `body` so SwiftUI can type-check the root view in reasonable
+    /// time.
+    @ViewBuilder
+    private var listPane: some View {
+        if destination == .duplicates {
+            DuplicateGroupsView(
+                groups: model.duplicateGroups,
+                nearGroups: model.nearDuplicateGroups,
+                selection: model.selection,
+                agentNamesByID: agentNamesByID,
+                hasAuthorization: model.hasAuthorization,
+                onRevealInFinder: { skill in reveal(skill) },
+                onOpenInEditor: { skill in openInEditor(skill) },
+                onIgnoreGroup: { fingerprint in
+                    _ = try? model.setDuplicateGroupIgnored(fingerprint: fingerprint, ignored: true)
+                },
+                onIgnoreNearGroup: { group in
+                    _ = try? model.setNearDuplicateGroupIgnored(group, ignored: true)
+                },
+                onLoadComparison: { left, right in
+                    try await model.compareSnapshots(left, right)
+                },
+                onLoadNearDiffs: { group in
+                    await model.nearBodyDiffs(in: group)
+                },
+                onSelect: { path in selectSkill(path) }
+            )
+            .frame(width: listColumnWidth)
+        } else if destination == .links {
+            SymlinkListView(
+                links: symlinkSkills,
+                selection: model.selection,
+                agentNamesByID: agentNamesByID,
+                onRevealInFinder: { skill in reveal(skill) },
+                onSelect: { path in selectSkill(path) }
+            )
+            .frame(width: listColumnWidth)
+        } else if destination == .rules {
+            RulesListView(
+                files: model.rules.files,
+                selection: rulesSelection,
+                agentNamesByID: agentNamesByID,
+                onSelect: { file in selectRules(file) },
+                onReveal: { file in revealRules(file) },
+                onOpen: { file in openRules(file) }
+            )
+            .frame(width: listColumnWidth)
+        } else if destination == .mcp {
+            McpListView(
+                servers: model.mcps.servers,
+                statuses: model.mcps.probeStatuses,
+                selection: mcpSelection,
+                agentNamesByID: agentNamesByID,
+                isProbing: mcpProbingAll,
+                onSelect: { server in
+                    mcpSelection = server.id
+                    model.recordNavigation(.sidebar(.mcp))
+                },
+                onProbeAll: { probeAllMcp() },
+                onRevealConfig: { server in model.mcps.revealConfigFile(server) }
+            )
+            .frame(width: listColumnWidth)
+        } else if destination == .catalog {
+            CatalogListView(
+                state: model.catalog.state,
+                selection: catalogSelection,
+                onSelect: { skill in selectCatalog(skill) },
+                onRefresh: { Task { await model.catalog.refresh() } }
+            )
+            .task { await model.catalog.loadIfNeeded() }
+            .frame(width: listColumnWidth)
+        } else {
+            SkillListView(
+                selection: model.selection,
+                searchText: $searchText,
+                sort: $sort,
+                searchFocused: $searchFocused,
+                title: destination.title(rootsByID: model.rootsByID, definitions: model.agentDefinitions),
+                skills: filteredSkills,
+                allSkillCount: model.snapshots.count,
+                hasAuthorization: model.hasAuthorization,
+                hasActiveFilters: hasActiveFilters,
+                refreshState: model.refreshState,
+                agentNamesByID: agentNamesByID,
+                bodyTextsByPath: model.bodySearchTextsByPath,
+                onClearFilters: clearFilters,
+                onImportProject: { chooseDestinationRoot() },
+                onImportHome: { chooseSystemRoot() },
+                onRevealInFinder: { skill in reveal(skill) },
+                onOpenInEditor: { skill in openInEditor(skill) },
+                onPrimarySelect: { path in selectSkill(path) },
+                onArrowSelect: { path in model.selectOnly(path) }
+            )
+            .frame(width: listColumnWidth)
+        }
+    }
+
+    /// The right column, switching on the current destination. Extracted
+    /// from `body` so SwiftUI can type-check the root view in reasonable
+    /// time; `detailPane` also gives ⌘3 a single focus target covering
+    /// every detail variant.
+    @ViewBuilder
+    private var detailPane: some View {
+        if destination == .rules {
+            RulesDetailView(
+                file: model.rules.files.first { $0.id == rulesSelection },
+                agentNamesByID: agentNamesByID,
+                onReveal: { file in revealRules(file) },
+                onOpen: { file in openRules(file) }
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if destination == .mcp {
+            McpDetailView(
+                server: model.mcps.servers.first { $0.id == mcpSelection },
+                status: mcpSelection.flatMap { id in model.mcps.probeStatuses[id] } ?? .unknown,
+                agentNamesByID: agentNamesByID,
+                onProbe: {
+                    if let id = mcpSelection {
+                        Task { await model.mcps.probe(serverID: id) }
+                    }
+                },
+                onRevealConfig: { server in model.mcps.revealConfigFile(server) }
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if destination == .catalog {
+            CatalogDetailView(
+                skill: catalogSkills.first { $0.id == catalogSelection },
+                sourceNamesByID: catalogSourceNames,
+                agentNamesByID: agentNamesByID
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let agentID = destination.agentID {
+            // Agent detail: Skill and MCP stacked vertically.
+            AgentDetailView(
+                skill: selectedSkillSnapshot,
+                agentID: agentID,
+                rootsByID: model.rootsByID,
+                agentNamesByID: agentNamesByID,
+                mcpServers: model.mcps.servers,
+                mcpStatuses: model.mcps.probeStatuses,
+                onRevealInFinder: { skill in reveal(skill) },
+                onOpenInEditor: { skill in openInEditor(skill) },
+                onSelectMcp: { server in
+                    mcpSelection = server.id
+                    destination = .mcp
+                },
+                onRevealConfig: { server in model.mcps.revealConfigFile(server) },
+                onProbeAll: { probeAgentMcp(agentID: agentID) }
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            SkillDetailView(
+                skill: selectedSkillSnapshot,
+                rootsByID: model.rootsByID,
+                agentNamesByID: agentNamesByID,
+                onRevealInFinder: { skill in reveal(skill) },
+                onOpenInEditor: { skill in openInEditor(skill) }
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
 
     /// The most recent refresh summary, when a refresh actually finished
     /// (drives the green "refresh complete" banner).
@@ -479,24 +565,6 @@ struct RootView: View {
             return summary
         }
         return nil
-    }
-
-    /// Green success banner shown right after a refresh that changed
-    /// something: "新增 N · 变更 M · 移除 K" with a link to the change
-    /// history. Dismissible; reappears on the next refresh that changes
-    /// something.
-    private func refreshCompleteBanner(_ summary: RefreshSummary) -> some View {
-        Banner(
-            tone: .success,
-            icon: "checkmark.circle.fill",
-            text: String.localizedStringWithFormat(
-                L10n.string("Refresh Complete Banner"),
-                summary.added, summary.changed, summary.removed
-            ),
-            actionTitle: L10n.string("View Changes"),
-            action: { isShowingRefreshHistory = true },
-            onDismiss: { dismissedRefreshBanner = true }
-        )
     }
 
     /// Top-of-window banner shown while any authorized root's bookmark no
@@ -860,5 +928,35 @@ extension BrowserDestination {
         case .agent(let id):
             definitions.first { $0.id == id }?.displayName ?? id
         }
+    }
+}
+
+/// Routes menu-bar command notifications (⌘F / ⌘[ / ⌘] / ⌘R / ⌘↩ / ⌘O /
+/// ⌘⌥T / ⌘1 / ⌘2 / ⌘3) into RootView's handlers. Bundled as one modifier
+/// so the root view's body chain stays type-checkable.
+private struct WindowCommandHandling: ViewModifier {
+    let onGoBack: () -> Void
+    let onGoForward: () -> Void
+    let onFocusSearch: () -> Void
+    let onRefresh: () -> Void
+    let onRevealSelection: () -> Void
+    let onOpenSelection: () -> Void
+    let onToggleAppearance: () -> Void
+    let onFocusSidebar: () -> Void
+    let onFocusList: () -> Void
+    let onFocusDetail: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .performGoBack)) { _ in onGoBack() }
+            .onReceive(NotificationCenter.default.publisher(for: .performGoForward)) { _ in onGoForward() }
+            .onReceive(NotificationCenter.default.publisher(for: .focusSearchField)) { _ in onFocusSearch() }
+            .onReceive(NotificationCenter.default.publisher(for: .performRefresh)) { _ in onRefresh() }
+            .onReceive(NotificationCenter.default.publisher(for: .performRevealSelection)) { _ in onRevealSelection() }
+            .onReceive(NotificationCenter.default.publisher(for: .performOpenSelection)) { _ in onOpenSelection() }
+            .onReceive(NotificationCenter.default.publisher(for: .performToggleAppearance)) { _ in onToggleAppearance() }
+            .onReceive(NotificationCenter.default.publisher(for: .performFocusSidebar)) { _ in onFocusSidebar() }
+            .onReceive(NotificationCenter.default.publisher(for: .performFocusList)) { _ in onFocusList() }
+            .onReceive(NotificationCenter.default.publisher(for: .performFocusDetail)) { _ in onFocusDetail() }
     }
 }
