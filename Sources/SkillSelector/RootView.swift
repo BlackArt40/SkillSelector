@@ -14,6 +14,12 @@ struct RootView: View {
     /// Ends in-column search editing when the user clicks outside the
     /// field — SwiftUI keeps field focus on outside clicks otherwise.
     @State private var editEndMonitor: Any?
+    /// Local event monitor translating two-finger horizontal swipes into
+    /// history navigation (right = back, left = forward), mirroring
+    /// Safari/Mail. Fires only when the system "swipe between pages"
+    /// gesture is enabled — the same setting Safari uses — so it never
+    /// fights normal scrolling in the list column.
+    @State private var swipeMonitor: Any?
     @State private var searchText = ""
     @State private var sort: SkillQuery.Sort = .default
     @State private var openError: String?
@@ -263,6 +269,7 @@ struct RootView: View {
         .navigationTitle(currentDestination.title(rootsByID: model.rootsByID, definitions: model.agentDefinitions))
         .onAppear {
             installEditingEndMonitor()
+            installSwipeNavigationMonitor()
             // The stack bottom is the launch default destination; seed it
             // once so back can traverse all the way to it.
             guard !didSeedHistory else { return }
@@ -273,6 +280,10 @@ struct RootView: View {
             if let monitor = editEndMonitor {
                 NSEvent.removeMonitor(monitor)
                 editEndMonitor = nil
+            }
+            if let monitor = swipeMonitor {
+                NSEvent.removeMonitor(monitor)
+                swipeMonitor = nil
             }
         }
         .onChange(of: destination) { _, newValue in
@@ -800,6 +811,25 @@ struct RootView: View {
             let editorFrame = editor.convert(editor.bounds, to: nil)
             if !editorFrame.contains(event.locationInWindow) {
                 window.makeFirstResponder(nil)
+            }
+            return event
+        }
+    }
+
+    /// Two-finger horizontal swipe navigation, mirroring Safari / Mail:
+    /// swipe right (deltaX > 0) steps back, swipe left steps forward. The
+    /// `.swipe` event only fires when the system "swipe between pages"
+    /// gesture is enabled, so it never collides with normal scrolling —
+    /// the list column has no horizontal scroll to fight with.
+    private func installSwipeNavigationMonitor() {
+        guard swipeMonitor == nil else { return }
+        swipeMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.swipe]
+        ) { event in
+            if event.deltaX > 0.5 {
+                goBack()
+            } else if event.deltaX < -0.5 {
+                goForward()
             }
             return event
         }
