@@ -175,6 +175,17 @@ struct MarkdownDocumentView: View {
                     toggleTranslation()
                 } label: {
                     HStack(spacing: 4) {
+                        // Leading spinner while the translation runs; a
+                        // clear placeholder keeps the button width stable
+                        // when the spinner appears/disappears.
+                        if isTranslating {
+                            ProgressView()
+                                .controlSize(.mini)
+                                .transition(.opacity)
+                        } else {
+                            Color.clear
+                                .frame(width: 10, height: 10)
+                        }
                         Image(systemName: isTranslated ? "character.bubble.fill" : "character.bubble")
                         Text(verbatim: isTranslated
                             ? L10n.string("Show Original")
@@ -190,6 +201,7 @@ struct MarkdownDocumentView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)
+                .animation(.smooth(duration: 0.15), value: isTranslating)
                 .help(L10n.string(isTranslated ? "Show Original" : "Translate Body"))
                 .accessibilityLabel(L10n.string(isTranslated ? "Show Original" : "Translate Body"))
                 .disabled(isTranslating || !bodyTextAvailable)
