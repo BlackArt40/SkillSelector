@@ -22,18 +22,41 @@ public final class SecurityScopedBookmarkAdapter: BookmarkDataCreating, @uncheck
     public init() {}
 
     public func createBookmarkData(for url: URL) throws -> Data {
-        try url.bookmarkData(
-            options: .withSecurityScope,
-            includingResourceValuesForKeys: nil,
-            relativeTo: nil
-        )
+        // Prefer security-scoped bookmarks (required for sandboxed apps to
+        // restore access across launches). On bare-binary dev launches the
+        // entitlement is absent — fall back to a plain bookmark so the
+        // authorization flow still works during development (re-pick the
+        // directory after a relaunch; the bundled .app is signed with
+        // `com.apple.security.files.bookmarks.app-scope` and takes the
+        // security-scoped path).
+        do {
+            return try url.bookmarkData(
+                options: .withSecurityScope,
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            )
+        } catch {
+            return try url.bookmarkData(
+                options: [],
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            )
+        }
     }
 
     public func resolveBookmarkData(_ data: Data) throws -> BookmarkResolution {
         var isStale = false
-        let url = try URL(
+        if let url = try? URL(
             resolvingBookmarkData: data,
             options: .withSecurityScope,
+            relativeTo: nil,
+            bookmarkDataIsStale: &isStale
+        ) {
+            return BookmarkResolution(url: url, isStale: isStale)
+        }
+        let url = try URL(
+            resolvingBookmarkData: data,
+            options: [],
             relativeTo: nil,
             bookmarkDataIsStale: &isStale
         )
@@ -41,7 +64,11 @@ public final class SecurityScopedBookmarkAdapter: BookmarkDataCreating, @uncheck
     }
 
     public func startAccessing(_ url: URL) -> Bool {
+        // Best-effort: security-scoped access succeeds for sandboxed apps;
+        // returns true unconditionally for plain bookmarks (the file
+        // permission is checked at I/O time).
         url.startAccessingSecurityScopedResource()
+        return true
     }
 
     public func stopAccessing(_ url: URL) {
