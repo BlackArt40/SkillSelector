@@ -98,45 +98,66 @@ struct MarkdownDocumentView: View {
     /// verbatim. Each non-fence chunk is translated as a unit so headings,
     /// emphasis and inline code markers survive the round trip and the
     /// translated body still renders as markdown.
+    ///
+    /// Two passes: split into code/prose segments, then translate each
+    /// prose segment. The translate call stays directly in this function's
+    /// body — a nested async closure (or helper) trips the Swift 6 strict
+    /// sendability check under release optimizations, even though debug
+    /// builds accept it.
     private func translateMarkdownPreservingFences(
         _ text: String,
         using session: TranslationSession
     ) async throws -> String {
-        let lines = text.components(separatedBy: "\n")
-        var result: [String] = []
-        var pending: [String] = []   // prose lines awaiting translation
+        // Pass 1: split into segments tagged code vs prose. Fence markers
+        // and their contents are code; everything else is prose.
+        var segments: [(isCode: Bool, content: String)] = []
         var inFence = false
-        var fenceMarker = ""
+        var currentCode: [String] = []
+        var currentProse: [String] = []
 
-        func flushProse() async throws {
-            guard !pending.isEmpty else { return }
-            let chunk = pending.joined(separator: "\n")
-            let translated = try await session.translate(chunk)
-            result.append(translated.targetText)
-            pending = []
+        func appendCode() {
+            if !currentCode.isEmpty {
+                segments.append((isCode: true, content: currentCode.joined(separator: "\n")))
+                currentCode = []
+            }
         }
 
-        for line in lines {
+        func appendProse() {
+            if !currentProse.isEmpty {
+                segments.append((isCode: false, content: currentProse.joined(separator: "\n")))
+                currentProse = []
+            }
+        }
+
+        for line in text.components(separatedBy: "\n") {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             if trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") {
-                try await flushProse()
-                if inFence {
-                    result.append(line)          // closing fence, verbatim
-                    inFence = false
-                } else {
-                    fenceMarker = trimmed
-                    result.append(line)          // opening fence, verbatim
-                    inFence = true
-                }
-                continue
-            }
-            if inFence {
-                result.append(line)              // code content, verbatim
+                // A fence marker always sits in its own code segment.
+                appendProse()
+                appendCode()
+                segments.append((isCode: true, content: line))
+                inFence.toggle()
+            } else if inFence {
+                currentCode.append(line)
             } else {
-                pending.append(line)
+                currentProse.append(line)
             }
         }
-        try await flushProse()
+        appendCode()
+        appendProse()
+
+        // Pass 2: translate prose segments in place. The call is inline in
+        // this loop (no nested async closure) so release-mode isolation
+        // checks accept it.
+        var result: [String] = []
+        for segment in segments {
+            if segment.isCode {
+                result.append(segment.content)
+            } else {
+                let translated = try await session.translate(segment.content)
+                result.append(translated.targetText)
+            }
+        }
         return result.joined(separator: "\n")
     }
 
