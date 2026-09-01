@@ -23,8 +23,8 @@ X86_RELEASE="$X86_SCRATCH/x86_64-apple-macosx/release"
 rm -rf "$DIST_DIR" "$ARM_SCRATCH" "$X86_SCRATCH"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
-swift build --package-path "$ROOT_DIR" --configuration release --arch arm64 --scratch-path "$ARM_SCRATCH"
-swift build --package-path "$ROOT_DIR" --configuration release --arch x86_64 --scratch-path "$X86_SCRATCH"
+swift build --package-path "$ROOT_DIR" --configuration release --arch arm64 --scratch-path "$ARM_SCRATCH" --disable-sandbox
+swift build --package-path "$ROOT_DIR" --configuration release --arch x86_64 --scratch-path "$X86_SCRATCH" --disable-sandbox
 
 test -x "$ARM_RELEASE/SkillSelector"
 test -x "$X86_RELEASE/SkillSelector"
