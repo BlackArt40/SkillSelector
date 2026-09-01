@@ -2,8 +2,7 @@ import SkillSelectorCore
 import SwiftUI
 
 /// The `.doc-card` from the design: warm surface card with a mono header
-/// row, the frontmatter block, and the rendered markdown body. The raw
-/// document is never modified — only the rendered copy is shown.
+/// row, the frontmatter block, and the rendered markdown body.
 struct MarkdownDocumentView: View {
     private enum LoadState {
         case loading

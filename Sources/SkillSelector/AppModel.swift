@@ -103,6 +103,19 @@ final class AppModel {
         didSet { defaults.set(manuallyEnabledAgentIDs.sorted(), forKey: Self.manuallyEnabledAgentsDefaultsKey) }
     }
 
+    /// Opens System Settings on the Language & Region → Translation
+    /// Languages pane, where Apple's on-device translation models are
+    /// downloaded and managed outside the app (each pair once per Mac).
+    /// Apple gives apps no API to download translation models — this
+    /// shortcut is the closest we can get; the user only has to click
+    /// Download once per pair. Shared by the detail view's error row and
+    /// the Settings Translation group so the scheme string lives in one
+    /// place.
+    func openTranslationLanguageSettings() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.Localization-Settings.extension") else { return }
+        NSWorkspace.shared.open(url)
+    }
+
     init(
         refresher: IndexRefresher,
         index: SkillIndex,

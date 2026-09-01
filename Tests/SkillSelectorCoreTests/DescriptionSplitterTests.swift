@@ -175,4 +175,44 @@ final class DescriptionSplitterTests: XCTestCase {
             XCTAssertLessThanOrEqual(segment.count, DescriptionSplitter.maxSegmentLength)
         }
     }
+
+    // MARK: Markdown → plain text (translation source)
+
+    func testPlainTextStripsImagesAndLinksKeepingLabels() {
+        let result = DescriptionSplitter.plainText(fromMarkdown: """
+            Feature ![icon](image.png) and [docs](https://example.com) here.
+            """)
+        XCTAssertTrue(result.contains("Feature icon and docs here."), "图片保留 alt、链接保留 label：\(result)")
+    }
+
+    func testPlainTextStripsPairedEmphasisButKeepsIdentifiers() {
+        let result = DescriptionSplitter.plainText(fromMarkdown: """
+            Use `npm run build`, **bold note**, and look at foo_bar or SKILL.md.
+            """)
+        XCTAssertTrue(result.contains("Use npm run build, bold note, and look at foo_bar or SKILL.md."),
+                      "成对标记剥离、标识符保留：\(result)")
+        XCTAssertTrue(result.contains("foo_bar"), "foo_bar 的下划线不被剥离：\(result)")
+        XCTAssertFalse(result.contains("**"), "** 成对剥离：\(result)")
+        XCTAssertFalse(result.contains("`"), "反引号成对剥离：\(result)")
+    }
+
+    func testPlainTextKeepsLoneMarkersIntact() {
+        XCTAssertEqual(
+            DescriptionSplitter.plainText(fromMarkdown: "rate a * b and 3 * 4"),
+            "rate a * b and 3 * 4",
+            "不成对的星号保留"
+        )
+        XCTAssertEqual(
+            DescriptionSplitter.plainText(fromMarkdown: "path/to_x stays"),
+            "path/to_x stays",
+            "字母数字包围的下划线保留"
+        )
+    }
+
+    func testPlainTextStripsLineMarkers() {
+        XCTAssertEqual(
+            DescriptionSplitter.plainText(fromMarkdown: "# Heading\n- item\n1. first"),
+            "Heading\nitem\nfirst"
+        )
+    }
 }

@@ -192,7 +192,7 @@ struct SettingsView: View {
                     sub: L10n.string("Translation Languages Sub")
                 ) {
                     Button(L10n.string("Download Model…")) {
-                        openTranslationLanguageSettings()
+                        model.openTranslationLanguageSettings()
                     }
                     .buttonStyle(SettingsButtonStyle())
                     .help(L10n.string("Download Translation Model Help"))
@@ -313,17 +313,10 @@ struct SettingsView: View {
         .accessibilityLabel(title)
     }
 
-    /// Opens System Settings on the Language & Region → Translation
-    /// Languages pane, where Apple's on-device translation models are
-    /// downloaded and managed outside the app (each pair once per Mac).
-    private func openTranslationLanguageSettings() {
-        guard let url = URL(string: "x-apple.systempreferences:com.apple.Localization-Settings.extension") else { return }
-        NSWorkspace.shared.open(url)
-    }
-
     // MARK: 目录授权 pane
 
-    private var directoriesPane: some View {        VStack(alignment: .leading, spacing: 0) {
+    private var directoriesPane: some View {
+        VStack(alignment: .leading, spacing: 0) {
             groupTitle(L10n.string("Authorized Directories"))
             if model.authorizedRoots.isEmpty {
                 SettingsGroup {

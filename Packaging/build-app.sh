@@ -26,7 +26,12 @@ cp Sources/SkillSelector/Resources/AppIcon.icns Sources/SkillSelector/Resources/
 cp Sources/SkillSelector/Resources/en.lproj/Localizable.strings "$OUT/Contents/Resources/en.lproj/"
 cp Sources/SkillSelector/Resources/zh-Hans.lproj/Localizable.strings "$OUT/Contents/Resources/zh-Hans.lproj/"
 
-cat > /tmp/skillselector-dev.entitlements << 'EOF'
+# A per-invocation temp path keeps parallel builds from overwriting each
+# other's entitlements file.
+ENTITLEMENTS="$(mktemp -t skillselector-dev-entitlements)"
+trap 'rm -f "$ENTITLEMENTS"' EXIT
+
+cat > "$ENTITLEMENTS" << 'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -41,5 +46,5 @@ cat > /tmp/skillselector-dev.entitlements << 'EOF'
 </plist>
 EOF
 
-codesign --force --deep --sign - --entitlements /tmp/skillselector-dev.entitlements "$OUT"
+codesign --force --deep --sign - --entitlements "$ENTITLEMENTS" "$OUT"
 echo "Built $OUT"

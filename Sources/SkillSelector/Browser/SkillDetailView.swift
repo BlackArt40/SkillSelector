@@ -40,6 +40,11 @@ struct SkillDetailView: View {
     /// Last translation failure, shown under the description so a failed
     /// or stalled translation is never silent.
     @State private var descriptionTranslationError: String?
+    /// Path of the skill that queued the current translation request. The
+    /// translation task commits its result to the view only while the
+    /// selection still points at this skill — an in-flight translation
+    /// must never paint its text onto a different skill's detail view.
+    @State private var pendingTranslationSkillPath: String?
 
     var body: some View {
         Group {
@@ -79,14 +84,23 @@ struct SkillDetailView: View {
             //  • user tap (pending text set + configuration invalidated)
             //    → translate the description here, on the same session.
             if let text = pendingDescription {
+                // The task re-runs on invalidation; capture the requesting
+                // skill so a slow translation can't overwrite the view if
+                // the user switches skills while it's in flight.
+                let requestedPath = pendingTranslationSkillPath
                 pendingDescription = nil
+                pendingTranslationSkillPath = nil
                 isDescriptionTranslating = true
                 descriptionTranslationError = nil
-                // Shared cache on AppModel: translations survive selection
-                // changes, so revisiting a skill is instant.
+                // Defensive cache check: toggleDescriptionTranslation
+                // already serves cache hits, so this is normally
+                // unreachable — but the task stays idempotent if other
+                // paths ever queue text.
                 if let cached = model.descriptionTranslations[text] {
-                    translatedDescription = cached
-                    isDescriptionTranslated = true
+                    if skill?.path == requestedPath {
+                        translatedDescription = cached
+                        isDescriptionTranslated = true
+                    }
                     isDescriptionTranslating = false
                     return
                 }
@@ -95,7 +109,7 @@ struct SkillDetailView: View {
                 // text after 12 seconds and surface the timeout.
                 let watchdog = Task { @MainActor in
                     try? await Task.sleep(for: .seconds(12))
-                    if isDescriptionTranslating {
+                    if isDescriptionTranslating, skill?.path == requestedPath {
                         isDescriptionTranslating = false
                         descriptionTranslationError = L10n.string("Description Translation Timeout")
                     }
@@ -109,16 +123,29 @@ struct SkillDetailView: View {
                         text,
                         using: session
                     )
+                    // Always worth caching for later visits — but commit
+                    // to the view only while the selection is still the
+                    // skill that asked for it. Committing also clears a
+                    // timeout message when the translate call wins the
+                    // race against the watchdog.
                     model.descriptionTranslations[text] = translated
-                    translatedDescription = translated
-                    isDescriptionTranslated = true
+                    if skill?.path == requestedPath {
+                        translatedDescription = translated
+                        isDescriptionTranslated = true
+                        isDescriptionTranslating = false
+                        descriptionTranslationError = nil
+                    }
                 } catch {
-                    // Keep the original visible and say why.
-                    translatedDescription = nil
-                    isDescriptionTranslated = false
-                    descriptionTranslationError = localizedTranslationError(error)
+                    // Keep the original visible and say why — only for
+                    // the requesting skill, so a stale failure never
+                    // surfaces over a newer selection.
+                    if skill?.path == requestedPath {
+                        translatedDescription = nil
+                        isDescriptionTranslated = false
+                        descriptionTranslationError = localizedTranslationError()
+                    }
+                    isDescriptionTranslating = false
                 }
-                isDescriptionTranslating = false
             } else {
                 // Warm-up: preload the language models in the background
                 // (no-op when already installed).
@@ -134,6 +161,7 @@ struct SkillDetailView: View {
             translatedDescription = nil
             isDescriptionTranslating = false
             pendingDescription = nil
+            pendingTranslationSkillPath = nil
             descriptionTranslationError = nil
         }
     }
@@ -234,7 +262,7 @@ struct SkillDetailView: View {
                     // that lands on the Translation Languages pane so the
                     // user only has to click Download once.
                     Button {
-                        openTranslationLanguageSettings()
+                        model.openTranslationLanguageSettings()
                     } label: {
                         Label(
                             L10n.string("Download Translation Model"),
@@ -310,6 +338,7 @@ struct SkillDetailView: View {
                 isDescriptionTranslated = true
             } else {
                 pendingDescription = text
+                pendingTranslationSkillPath = skill.path
                 translatedDescription = nil
                 descriptionTranslationError = nil
                 isDescriptionTranslating = true
@@ -323,59 +352,13 @@ struct SkillDetailView: View {
     /// plain text (raw markers like `**` and `[..](..)` would otherwise
     /// survive the translation and show up in the result).
     private func translationSourceText(_ skill: SkillSnapshot) -> String {
-        plainText(fromMarkdown: descriptionText(skill))
+        DescriptionSplitter.plainText(fromMarkdown: descriptionText(skill))
     }
 
-    /// Strips common Markdown markers from a string, leaving plain text:
-    /// images keep their alt text, links keep their label, inline
-    /// code/emphasis markers are removed, and leading heading / quote /
-    /// list markers are dropped per line.
-    private func plainText(fromMarkdown text: String) -> String {
-        var result = text
-        // Images: ![alt](url) → alt
-        result = result.replacingOccurrences(
-            of: #"!\[([^\]]*)\]\([^)]*\)"#,
-            with: "$1",
-            options: .regularExpression
-        )
-        // Links: [label](url) → label
-        result = result.replacingOccurrences(
-            of: #"\[([^\]]*)\]\([^)]*\)"#,
-            with: "$1",
-            options: .regularExpression
-        )
-        // Inline code / emphasis markers: `code`, **bold**, *italic*, __, _
-        for marker in ["`", "**", "__", "*", "_"] {
-            result = result.replacingOccurrences(of: marker, with: "")
-        }
-        // Leading heading / quote / bullet markers and ordered list digits
-        let lines = result.components(separatedBy: "\n")
-        return lines.map { line in
-            let cleaned = line.replacingOccurrences(
-                of: #"^[#>*\-+]+(?:\s+|$)"#,
-                with: "",
-                options: .regularExpression
-            )
-            return cleaned.replacingOccurrences(
-                of: #"^\d+[.)]\s+"#,
-                with: "",
-                options: .regularExpression
-            )
-        }
-        .joined(separator: "\n")
-    }
-
-    private func localizedTranslationError(_ error: Error) -> String {
-        (error as? LocalizedError)?.errorDescription ?? String(describing: error)
-    }
-
-    /// Opens System Settings on the Language & Region pane, where the
-    /// "Translation Languages…" button lives. Apple gives apps no API to
-    /// download translation models — this shortcut is the closest we can
-    /// get; the user only has to click Download once per language pair.
-    private func openTranslationLanguageSettings() {
-        guard let url = URL(string: "x-apple.systempreferences:com.apple.Localization-Settings.extension") else { return }
-        NSWorkspace.shared.open(url)
+    private func localizedTranslationError() -> String {
+        // System error descriptions are English and unlocalized; surface
+        // one generic message instead of leaking raw error text.
+        L10n.string("Description Translation Failed")
     }
 
     /// Translates a description segment by segment: split into

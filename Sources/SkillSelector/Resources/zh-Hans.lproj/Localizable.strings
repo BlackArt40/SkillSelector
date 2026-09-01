@@ -354,6 +354,7 @@
 "Show Original" = "显示原文";
 "Translating" = "翻译中…";
 "Description Translation Timeout" = "翻译超时，已显示原文。请检查系统设置 > 通用 > 语言与地区 中是否已下载翻译语言。";
+"Description Translation Failed" = "翻译失败，已显示原文。请重试，或检查系统设置 > 通用 > 语言与地区 中是否已下载翻译语言。";
 "Download Translation Model" = "下载翻译模型";
 "Download Translation Model Help" = "打开系统设置 → 翻译语言，下载「英语 → 简体中文」翻译模型（首次使用需下载）。";
 "Translation" = "翻译";
