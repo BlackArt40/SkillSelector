@@ -352,3 +352,5 @@
 "Show Original" = "Show Original";
 "Translating" = "Translating…";
 "Description Translation Timeout" = "Translation timed out — showing the original. Check that translation languages are downloaded in System Settings > General > Language & Region.";
+"Download Translation Model" = "Download Translation Model";
+"Download Translation Model Help" = "Opens System Settings → Translation Languages to download the English model (required on first use).";

@@ -223,11 +223,31 @@ struct SkillDetailView: View {
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
             if let descriptionTranslationError {
-                Label(descriptionTranslationError, systemImage: "exclamationmark.triangle")
-                    .font(AppTheme.body(11.5))
-                    .foregroundStyle(Color.orange)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 6) {
+                    Label(descriptionTranslationError, systemImage: "exclamationmark.triangle")
+                        .font(AppTheme.body(11.5))
+                        .foregroundStyle(Color.orange)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                    // First use needs Apple's on-device model, which the
+                    // system downloads outside the app — offer a shortcut
+                    // that lands on the Translation Languages pane so the
+                    // user only has to click Download once.
+                    Button {
+                        openTranslationLanguageSettings()
+                    } label: {
+                        Label(
+                            L10n.string("Download Translation Model"),
+                            systemImage: "arrow.down.circle"
+                        )
+                        .font(AppTheme.mono(11))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.borderless)
+                    .help(L10n.string("Download Translation Model Help"))
+                }
             }
         }
     }
@@ -347,6 +367,15 @@ struct SkillDetailView: View {
 
     private func localizedTranslationError(_ error: Error) -> String {
         (error as? LocalizedError)?.errorDescription ?? String(describing: error)
+    }
+
+    /// Opens System Settings on the Language & Region pane, where the
+    /// "Translation Languages…" button lives. Apple gives apps no API to
+    /// download translation models — this shortcut is the closest we can
+    /// get; the user only has to click Download once per language pair.
+    private func openTranslationLanguageSettings() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.Localization-Settings.extension") else { return }
+        NSWorkspace.shared.open(url)
     }
 
     /// Translates a description segment by segment: split into
