@@ -138,6 +138,7 @@ struct SkillSelectorApp: App {
     }
 
     private static func makeContainer() -> ModelContainer? {
+        migrateLegacyStoreIfNeeded()
         do {
             // App-scoped store: the SwiftData default (a shared
             // "default.store" in ~/Library/Application Support) collides
@@ -168,6 +169,54 @@ struct SkillSelectorApp: App {
             .appendingPathComponent("SkillSelector", isDirectory: true)
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
         return base.appendingPathComponent("SkillSelector.store")
+    }
+
+    /// One-time upgrade migration: v1.8.0-and-earlier builds used the
+    /// SwiftData framework default (`~/Library/Application Support/
+    /// default.store`), a name shared with every other SwiftData app on
+    /// the machine. When the app-scoped store does not exist yet and a
+    /// legacy store carrying this app's schema is present, its files are
+    /// copied into the app-scoped location so upgraders keep their records
+    /// (authorized roots, ignore flags, scan cache) instead of silently
+    /// losing them and re-authorizing every root.
+    ///
+    /// Files are copied, never moved — the shared default name may belong
+    /// to another app, so the original is left untouched. The copy is
+    /// gated on a byte-level schema fingerprint (SwiftData's SQLite table
+    /// name for `SkillRecord`); a foreign store is skipped, and a copy
+    /// that still fails to open degrades through the existing in-memory
+    /// fallback.
+    private static func migrateLegacyStoreIfNeeded() {
+        migrateLegacyStoreIfNeeded(
+            applicationSupport: FileManager.default
+                .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0],
+            fileManager: .default
+        )
+    }
+
+    /// Testable core. `applicationSupport` holds `default.store{,-wal,-shm}`;
+    /// the migration fills the sibling `SkillSelector/` directory with
+    /// `SkillSelector.store{,-wal,-shm}` when that store is absent.
+    static func migrateLegacyStoreIfNeeded(
+        applicationSupport: URL,
+        fileManager: FileManager = .default
+    ) {
+        let targetDirectory = applicationSupport
+            .appendingPathComponent("SkillSelector", isDirectory: true)
+        let target = targetDirectory.appendingPathComponent("SkillSelector.store")
+        guard !fileManager.fileExists(atPath: target.path) else { return }
+        let legacy = applicationSupport.appendingPathComponent("default.store")
+        guard fileManager.fileExists(atPath: legacy.path),
+              (try? Data(contentsOf: legacy))?
+                  .firstRange(of: Data("SKILLRECORD".utf8)) != nil else { return }
+        try? fileManager.createDirectory(at: targetDirectory, withIntermediateDirectories: true)
+        for suffix in ["", "-wal", "-shm"] {
+            let source = applicationSupport.appendingPathComponent("default.store\(suffix)")
+            guard fileManager.fileExists(atPath: source.path) else { continue }
+            let destination = targetDirectory.appendingPathComponent("SkillSelector.store\(suffix)")
+            try? fileManager.removeItem(at: destination)
+            try? fileManager.copyItem(at: source, to: destination)
+        }
     }
 
     var body: some Scene {
