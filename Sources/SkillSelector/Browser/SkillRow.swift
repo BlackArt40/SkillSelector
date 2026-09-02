@@ -92,19 +92,31 @@ struct SkillRow: View {
         return snippet
     }
 
+    /// The avatar tile; for symlink skills, hovering the visible link
+    /// hint shows the target path (spec §符号链接展示).
+    @ViewBuilder
+    private var skillTile: some View {
+        let tile = SkillTileView(
+            title: skillTileLetter(for: skill.name),
+            size: 34,
+            cornerRadius: 9,
+            active: isActive,
+            // Symlink hint sits on the avatar's top-right (spec §5.2
+            // + visual baseline: a 9 pt triangle, matching the
+            // design's "link" affordance).
+            symbolLink: skill.resolvedTarget != nil
+        )
+        if let target = skill.resolvedTarget {
+            tile.help(target)
+        } else {
+            tile
+        }
+    }
+
     var body: some View {
         Button(action: onSelect) {
             HStack(alignment: .top, spacing: 10) {
-                SkillTileView(
-                    title: skillTileLetter(for: skill.name),
-                    size: 34,
-                    cornerRadius: 9,
-                    active: isActive,
-                    // Symlink hint sits on the avatar's top-right (spec §5.2
-                    // + visual baseline: a 9 pt triangle, matching the
-                    // design's "link" affordance).
-                    symbolLink: skill.resolvedTarget != nil
-                )
+                skillTile
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 6) {
                         HighlightedText(
@@ -121,16 +133,18 @@ struct SkillRow: View {
                                 dot: AnyView(Circle().fill(AppTheme.warn).frame(width: 6, height: 6))
                             )
                         }
-                        if skill.resolvedTarget != nil {
+                        if let target = skill.resolvedTarget {
                             // The visual hint now lives on the avatar (see
-                            // SkillTileView's symbolLink overlay); keep an
-                            // accessibility-only affordance in the row so
-                            // VoiceOver still announces the link target.
+                            // SkillTileView's symbolLink overlay); keep the
+                            // small link icon in the name row — hover shows
+                            // the target path (spec §符号链接展示), VoiceOver
+                            // announces it as the value.
                             Image(systemName: "link")
                                 .font(.system(size: 9))
                                 .foregroundStyle(AppTheme.muted)
+                                .help(target)
                                 .accessibilityLabel(L10n.string("Link Badge"))
-                                .accessibilityValue(skill.resolvedTarget ?? "")
+                                .accessibilityValue(target)
                                 .accessibilityHidden(false)
                         }
                     }
