@@ -1,3 +1,4 @@
+import NaturalLanguage
 import SwiftUI
 @preconcurrency import Translation
 
@@ -21,11 +22,13 @@ struct DescriptionTranslationState {
     /// selection still points at this skill — an in-flight translation
     /// must never paint its text onto a different skill's detail view.
     var pendingSkillPath: String?
-    /// Translation session configuration. Kept non-nil with an explicit
-    /// en → zh-Hans pairing so `prepareTranslation()` can preload the
-    /// models on warm-up and `translate()` never has to auto-detect the
-    /// source language (auto-detection is a common failure/stall path).
-    /// Call `invalidate()` to re-run the task on the *same* session.
+    /// Translation session configuration. Defaults to en → zh-Hans so
+    /// `prepareTranslation()` can preload the models for the common case
+    /// on warm-up; when the user actually toggles, the source is re-pinned
+    /// from the description's own language (see
+    /// `DescriptionTranslationSource.preferredSource`) — the session never
+    /// auto-detects (a common failure/stall path). Call `invalidate()` to
+    /// re-run the task on the *same* session.
     var configuration = TranslationSession.Configuration(
         source: Locale.Language(identifier: "en"),
         target: Locale.Language(identifier: "zh-Hans")
@@ -41,5 +44,27 @@ struct DescriptionTranslationState {
         pendingText = nil
         pendingSkillPath = nil
         error = nil
+    }
+}
+
+/// Picks the translation session's source language for a description.
+/// The target stays fixed (zh-Hans, matching the app's Chinese
+/// localization); only the source follows the text.
+enum DescriptionTranslationSource {
+    /// Returns the language to pin as the session's source, or nil when
+    /// there is nothing to translate: the description is already
+    /// simplified Chinese, or carries no recognizable language at all
+    /// (empty/symbol-only text). The detail view hides the translate
+    /// button when this returns nil.
+    static func preferredSource(in text: String) -> Locale.Language? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let recognizer = NLLanguageRecognizer()
+        recognizer.processString(trimmed)
+        guard let language = recognizer.dominantLanguage else { return nil }
+        // Simplified Chinese is the target already; Traditional Chinese
+        // still translates (zh-Hant → zh-Hans is a legitimate pairing).
+        if language == .simplifiedChinese { return nil }
+        return Locale.Language(identifier: language.rawValue)
     }
 }

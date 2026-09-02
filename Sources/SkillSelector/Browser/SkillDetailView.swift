@@ -134,7 +134,9 @@ struct SkillDetailView: View {
                     badge: srcBadge(skill)
                 )
                 Spacer(minLength: 8)
-                descriptionTranslateButton(skill)
+                if isDescriptionTranslatable(skill) {
+                    descriptionTranslateButton(skill)
+                }
             }
             Text(verbatim: displayedDescription(skill))
                 .font(AppTheme.body(bodySize))
@@ -178,6 +180,15 @@ struct SkillDetailView: View {
             return translated
         }
         return descriptionText(skill)
+    }
+
+    /// Whether the translate button is offered: the description must
+    /// carry a recognizable non-Chinese language — a simplified-Chinese
+    /// description is already in the target language, so there is nothing
+    /// to translate (spec: the button follows the text, not a pinned
+    /// en → zh-Hans pairing).
+    private func isDescriptionTranslatable(_ skill: SkillSnapshot) -> Bool {
+        DescriptionTranslationSource.preferredSource(in: translationSourceText(skill)) != nil
     }
 
     /// 翻译/原文 toggle for the description (system Translation → zh-Hans).
@@ -224,6 +235,17 @@ struct SkillDetailView: View {
         } else if serveCachedTranslation(for: text, requestedPath: skill.path) {
             // Cache hit — nothing to translate.
         } else {
+            // Pin the source from the description's own language (never
+            // the session's auto-detection — a common stall path); the
+            // en → zh-Hans default stays for warm-up only. The button is
+            // hidden for Chinese descriptions, so a source is always
+            // found here.
+            if let source = DescriptionTranslationSource.preferredSource(in: text) {
+                translation.configuration = TranslationSession.Configuration(
+                    source: source,
+                    target: Locale.Language(identifier: "zh-Hans")
+                )
+            }
             // Queue the text and re-run the translation task on the
             // existing session (invalidate() keeps the session and its
             // loaded models — never rebuilds it).
