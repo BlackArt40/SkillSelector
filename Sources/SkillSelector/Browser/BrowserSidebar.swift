@@ -501,3 +501,23 @@ private struct SidebarButtonStyle: ButtonStyle {
             }
     }
 }
+
+extension BrowserDestination {
+    /// The column title for the current destination ("全部 Skill",
+    /// "全局 Skill", the root label, or the agent name).
+    func title(rootsByID: [String: AuthorizedRootSnapshot], definitions: [AgentDefinition]) -> String {
+        switch self {
+        case .all: L10n.string("All Skills")
+        case .global: L10n.string("Global Skills")
+        case .duplicates: L10n.string("Duplicate Skills")
+        case .links: L10n.string("Symbolic Links")
+        case .rules: L10n.string("Rules")
+        case .mcp: L10n.string("MCP")
+        case .catalog: L10n.string("Marketplace")
+        case .system(let rootID), .project(let rootID):
+            rootsByID[rootID]?.displayName ?? rootID
+        case .agent(let id):
+            definitions.first { $0.id == id }?.displayName ?? id
+        }
+    }
+}

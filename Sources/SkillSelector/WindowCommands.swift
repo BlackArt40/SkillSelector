@@ -92,3 +92,27 @@ struct WindowCommands: Commands {
         }
     }
 }
+/// Routes menu-bar command notifications (⌘F / ⌘[ / ⌘] / ⌘R / ⌘↩ / ⌘O /
+/// ⌘⌥T) into RootView's handlers. Bundled as one modifier so the root
+/// view's body chain stays type-checkable. Lives beside the command
+/// senders above — menu item and handler change for the same reason.
+struct WindowCommandHandling: ViewModifier {
+    let onGoBack: () -> Void
+    let onGoForward: () -> Void
+    let onFocusSearch: () -> Void
+    let onRefresh: () -> Void
+    let onRevealSelection: () -> Void
+    let onOpenSelection: () -> Void
+    let onToggleAppearance: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .performGoBack)) { _ in onGoBack() }
+            .onReceive(NotificationCenter.default.publisher(for: .performGoForward)) { _ in onGoForward() }
+            .onReceive(NotificationCenter.default.publisher(for: .focusSearchField)) { _ in onFocusSearch() }
+            .onReceive(NotificationCenter.default.publisher(for: .performRefresh)) { _ in onRefresh() }
+            .onReceive(NotificationCenter.default.publisher(for: .performRevealSelection)) { _ in onRevealSelection() }
+            .onReceive(NotificationCenter.default.publisher(for: .performOpenSelection)) { _ in onOpenSelection() }
+            .onReceive(NotificationCenter.default.publisher(for: .performToggleAppearance)) { _ in onToggleAppearance() }
+    }
+}

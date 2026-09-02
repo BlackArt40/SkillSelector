@@ -11,15 +11,10 @@ struct RootView: View {
     @Environment(\.openSettings) private var openSettings
     @AppStorage(ThemePreference.storageKey) private var themeMode = "system"
     @State private var destination: BrowserDestination
-    /// Ends in-column search editing when the user clicks outside the
-    /// field — SwiftUI keeps field focus on outside clicks otherwise.
-    @State private var editEndMonitor: Any?
-    /// Local event monitor translating two-finger horizontal swipes into
-    /// history navigation (right = back, left = forward), mirroring
-    /// Safari/Mail. Fires only when the system "swipe between pages"
-    /// gesture is enabled — the same setting Safari uses — so it never
-    /// fights normal scrolling in the list column.
-    @State private var swipeMonitor: Any?
+    /// Local NSEvent monitors (click-outside ends search-field editing;
+    /// two-finger swipes navigate history), owned by `RootEventMonitors`
+    /// and installed on appear / torn down on disappear.
+    @State private var eventMonitors = RootEventMonitors()
     @State private var searchText = ""
     @State private var sort: SkillQuery.Sort = .default
     @State private var openError: String?
@@ -115,10 +110,14 @@ struct RootView: View {
     private func mainContent(detectedAgentIDs: Set<String>, title: String) -> some View {
         VStack(spacing: 0) {
             if !model.unhealthyRootIDs.isEmpty {
-                authorizationBanner
+                RootAuthorizationBanner(onReauthorize: { reauthorizeUnhealthyRoots() })
             }
             if let summary = finishedRefreshSummary, !summary.isEmpty, !dismissedRefreshBanner {
-                refreshCompleteBanner(summary)
+                RootRefreshCompleteBanner(
+                    summary: summary,
+                    onViewChanges: { isShowingRefreshHistory = true },
+                    onDismiss: { dismissedRefreshBanner = true }
+                )
             }
             HStack(spacing: 0) {
                 BrowserSidebar(
@@ -159,23 +158,15 @@ struct RootView: View {
     /// View-appear: install event monitors and seed the history stack
     /// bottom once with the launch destination.
     private func onAppear() {
-        installEditingEndMonitor()
-        installSwipeNavigationMonitor()
+        eventMonitors.install(onSwipeBack: { goBack() }, onSwipeForward: { goForward() })
         guard !didSeedHistory else { return }
         didSeedHistory = true
         model.recordNavigation(.sidebar(destination))
     }
 
-    /// View-disappear: tear down both event monitors.
+    /// View-disappear: tear down the event monitors.
     private func onDisappear() {
-        if let monitor = editEndMonitor {
-            NSEvent.removeMonitor(monitor)
-            editEndMonitor = nil
-        }
-        if let monitor = swipeMonitor {
-            NSEvent.removeMonitor(monitor)
-            swipeMonitor = nil
-        }
+        eventMonitors.removeAll()
     }
 
     /// Destination change: record a sidebar history step (suppressed while
@@ -227,7 +218,8 @@ struct RootView: View {
     }
 
     /// The window toolbar: back/forward navigation group and the primary
-    /// action group (refresh, history, appearance, settings).
+    /// action group (refresh, history, appearance, settings). The buttons
+    /// themselves live in RootToolbar.swift.
     @ToolbarContentBuilder
     private var windowToolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .navigation) {
@@ -245,130 +237,21 @@ struct RootView: View {
             .accessibilityLabel(L10n.string("Go Forward"))
         }
         ToolbarItemGroup(placement: .primaryAction) {
-            refreshButton
-            historyButton
-            themeToggle
-            settingsButton
+            RootRefreshButton(
+                isRunning: model.refreshState == RefreshState.running,
+                onRefresh: { Task { await model.refresh() } }
+            )
+            RootHistoryButton(
+                unreadChangeCount: $unreadChangeCount,
+                isShowingRefreshHistory: $isShowingRefreshHistory,
+                history: model.refreshHistory
+            )
+            RootThemeToggleButton(
+                isDark: ThemePreference.effectiveDark(mode: themeMode),
+                onToggle: toggleAppearance
+            )
+            RootSettingsButton()
         }
-    }
-
-    /// history. Dismissible; reappears on the next refresh that changes
-    /// something.
-    private func refreshCompleteBanner(_ summary: RefreshSummary) -> some View {
-        Banner(
-            tone: .success,
-            icon: "checkmark.circle.fill",
-            text: String.localizedStringWithFormat(
-                L10n.string("Refresh Complete Banner"),
-                summary.added, summary.changed, summary.removed
-            ),
-            actionTitle: L10n.string("View Changes"),
-            action: { isShowingRefreshHistory = true },
-            onDismiss: { dismissedRefreshBanner = true }
-        )
-    }
-
-    // MARK: Toolbar
-
-    /// The explicit refresh action: rescans every authorized root now.
-    /// While a refresh runs the button shows progress and ignores clicks
-    /// (the in-flight task is awaited either way).
-    private var refreshButton: some View {
-        let isRunning = model.refreshState == RefreshState.running
-        return Button {
-            Task { await model.refresh() }
-        } label: {
-            if isRunning {
-                ProgressView()
-                    .controlSize(.small)
-                    .frame(width: 30, height: 30)
-            } else {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 14))
-                    .frame(width: 30, height: 30)
-                    .contentShape(Rectangle())
-            }
-        }
-        .buttonStyle(.borderless)
-        .disabled(isRunning)
-        .help(L10n.string("Refresh Now"))
-        .accessibilityLabel(L10n.string("Refresh Now"))
-    }
-
-    /// Recent refresh changes, anchored to the history button.
-    private var historyButton: some View {
-        Button {
-            // Opening the popover clears the badge (spec §4: zeroed once
-            // viewed).
-            unreadChangeCount = 0
-            isShowingRefreshHistory = true
-        } label: {
-            Image(systemName: "clock.arrow.circlepath")
-                .font(.system(size: 14))
-                .frame(width: 30, height: 30)
-                .contentShape(Rectangle())
-                .overlay(alignment: .topTrailing) {
-                    if unreadChangeCount > 0 {
-                        Text(verbatim: "\(min(unreadChangeCount, 99))")
-                            .font(AppTheme.body(9, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(AppTheme.danger, in: Capsule())
-                            .offset(x: 4, y: -4)
-                            .accessibilityHidden(true)
-                    }
-                }
-        }
-        .buttonStyle(.borderless)
-        .help(L10n.string("Change History"))
-        .accessibilityLabel(
-            unreadChangeCount > 0
-                ? L10n.string("Change History") + " \(unreadChangeCount)"
-                : L10n.string("Change History")
-        )
-        .popover(isPresented: $isShowingRefreshHistory, arrowEdge: .bottom) {
-            RefreshHistoryPopover(history: model.refreshHistory)
-        }
-    }
-
-    /// Settings entry point in the window toolbar (top-right), replacing
-    /// the old sidebar footer link. Icon-only, matching the other toolbar
-    /// actions.
-    private var settingsButton: some View {
-        Button {
-            openSettings()
-        } label: {
-            Image(systemName: "gearshape")
-                .font(.system(size: 14))
-                .frame(width: 30, height: 30)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.borderless)
-        .help(L10n.string("Open Settings"))
-        .accessibilityLabel(L10n.string("Open Settings"))
-    }
-
-    /// `.themeBtn`: moon in light mode, sun in dark mode; toggles between
-    /// the two like the HTML prototype's `ss.theme` flip.
-    private var themeToggle: some View {
-        Button(action: toggleAppearance) {
-            Image(systemName: ThemePreference.effectiveDark(mode: themeMode) ? "sun.max" : "moon")
-                .font(.system(size: 14))
-                .frame(width: 30, height: 30)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.borderless)
-        .help(
-            ThemePreference.effectiveDark(mode: themeMode)
-                ? L10n.string("Switch to Light Mode")
-                : L10n.string("Switch to Dark Mode")
-        )
-        .accessibilityLabel(
-            ThemePreference.effectiveDark(mode: themeMode)
-                ? L10n.string("Switch to Light Mode")
-                : L10n.string("Switch to Dark Mode")
-        )
     }
 
     /// Flips the persisted appearance between light and dark — the shared
@@ -583,27 +466,10 @@ struct RootView: View {
         return nil
     }
 
-    /// Top-of-window banner shown while any authorized root's bookmark no
-    /// longer resolves. With a single broken root the button goes straight
-    /// to the authorization panel (pre-selected to the lost directory) so
-    /// one click in the panel restores access; with several, it opens the
-    /// Settings directories pane to manage them together. Sandboxed apps
-    /// cannot silently re-acquire a broken bookmark — macOS requires the
-    /// user to re-pick the directory in the open panel.
-    private var authorizationBanner: some View {
-        Banner(
-            tone: .warning,
-            icon: "exclamationmark.triangle.fill",
-            text: L10n.string("Authorization Lost Banner"),
-            actionTitle: L10n.string("Re-authorize…"),
-            action: { reauthorizeUnhealthyRoots() },
-            actionHelp: L10n.string("Re-authorize Directory")
-        )
-    }
-
-    /// Routes the banner's re-authorization: a single broken root opens the
-    /// authorization panel directly; multiple roots fall back to the
-    /// Settings directories pane.
+    /// Routes the re-authorization banner's action: a single broken root
+    /// opens the authorization panel directly; multiple roots fall back to
+    /// the Settings directories pane. (The banner itself lives in
+    /// RootBanners.swift.)
     private func reauthorizeUnhealthyRoots() {
         let broken = model.authorizedRoots.filter { model.unhealthyRootIDs.contains($0.id) }
         if let only = broken.count == 1 ? broken.first : nil {
@@ -881,44 +747,6 @@ struct RootView: View {
         return panel.runModal() == .OK ? panel.url?.standardizedFileURL : nil
     }
 
-    /// Clicking anywhere outside a focused search field ends its editing
-    /// (caret gone, keyboard detached) — AppKit used to do this for the
-    /// toolbar field via its own monitors; one window-level monitor now
-    /// covers every in-column field.
-    private func installEditingEndMonitor() {
-        guard editEndMonitor == nil else { return }
-        editEndMonitor = NSEvent.addLocalMonitorForEvents(
-            matching: [.leftMouseDown]
-        ) { event in
-            guard let window = event.window,
-                  let editor = window.firstResponder as? NSTextView else { return event }
-            let editorFrame = editor.convert(editor.bounds, to: nil)
-            if !editorFrame.contains(event.locationInWindow) {
-                window.makeFirstResponder(nil)
-            }
-            return event
-        }
-    }
-
-    /// Two-finger horizontal swipe navigation, mirroring Safari / Mail:
-    /// swipe right (deltaX > 0) steps back, swipe left steps forward. The
-    /// `.swipe` event only fires when the system "swipe between pages"
-    /// gesture is enabled, so it never collides with normal scrolling —
-    /// the list column has no horizontal scroll to fight with.
-    private func installSwipeNavigationMonitor() {
-        guard swipeMonitor == nil else { return }
-        swipeMonitor = NSEvent.addLocalMonitorForEvents(
-            matching: [.swipe]
-        ) { event in
-            if event.deltaX > 0.5 {
-                goBack()
-            } else if event.deltaX < -0.5 {
-                goForward()
-            }
-            return event
-        }
-    }
-
     /// Opens the Settings scene on the directories pane — used by the
     /// re-authorization banner.
     private func openSettingsDirectories() {
@@ -927,46 +755,3 @@ struct RootView: View {
     }
 }
 
-extension BrowserDestination {
-    /// The column title for the current destination ("全部 Skill",
-    /// "全局 Skill", the root label, or the agent name).
-    func title(rootsByID: [String: AuthorizedRootSnapshot], definitions: [AgentDefinition]) -> String {
-        switch self {
-        case .all: L10n.string("All Skills")
-        case .global: L10n.string("Global Skills")
-        case .duplicates: L10n.string("Duplicate Skills")
-        case .links: L10n.string("Symbolic Links")
-        case .rules: L10n.string("Rules")
-        case .mcp: L10n.string("MCP")
-        case .catalog: L10n.string("Marketplace")
-        case .system(let rootID), .project(let rootID):
-            rootsByID[rootID]?.displayName ?? rootID
-        case .agent(let id):
-            definitions.first { $0.id == id }?.displayName ?? id
-        }
-    }
-}
-
-/// Routes menu-bar command notifications (⌘F / ⌘[ / ⌘] / ⌘R / ⌘↩ / ⌘O /
-/// ⌘⌥T) into RootView's handlers. Bundled as one modifier so the root
-/// view's body chain stays type-checkable.
-private struct WindowCommandHandling: ViewModifier {
-    let onGoBack: () -> Void
-    let onGoForward: () -> Void
-    let onFocusSearch: () -> Void
-    let onRefresh: () -> Void
-    let onRevealSelection: () -> Void
-    let onOpenSelection: () -> Void
-    let onToggleAppearance: () -> Void
-
-    func body(content: Content) -> some View {
-        content
-            .onReceive(NotificationCenter.default.publisher(for: .performGoBack)) { _ in onGoBack() }
-            .onReceive(NotificationCenter.default.publisher(for: .performGoForward)) { _ in onGoForward() }
-            .onReceive(NotificationCenter.default.publisher(for: .focusSearchField)) { _ in onFocusSearch() }
-            .onReceive(NotificationCenter.default.publisher(for: .performRefresh)) { _ in onRefresh() }
-            .onReceive(NotificationCenter.default.publisher(for: .performRevealSelection)) { _ in onRevealSelection() }
-            .onReceive(NotificationCenter.default.publisher(for: .performOpenSelection)) { _ in onOpenSelection() }
-            .onReceive(NotificationCenter.default.publisher(for: .performToggleAppearance)) { _ in onToggleAppearance() }
-    }
-}
