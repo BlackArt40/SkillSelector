@@ -78,7 +78,8 @@ final class AppModel {
     /// description text, value: the zh-Hans translation). Kept across
     /// selection changes so revisiting a skill shows its translation
     /// instantly instead of re-running the system translation session.
-    var descriptionTranslations: [String: String] = [:]
+    /// Memory-only: never persisted, dies with the process.
+    private(set) var descriptionTranslations: [String: String] = [:]
     /// Recent refreshes that changed something, newest first. Empty
     /// refreshes are not recorded — the history answers "what moved".
     private(set) var refreshHistory: [RefreshChangeEntry] = []
@@ -114,6 +115,18 @@ final class AppModel {
     func openTranslationLanguageSettings() {
         guard let url = URL(string: "x-apple.systempreferences:com.apple.Localization-Settings.extension") else { return }
         NSWorkspace.shared.open(url)
+    }
+
+    /// Cache policy for description translations lives here, not in the
+    /// view: the toggle's fast path and the translation task's defensive
+    /// re-check ask the same question, and completed translations land
+    /// back here so later visits reuse them.
+    func cachedDescriptionTranslation(for text: String) -> String? {
+        descriptionTranslations[text]
+    }
+
+    func storeDescriptionTranslation(_ translation: String, for text: String) {
+        descriptionTranslations[text] = translation
     }
 
     init(
