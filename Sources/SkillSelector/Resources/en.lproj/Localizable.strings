@@ -345,7 +345,7 @@
 "No Matching Results" = "No matching results";
 "Toggle Appearance" = "Toggle Appearance";
 "Dismiss" = "Dismiss";
-"Refresh Complete Banner" = "Refresh complete · 0 added · 0 changed · 0 removed";
+"Refresh Complete Banner" = "Refresh complete · %lld added · %lld changed · %lld removed";
 "View Changes" = "View Changes";
 "Scanning" = "Scanning…";
 "Translate Description" = "Translate Description";

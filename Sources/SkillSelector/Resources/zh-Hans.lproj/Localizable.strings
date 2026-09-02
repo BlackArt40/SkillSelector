@@ -347,7 +347,7 @@
 
 "Toggle Appearance" = "切换外观";
 "Dismiss" = "关闭";
-"Refresh Complete Banner" = "刷新完成 · 新增 0 · 变更 0 · 移除 0";
+"Refresh Complete Banner" = "刷新完成 · 新增 %lld · 变更 %lld · 移除 %lld";
 "View Changes" = "查看变更";
 "Scanning" = "正在扫描…";
 "Translate Description" = "翻译简介";
