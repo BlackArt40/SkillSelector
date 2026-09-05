@@ -16,7 +16,10 @@ public enum SkillStore {
     }
 
     public static func inMemory() throws -> DatabaseQueue {
-        let queue = try DatabaseQueue.inMemory()
+        // GRDB 7: the independent in-memory database is the default
+        // `DatabaseQueue()` initializer (`:memory:`); the GRDB 6-era
+        // `DatabaseQueue.inMemory()` factory no longer exists.
+        let queue = try DatabaseQueue()
         try migrator().migrate(queue)
         return queue
     }
