@@ -516,8 +516,8 @@ struct SettingsView: View {
         } label: {
             Text(verbatim: title)
                 .font(AppTheme.body(12.5))
-                .foregroundStyle(AppTheme.accentActive)
                 .underline()
+                .foregroundStyle(AppTheme.accentActive)
                 .padding(.horizontal, 4)
                 .padding(.vertical, 2)
                 .contentShape(Rectangle())

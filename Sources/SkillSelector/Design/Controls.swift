@@ -92,68 +92,67 @@ struct AgentChipLarge: View {
 }
 
 /// A wrapping row of `.agent-chip-lg` chips (`.chip-row`).
+///
+/// SwiftUI's `Layout` protocol is macOS 13+, so wrapping uses the
+/// macOS 11-compatible alignment-guide technique: chips sit in a top-leading
+/// ZStack and are pushed into rows by running x/y accumulators captured in
+/// the guide closures; the measured block height is fed back through state
+/// so the container stays as compact as the chips.
 struct FlowChips: View {
     let names: [String]
 
+    /// Gap between and after chips (the old FlowLayout's `spacing`).
+    private let spacing: CGFloat = 6
+    @State private var totalHeight: CGFloat = 0
+
     var body: some View {
-        FlowLayout(spacing: 6) {
-            ForEach(names, id: \.self) { name in
-                AgentChipLarge(name: name)
-            }
+        GeometryReader { geo in
+            wrappedChips(in: geo)
         }
+        .frame(height: totalHeight)
     }
-}
 
-/// Left-to-right wrapping layout for chip rows.
-struct FlowLayout: Layout {
-    var spacing: CGFloat = 6
-
-    func sizeThatFits(
-        proposal: ProposedViewSize,
-        subviews: Subviews,
-        cache: inout ()
-    ) -> CGSize {
-        let width = proposal.width ?? .infinity
+    private func wrappedChips(in geo: GeometryProxy) -> some View {
         var x: CGFloat = 0
         var y: CGFloat = 0
-        var rowHeight: CGFloat = 0
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if x + size.width > width, x > 0 {
-                x = 0
-                y += rowHeight + spacing
-                rowHeight = 0
+        return ZStack(alignment: .topLeading) {
+            ForEach(names, id: \.self) { name in
+                AgentChipLarge(name: name)
+                    .padding(.trailing, spacing)
+                    .padding(.bottom, spacing)
+                    .alignmentGuide(.leading) { dimension in
+                        if abs(x - dimension.width) > geo.size.width {
+                            x = 0
+                            y -= dimension.height
+                        }
+                        let result = x
+                        if name == names.last {
+                            x = 0
+                        } else {
+                            x -= dimension.width
+                        }
+                        return result
+                    }
+                    .alignmentGuide(.top) { _ in
+                        let result = y
+                        if name == names.last {
+                            y = 0
+                        }
+                        return result
+                    }
             }
-            x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
         }
-        return CGSize(width: width == .infinity ? x : width, height: y + rowHeight)
-    }
-
-    func placeSubviews(
-        in bounds: CGRect,
-        proposal: ProposedViewSize,
-        subviews: Subviews,
-        cache: inout ()
-    ) {
-        var x = bounds.minX
-        var y = bounds.minY
-        var rowHeight: CGFloat = 0
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if x + size.width > bounds.maxX, x > bounds.minX {
-                x = bounds.minX
-                y += rowHeight + spacing
-                rowHeight = 0
+        .background(
+            GeometryReader { proxy -> Color in
+                let height = proxy.size.height
+                DispatchQueue.main.async {
+                    if totalHeight != height {
+                        totalHeight = height
+                    }
+                }
+                return Color.clear
             }
-            subview.place(
-                at: CGPoint(x: x, y: y),
-                anchor: .topLeading,
-                proposal: ProposedViewSize(size)
-            )
-            x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
-        }
+        )
     }
 }
 

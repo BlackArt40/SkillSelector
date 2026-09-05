@@ -8,13 +8,13 @@ import XCTest
 final class ScanStateDepthTests: XCTestCase {
     func testShallowTreeIsFullyEnumerated() throws {
         let root = FileManager.default.temporaryDirectory
-            .appending(component: "ScanStateDepth-shallow-\(UUID().uuidString)")
+            .appendingPathComponent("ScanStateDepth-shallow-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
 
-        try FileManager.default.createDirectory(at: root.appending(component: "docs"), withIntermediateDirectories: true)
-        try Data("x".utf8).write(to: root.appending(component: "SKILL.md"))
-        try Data("y".utf8).write(to: root.appending(component: "docs").appending(component: "notes.md"))
+        try FileManager.default.createDirectory(at: root.appendingPathComponent("docs"), withIntermediateDirectories: true)
+        try Data("x".utf8).write(to: root.appendingPathComponent("SKILL.md"))
+        try Data("y".utf8).write(to: root.appendingPathComponent("docs").appendingPathComponent("notes.md"))
 
         let state = ScanStateBuilder.build(
             contentDirectory: root,
@@ -27,7 +27,7 @@ final class ScanStateDepthTests: XCTestCase {
 
     func testDeepTreeIsCappedWithoutOverflow() throws {
         let root = FileManager.default.temporaryDirectory
-            .appending(component: "ScanStateDepth-deep-\(UUID().uuidString)")
+            .appendingPathComponent("ScanStateDepth-deep-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
 
@@ -38,7 +38,7 @@ final class ScanStateDepthTests: XCTestCase {
         var cursor = root
         let totalDepth = ScanStateBuilder.maximumWalkDepth + 50
         for _ in 0..<totalDepth {
-            cursor = cursor.appending(component: "d")
+            cursor = cursor.appendingPathComponent("d")
         }
         try FileManager.default.createDirectory(at: cursor, withIntermediateDirectories: true)
 
