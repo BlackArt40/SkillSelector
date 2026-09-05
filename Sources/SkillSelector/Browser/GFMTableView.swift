@@ -107,7 +107,9 @@ struct GFMTableView: View {
         return Text(verbatim: cell)
     }
 
-    private func alignment(for column: Int) -> HorizontalAlignment {
+    /// `frame(width:alignment:)` takes a full `Alignment`; the table's
+    /// alignment only constrains the horizontal axis.
+    private func alignment(for column: Int) -> Alignment {
         guard table.alignments.indices.contains(column) else { return .leading }
         switch table.alignments[column] {
         case .leading: return .leading
@@ -134,7 +136,8 @@ private struct ColumnWidthReader: View {
 }
 
 private struct ColumnWidthKey: PreferenceKey {
-    static var defaultValue: [Int: CGFloat] = [:]
+    // `let` (not `var`): Swift 6 rejects nonisolated global mutable state.
+    static let defaultValue: [Int: CGFloat] = [:]
 
     static func reduce(value: inout [Int: CGFloat], nextValue: () -> [Int: CGFloat]) {
         value.merge(nextValue(), uniquingKeysWith: max)

@@ -19,14 +19,14 @@ public enum MarkdownSegment: Equatable, Sendable {
 }
 
 /// A parsed GFM table: header cells, per-column alignment, and data rows.
-public struct GFMTable: Equatable, Sendable {
-    public enum GFMTableAlignment: Equatable, Sendable {
+public struct GFMTable: Equatable, Hashable, Sendable {
+    public enum GFMTableAlignment: Equatable, Hashable, Sendable {
         case leading
         case center
         case trailing
     }
 
-    public struct Column: Equatable, Sendable {
+    public struct Column: Equatable, Hashable, Sendable {
         public let alignment: GFMTableAlignment
 
         public init(alignment: GFMTableAlignment) {
