@@ -7,7 +7,7 @@ import SwiftUI
 /// agent badge), an action bar, the rendered markdown content, and a
 /// metadata grid. Read-only — rules files are only revealed or opened.
 struct RulesDetailView: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     let file: RulesFileDescriptor?
     var agentNamesByID: [String: String] = [:]
     var onReveal: ((RulesFileDescriptor) -> Void)?
@@ -284,7 +284,7 @@ struct RulesDetailView: View {
 /// One same-named rules file in another root, with a lazy line diff against
 /// the selected file and an expandable diff view.
 private struct RuleFileDiffCard: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     let file: RulesFileDescriptor
     let counterpart: RulesFileDescriptor
 

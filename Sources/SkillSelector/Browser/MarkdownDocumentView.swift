@@ -12,7 +12,7 @@ struct MarkdownDocumentView: View {
         case failed(String)
     }
 
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     let skill: SkillSnapshot
 
     @State private var state: LoadState = .loading

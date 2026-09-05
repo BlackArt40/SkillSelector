@@ -7,7 +7,7 @@ import SwiftUI
 /// via the drag handle, and a titlebar toolbar hosts back/forward, search
 /// and the appearance toggle.
 struct RootView: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.openSettings) private var openSettings
     @AppStorage(ThemePreference.storageKey) private var themeMode = "system"
     @State private var destination: BrowserDestination
@@ -59,7 +59,6 @@ struct RootView: View {
     }
 
     var body: some View {
-        @Bindable var model = model
         let currentDestination = destination
         let detectedAgentIDs = BrowserSidebar.detectedAgentIDs(
             from: model.snapshots,

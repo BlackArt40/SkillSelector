@@ -20,7 +20,7 @@ extension Notification.Name {
 /// The settings window from design/screens/settings.html: a tab bar with
 /// 通用 / 目录授权 / 关于 panes built from `.group` cards.
 struct SettingsView: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @AppStorage("SkillSelector.preferredLanguage") private var preferredLanguage: String?
     @State private var activeTab: SettingsTab = .general
     @State private var settingsError: String?
@@ -38,7 +38,6 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        @Bindable var model = model
         VStack(spacing: 0) {
             tabBar
             Rectangle()

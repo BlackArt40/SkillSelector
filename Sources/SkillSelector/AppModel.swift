@@ -1,6 +1,6 @@
 import Darwin
 import Foundation
-import Observation
+import Combine
 import SkillSelectorCore
 
 enum RefreshState: Hashable {
@@ -30,13 +30,12 @@ struct SkillSelection: Hashable, Identifiable {
 }
 
 @MainActor
-@Observable
-final class AppModel {
+final class AppModel: ObservableObject {
     private let refresher: IndexRefresher
     private let index: SkillIndex
     /// Authorized-roots store, also handed to the state submodels.
-    private(set) var bookmarks: BookmarkStore?
-    private(set) var registry: AgentRegistry
+    @Published private(set) var bookmarks: BookmarkStore?
+    @Published private(set) var registry: AgentRegistry
     private let builtInRegistry: AgentRegistry
     private let customAgentStore: any AgentDefinitionStoring
     private let refreshHistoryStore: any RefreshHistoryStoring
@@ -46,22 +45,22 @@ final class AppModel {
     private let homeDirectory: URL
     /// Test seam: pins the sandbox verdict that `isSandboxed` reads from the
     /// process environment, so unit tests can exercise the sandboxed path.
-    var environmentIsSandboxed: Bool?
-    @ObservationIgnored private var activeRefresh: (id: UUID, task: Task<Void, Never>)?
-    @ObservationIgnored private var activeFingerprintBackfill: (id: UUID, task: Task<Void, Never>)?
+    @Published var environmentIsSandboxed: Bool?
+    private var activeRefresh: (id: UUID, task: Task<Void, Never>)?
+    private var activeFingerprintBackfill: (id: UUID, task: Task<Void, Never>)?
     /// True while the deferred fingerprint backfill is running off the
     /// main thread — drives the "background indexing" status dot in the
     /// search field (spec §5.9 / §06).
-    private(set) var isBackfilling = false
+    @Published private(set) var isBackfilling = false
     /// Paths whose deferred fingerprint failed to compute (unreadable
     /// content). They are not retried until the next refresh, when files
     /// may have changed — this keeps the schedule self-terminating.
-    @ObservationIgnored private var fingerprintFailures: Set<String> = []
+    private var fingerprintFailures: Set<String> = []
     /// Paths whose body is too short for a similarity fingerprint: the
     /// value is legitimately nil, so without this set the backfill would
     /// re-read them after every reload. Reset on refresh (files change).
-    @ObservationIgnored private var shortSimilarityBodies: Set<String> = []
-    @ObservationIgnored private var activeBodyIndexBuild: (id: UUID, task: Task<Void, Never>)?
+    private var shortSimilarityBodies: Set<String> = []
+    private var activeBodyIndexBuild: (id: UUID, task: Task<Void, Never>)?
     /// MCP server detection state (probe statuses + server list), separated
     /// from this type to keep AppModel a composition root (Brooks finding 2).
     let mcps: McpStateModel
@@ -71,29 +70,29 @@ final class AppModel {
     /// type to keep AppModel a composition root (Brooks finding 2).
     let catalog: CatalogModel
 
-    var refreshState: RefreshState = .idle
-    var selection: SkillSelection?
+    @Published var refreshState: RefreshState = .idle
+    @Published var selection: SkillSelection?
     /// Recent refreshes that changed something, newest first. Empty
     /// refreshes are not recorded — the history answers "what moved".
-    private(set) var refreshHistory: [RefreshChangeEntry] = []
+    @Published private(set) var refreshHistory: [RefreshChangeEntry] = []
     /// Folded entry-file bodies by installation path, powering body
     /// search (`body:` terms and free-term matching). Rebuilt in the
     /// background after each refresh; empty until the first build lands,
     /// and search degrades to name matching in the meantime.
-    private(set) var bodySearchTextsByPath: [String: String] = [:]
-    private(set) var snapshots: [SkillSnapshot] = []
-    private(set) var authorizedRoots: [AuthorizedRootSnapshot] = []
-    private(set) var rootsByID: [String: AuthorizedRootSnapshot] = [:]
-    private(set) var agentDefinitions: [AgentDefinition]
-    private(set) var customAgentDefinitions: [AgentDefinition]
+    @Published private(set) var bodySearchTextsByPath: [String: String] = [:]
+    @Published private(set) var snapshots: [SkillSnapshot] = []
+    @Published private(set) var authorizedRoots: [AuthorizedRootSnapshot] = []
+    @Published private(set) var rootsByID: [String: AuthorizedRootSnapshot] = [:]
+    @Published private(set) var agentDefinitions: [AgentDefinition]
+    @Published private(set) var customAgentDefinitions: [AgentDefinition]
     /// Fine-grained navigation history, owned by the model. Views record
     /// actions through `recordNavigation`; they never mutate the stacks
     /// directly.
-    private var navigation = NavigationHistory()
-    var autoScanHome: Bool {
+    @Published private var navigation = NavigationHistory()
+    @Published var autoScanHome: Bool {
         didSet { defaults.set(autoScanHome, forKey: Self.autoScanHomeDefaultsKey) }
     }
-    private(set) var manuallyEnabledAgentIDs: Set<String> {
+    @Published private(set) var manuallyEnabledAgentIDs: Set<String> {
         didSet { defaults.set(manuallyEnabledAgentIDs.sorted(), forKey: Self.manuallyEnabledAgentsDefaultsKey) }
     }
 
@@ -453,7 +452,7 @@ final class AppModel {
     /// Roots whose security-scoped bookmark can no longer be resolved (moved
     /// directory, restored backup, reinstalled system). They need explicit
     /// re-authorization — a sandboxed app cannot heal these silently.
-    private(set) var unhealthyRootIDs: Set<String> = []
+    @Published private(set) var unhealthyRootIDs: Set<String> = []
 
     private func reloadBookmarkHealth() {
         guard let bookmarks else {

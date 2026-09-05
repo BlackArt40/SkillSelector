@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Foundation
 import SkillSelectorCore
 
@@ -11,10 +12,9 @@ import SkillSelectorCore
 /// until the user asks, then a one-shot verdict per server. Both
 /// properties are observable so SwiftUI re-renders when they change.
 @MainActor
-@Observable
-final class McpStateModel {
-    var servers: [McpServerDescriptor] = []
-    var probeStatuses: [String: McpProbeStatus] = [:]
+final class McpStateModel: ObservableObject {
+    @Published var servers: [McpServerDescriptor] = []
+    @Published var probeStatuses: [String: McpProbeStatus] = [:]
 
     /// The bookmark store is immutable after app launch, so the submodel
     /// keeps its own reference instead of reaching into `AppModel`.

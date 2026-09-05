@@ -10,7 +10,7 @@ import SwiftUI
 /// parent): prefetch flushes then invalidate only this list, not the
 /// whole browser, so scrolling stays smooth while they stream in.
 struct CatalogListView: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     let state: CatalogState
     var selection: String?
     var onSelect: ((CatalogSkill) -> Void)?

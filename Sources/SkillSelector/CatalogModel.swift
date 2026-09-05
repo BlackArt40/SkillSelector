@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import SkillSelectorCore
 
@@ -9,37 +10,36 @@ import SkillSelectorCore
 /// never persisted, no background work. Remote content is rendered
 /// read-only; installation stays with the ecosystem's own tooling.
 @MainActor
-@Observable
-final class CatalogModel {
-    var state: CatalogState = .idle
+final class CatalogModel: ObservableObject {
+    @Published var state: CatalogState = .idle
     /// Effective catalog sources: the built-in table (minus any the user
     /// hid) plus the user's imported ones (UserDefaults-persisted).
-    var sources: [CatalogSource] = CatalogRegistry.sources
+    @Published var sources: [CatalogSource] = CatalogRegistry.sources
     /// Built-in source ids the user removed from the marketplace. Persisted
     /// in UserDefaults; a hidden built-in can only return by clearing it.
-    private(set) var hiddenBuiltInSourceIDs: Set<String> = []
+    @Published private(set) var hiddenBuiltInSourceIDs: Set<String> = []
     /// Source ids whose last fetch failed while other sources loaded.
-    var failedSourceIDs: [String] = []
+    @Published var failedSourceIDs: [String] = []
     /// Frontmatter descriptions keyed by skill id, prefetched in the
     /// background after a catalog load; rows fill them in progressively.
     /// Same memory-only discipline as the listing itself.
-    var descriptions: [String: String] = [:]
+    @Published var descriptions: [String: String] = [:]
     /// Repository metadata keyed by source id, prefetched in the background
     /// with the listing; the detail page's「仓库信息」section reads it.
-    var repoInfoBySourceID: [String: CatalogRepoMetadata] = [:]
+    @Published var repoInfoBySourceID: [String: CatalogRepoMetadata] = [:]
 
     /// Catalog network boundary; injected for tests, immutable after init.
-    @ObservationIgnored let fetcher: any CatalogFetching
+    let fetcher: any CatalogFetching
     /// Persistence for user-imported sources; immutable after init.
-    @ObservationIgnored let sourceStore: any CatalogSourceStoring
+    let sourceStore: any CatalogSourceStoring
     /// Persistence for the hidden built-in source ids.
-    @ObservationIgnored private let defaults: UserDefaults
+    private let defaults: UserDefaults
     /// In-flight catalog load; guards duplicate concurrent loads.
-    @ObservationIgnored var loadTask: Task<Void, Never>?
+    var loadTask: Task<Void, Never>?
     /// In-flight description prefetch; cancelled by the next load.
-    @ObservationIgnored var descriptionTask: Task<Void, Never>?
+    var descriptionTask: Task<Void, Never>?
     /// In-flight repo-metadata prefetch; cancelled by the next load.
-    @ObservationIgnored var repoInfoTask: Task<Void, Never>?
+    var repoInfoTask: Task<Void, Never>?
 
     init(
         fetcher: any CatalogFetching,

@@ -52,7 +52,7 @@ struct CustomAgentSheetRequest: Identifiable {
 /// The add/edit sheet for custom Agents: the minimal field set —
 /// name, global root paths, entry filename.
 struct CustomAgentSheet: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
 
     /// The definition being edited, nil when adding.

@@ -160,7 +160,7 @@ struct SkillSelectorApp: App {
         WindowGroup {
             if let model {
                 RootView()
-                    .environment(model)
+                    .environmentObject(model)
                     .task {
                         await model.checkEnvironmentOnLaunch()
                     }
@@ -175,7 +175,7 @@ struct SkillSelectorApp: App {
         Settings {
             if let model {
                 SettingsView()
-                    .environment(model)
+                    .environmentObject(model)
             }
         }
     }

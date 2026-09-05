@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Foundation
 import SkillSelectorCore
 
@@ -14,14 +15,13 @@ import SkillSelectorCore
 /// `renameRoot` only renames a root's display `customName`, so it never
 /// touches this model's logic — only the path-based `id`/`url` matter here.
 @MainActor
-@Observable
-final class RulesStateModel {
-    var files: [RulesFileDescriptor] = []
+final class RulesStateModel: ObservableObject {
+    @Published var files: [RulesFileDescriptor] = []
 
     /// The authorized roots as of the last `reload`, used to resolve the
     /// security-scoped access behind every document/file API. Not observable
     /// by design — it only feeds lookups, never the rules list rendering.
-    @ObservationIgnored private(set) var roots: [AuthorizedRootSnapshot] = []
+    private(set) var roots: [AuthorizedRootSnapshot] = []
 
     /// The bookmark store is immutable after app launch, so the submodel
     /// keeps its own reference instead of reaching into `AppModel`.

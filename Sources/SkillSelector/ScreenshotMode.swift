@@ -80,7 +80,7 @@ enum ScreenshotMode {
 
         // 2. Duplicates page, hosted full-size.
         let duplicates = hostedWindow(
-            RootView(initialDestination: .duplicates).environment(model),
+            RootView(initialDestination: .duplicates).environmentObject(model),
             size: NSSize(width: 1440, height: 900)
         )
         await settle()
@@ -89,7 +89,7 @@ enum ScreenshotMode {
 
         // 2b. MCP page, hosted full-size — the new detection surface.
         let mcp = hostedWindow(
-            RootView(initialDestination: .mcp).environment(model),
+            RootView(initialDestination: .mcp).environmentObject(model),
             size: NSSize(width: 1440, height: 900)
         )
         await settle()
@@ -105,7 +105,7 @@ enum ScreenshotMode {
             RootView(
                 initialDestination: .rules,
                 initialRulesSelection: rulesFileID
-            ).environment(model),
+            ).environmentObject(model),
             size: NSSize(width: 1440, height: 900)
         )
         await settle()
@@ -130,7 +130,7 @@ enum ScreenshotMode {
             RootView(
                 initialDestination: .catalog,
                 initialCatalogSelection: catalogSkillID
-            ).environment(model),
+            ).environmentObject(model),
             size: NSSize(width: 1440, height: 900)
         )
         await settle(seconds: 4)
@@ -139,7 +139,7 @@ enum ScreenshotMode {
 
         // 3. Settings window (directories tab), titled so it can host sheets.
         let settings = titledHostedWindow(
-            SettingsView(initialTab: .directories).environment(model)
+            SettingsView(initialTab: .directories).environmentObject(model)
         )
         await settle()
         capture(settings, name: "settings-\(languageTag).png")
@@ -148,7 +148,7 @@ enum ScreenshotMode {
         if let droid = model.customAgentDefinitions.first {
             let editor = presentSheet(
                 CustomAgentSheet(editing: droid)
-                    .environment(model),
+                    .environmentObject(model),
                 on: settings
             )
             await settle(seconds: 1.2)

@@ -8,7 +8,7 @@ import SwiftUI
 /// fetched SKILL.md rendered read-only, and a metadata grid. Remote
 /// content is treated as untrusted text and capped by the fetcher.
 struct CatalogDetailView: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     let skill: CatalogSkill?
     var sourceNamesByID: [String: String] = [:]
     /// Agent display names for the local-installation section (「对照本地」).
@@ -415,7 +415,7 @@ struct CatalogDetailView: View {
 /// body against the remote marketplace body and reports "identical" or a
 /// "+N −M lines" difference. Pure read-only — no writes, no commands.
 private struct LocalMatchVersionRow: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     let match: SkillSnapshot
     let remoteBody: String
 
