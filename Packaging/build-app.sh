@@ -26,6 +26,14 @@ cp Sources/SkillSelector/Resources/AppIcon.icns Sources/SkillSelector/Resources/
 cp Sources/SkillSelector/Resources/en.lproj/Localizable.strings "$OUT/Contents/Resources/en.lproj/"
 cp Sources/SkillSelector/Resources/zh-Hans.lproj/Localizable.strings "$OUT/Contents/Resources/zh-Hans.lproj/"
 
+# SwiftPM resource bundles: same dual placement as package-dmg.sh — the .app
+# root for Bundle.module, Resources for Bundle.main.url(forResource:) (L10n).
+for resource_bundle in .build/release/*.bundle; do
+    [[ -e "$resource_bundle" ]] || continue
+    ditto "$resource_bundle" "$OUT/Contents/Resources/${resource_bundle:t}"
+    ditto "$resource_bundle" "$OUT/${resource_bundle:t}"
+done
+
 # A per-invocation temp path keeps parallel builds from overwriting each
 # other's entitlements file.
 ENTITLEMENTS="$(mktemp -t skillselector-dev-entitlements)"
