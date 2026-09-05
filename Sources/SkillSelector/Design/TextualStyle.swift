@@ -8,7 +8,12 @@ import SwiftUI
 /// fenced code panel. Block layout (spacing, list markers, table decoration)
 /// follows MarkdownUI's gitHub-like defaults; the base text size is the macOS
 /// body size (13) so `.em` heading/code scales match the old fontScale values.
+///
+/// The theme is MainActor-isolated: `Theme` is not `Sendable`, so a
+/// nonisolated global would be rejected in Swift 6 language mode — and every
+/// consumer (SwiftUI view bodies) already runs on the main actor.
 extension Theme {
+    @MainActor
     static let appTheme: Theme = Theme()
         .text {
             FontSize(13)
