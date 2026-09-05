@@ -55,16 +55,18 @@ The local features run offline. No telemetry, no crash reporter, no file watcher
 
 ## Install
 
-Requires macOS 15 Sequoia or later; Universal 2 (Apple Silicon and Intel).
+Requires macOS 12 Monterey or later; Universal 2 (Apple Silicon and Intel).
+
+Since 1.9.0: the description translation feature has been removed; after upgrading, the first launch starts fresh (the index rebuilds automatically — re-authorize your directories; duplicate-ignore marks reset).
 
 1. Download the `.dmg` and its `.sha256` from [GitHub Releases](https://github.com/BlackArt40/SkillSelector/releases)
 2. Verify integrity (keep both files in the same directory):
 
    ```zsh
-   shasum -a 256 -c SkillSelector-1.7.1.dmg.sha256
+   shasum -a 256 -c SkillSelector-1.9.0.dmg.sha256
    ```
 
-   It must print `SkillSelector-1.7.1.dmg: OK`. If it doesn't, don't install it.
+   It must print `SkillSelector-1.9.0.dmg: OK`. If it doesn't, don't install it.
 
 3. Mount the `.dmg` and drag `SkillSelector.app` to Applications
 4. Right-click the app → Open → confirm Open
@@ -86,12 +88,12 @@ If that's not acceptable, build from source — it goes through the same packagi
 
 ```zsh
 swift build
-zsh Scripts/package-dmg.sh 1.7.1
+zsh Scripts/package-dmg.sh 1.9.0
 ```
 
-Produces `dist/SkillSelector.app`, `dist/SkillSelector.dmg`, `dist/SkillSelector-1.7.1.dmg`, and a matching `.sha256`.
+Produces `dist/SkillSelector.app`, `dist/SkillSelector.dmg`, `dist/SkillSelector-1.9.0.dmg`, and a matching `.sha256`.
 
-The only third-party dependency is Yams (frontmatter parsing). Run the tests with `swift test`; CI runs them on every PR and push.
+The only third-party dependencies are Yams (frontmatter parsing), GRDB (local index), and MarkdownUI (Markdown rendering). Run the tests with `swift test`; CI runs them on every PR and push.
 
 ## Versioning
 
