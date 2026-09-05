@@ -223,7 +223,8 @@ final class FingerprintVersionMigrationTests: XCTestCase {
         let root = ScanRoot.project(id: "p", url: base, registry: BuiltInAgentRegistry.make())
         try index.apply(report: await SkillScanner(computesContentFingerprints: true).scan([root]))
 
-        XCTAssertEqual(try index.cachedScanEntries().count, 1)        let second = await SkillScanner(computesContentFingerprints: true).scan(
+        XCTAssertEqual(try index.cachedScanEntries().count, 1)
+        let second = await SkillScanner(computesContentFingerprints: true).scan(
             [root],
             cache: SkillScanCache(entriesByPath: try index.cachedScanEntries())
         )
