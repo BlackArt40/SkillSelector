@@ -69,7 +69,7 @@ private final class MainFrameView: NSView {
     }
 
     private func saveFrame() {
-        guard let window, isVisible else { return }
+        guard let window, window.isVisible else { return }
         let frame = window.frame
         UserDefaults.standard.set(
             "\(frame.origin.x) \(frame.origin.y) \(frame.size.width) \(frame.size.height)",
