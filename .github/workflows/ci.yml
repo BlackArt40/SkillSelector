@@ -28,8 +28,10 @@ jobs:
       - name: Build failure annotations
         if: failure()
         run: |
-          grep -E "error: " /tmp/build-output.txt | head -40 | while IFS= read -r line; do echo "::error::$line"; done
-          grep -cE "error: " /tmp/build-output.txt
+          grep -E "error: " /tmp/build-output.txt | head -10 | while IFS= read -r line; do echo "::error::$line"; done
+          c=$(grep -cE "error: " /tmp/build-output.txt || true)
+          echo "::error::total error lines: $c"
+          exit 0
       - name: Test
         run: |
           set -o pipefail
@@ -37,12 +39,10 @@ jobs:
       - name: Test failure annotations
         if: failure()
         run: |
-          { awk '/Failing tests:/{f=6} f>0{print; f--}' /tmp/test-output.txt; grep -E "^Executed [0-9]+ tests" /tmp/test-output.txt; } > /tmp/test-summary.txt
-          if [ -s /tmp/test-summary.txt ]; then
-            while IFS= read -r line; do echo "::error::$line"; done < /tmp/test-summary.txt
-          else
-            echo "::error::no failing-test summary found — see logs"
-          fi
+          { awk '/Failing tests:/{f=8} f>0{print; f--}' /tmp/test-output.txt
+            grep -E "^Executed [0-9]+ tests|error:" /tmp/test-output.txt | head -8
+          } | sort -u | head -10 | while IFS= read -r line; do echo "::error::$line"; done
+          exit 0
 
   package:
     name: Package DMG (clean checkout)
