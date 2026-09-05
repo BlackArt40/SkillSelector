@@ -28,9 +28,12 @@ jobs:
       - name: Build failure annotations
         if: failure()
         run: |
-          grep -E "error: " /tmp/build-output.txt | head -10 | while IFS= read -r line; do echo "::error::$line"; done
+          # Availability errors get their own bucket so they cannot crowd out
+          # the other diagnostics under the 10-annotation display cap.
           c=$(grep -cE "error: " /tmp/build-output.txt || true)
           echo "::error::total error lines: $c"
+          grep -E "error: " /tmp/build-output.txt | grep -v "is only available in macOS" | head -10 | while IFS= read -r line; do echo "::error::$line"; done
+          grep -E "error: " /tmp/build-output.txt | grep "is only available in macOS" | head -10 | while IFS= read -r line; do echo "::error::$line"; done
           exit 0
       - name: Test
         run: |
@@ -39,9 +42,15 @@ jobs:
       - name: Test failure annotations
         if: failure()
         run: |
-          { awk '/Failing tests:/{f=8} f>0{print; f--}' /tmp/test-output.txt
-            grep -E "^Executed [0-9]+ tests|error:" /tmp/test-output.txt | head -8
-          } | sort -u | head -10 | while IFS= read -r line; do echo "::error::$line"; done
+          # Same shape as the build step: count first, then failing-test
+          # names, then errors split into non-availability vs availability
+          # buckets (this suite never prints "Executed N tests", so that
+          # grep from the old shape is gone).
+          c=$(grep -cE "error: " /tmp/test-output.txt || true)
+          echo "::error::total error lines: $c"
+          awk '/Failing tests:/{f=8} f>0{print; f--}' /tmp/test-output.txt | head -10 | while IFS= read -r line; do echo "::error::$line"; done
+          grep -E "error: " /tmp/test-output.txt | grep -v "is only available in macOS" | head -10 | while IFS= read -r line; do echo "::error::$line"; done
+          grep -E "error: " /tmp/test-output.txt | grep "is only available in macOS" | head -10 | while IFS= read -r line; do echo "::error::$line"; done
           exit 0
 
   package:
