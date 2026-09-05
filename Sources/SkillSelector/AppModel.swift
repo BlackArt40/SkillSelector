@@ -61,6 +61,9 @@ final class AppModel: ObservableObject {
     /// re-read them after every reload. Reset on refresh (files change).
     private var shortSimilarityBodies: Set<String> = []
     private var activeBodyIndexBuild: (id: UUID, task: Task<Void, Never>)?
+    /// Bridges the state submodels' `objectWillChange` into this model's
+    /// (see the subscription at the end of `init`).
+    private var cancellables: Set<AnyCancellable> = []
     /// MCP server detection state (probe statuses + server list), separated
     /// from this type to keep AppModel a composition root (Brooks finding 2).
     let mcps: McpStateModel
@@ -146,6 +149,23 @@ final class AppModel: ObservableObject {
         } catch {
             refreshState = .failed(String(describing: error))
         }
+        // Forward submodel mutations into this model's `objectWillChange`.
+        // Views observe only `AppModel` (via `@EnvironmentObject`), so under
+        // ObservableObject a change to `mcps` / `rules` / `catalog` — e.g. a
+        // probe verdict landing or the catalog leaving its loading state —
+        // fires the submodel's own publisher, which nothing subscribes to.
+        // Under @Observable the chained reads (`model.catalog.state`) tracked
+        // the submodel instances directly; this re-send restores that
+        // reactivity. `[weak self]` guards the retain cycle.
+        mcps.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
+        rules.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
+        catalog.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
     }
 
     func checkEnvironment() async {
