@@ -212,9 +212,10 @@ public final class BookmarkStore {
     }
 
     public func roots() throws -> [AuthorizedRootSnapshot] {
-        try database.read {
+        let records = try database.read {
             try AuthorizedRootRecord.order(Column("path")).fetchAll($0)
-        }.map { record in
+        }
+        return try records.map { record in
             guard let kind = AuthorizedRootKind(rawValue: record.kindRawValue) else {
                 throw BookmarkStoreError.invalidRootKind(record.kindRawValue)
             }
@@ -238,10 +239,12 @@ public final class BookmarkStore {
     }
 
     private func record(id: String) throws -> AuthorizedRootRecord? {
-        try database.read {
+        let record = try database.read {
             try AuthorizedRootRecord.filter(Column("id") == id).fetchOne($0)
         }
+        return record
     }
+
 
 
     private func removeActiveAccess(id: UUID, rootID: String) {

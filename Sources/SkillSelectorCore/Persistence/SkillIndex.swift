@@ -94,14 +94,15 @@ public final class SkillIndex {
     }
 
     public func skills() throws -> [SkillSnapshot] {
-        try database.read { db in
-            try SkillRecord.order(Column("path")).fetchAll(db).map { try snapshot($0) }
+        let records = try database.read { db in
+            try SkillRecord.order(Column("path")).fetchAll(db)
         }
+        return try records.map { try snapshot($0) }
     }
 
     public func cachedScanEntries() throws -> [String: ScannedSkillCacheEntry] {
+        var entries: [String: ScannedSkillCacheEntry] = [:]
         try database.read { db in
-            var entries: [String: ScannedSkillCacheEntry] = [:]
             for record in try SkillRecord.fetchAll(db) {
                 guard let data = record.scanStateData,
                       let entry = try? decoder.decode(ScannedSkillCacheEntry.self, from: data) else { continue }
@@ -109,8 +110,8 @@ public final class SkillIndex {
                    !SkillContentFingerprint.isCurrentVersion(fingerprint) { continue }
                 entries[record.path] = entry
             }
-            return entries
         }
+        return entries
     }
 
     @discardableResult
@@ -124,8 +125,12 @@ public final class SkillIndex {
         similarityByPath: [String: String]
     ) throws -> Int {
         guard !contentByPath.isEmpty || !similarityByPath.isEmpty else { return 0 }
+        // The write closure returns Void and mutates `updated`: GRDB 7's
+        // sync `write` overload is disfavored against the async Sendable
+        // one, and a value-returning tail-expression closure fails to
+        // type-check under Swift 6 ("missing return in instance method").
+        var updated = 0
         try database.write { db in
-            var updated = 0
             var records = try self.recordsByPath(db)
             for (path, content) in contentByPath {
                 guard var record = records[path] else { continue }
@@ -146,14 +151,14 @@ public final class SkillIndex {
                 try record.upsert(db)
                 updated += 1
             }
-            return updated
         }
+        return updated
     }
 
     @discardableResult
     public func setIgnoredDuplicateGroup(_ fingerprint: String, ignored: Bool) throws -> Int {
+        var updated = 0
         try database.write { db in
-            var updated = 0
             var records = try SkillRecord.fetchAll(db)
             for index in records.indices where records[index].contentFingerprint == fingerprint {
                 let target = ignored ? fingerprint : nil
@@ -162,8 +167,8 @@ public final class SkillIndex {
                 try records[index].upsert(db)
                 updated += 1
             }
-            return updated
         }
+        return updated
     }
 
     @discardableResult
@@ -172,8 +177,8 @@ public final class SkillIndex {
         key: String,
         ignored: Bool
     ) throws -> Int {
+        var updated = 0
         try database.write { db in
-            var updated = 0
             var records = try self.recordsByPath(db)
             for path in paths {
                 guard var record = records[path] else { continue }
@@ -184,8 +189,8 @@ public final class SkillIndex {
                 try record.upsert(db)
                 updated += 1
             }
-            return updated
         }
+        return updated
     }
 
     // MARK: - Private helpers
