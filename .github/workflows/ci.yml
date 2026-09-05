@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - macos-12
   pull_request:
   schedule:
     # 03:00 Asia/Shanghai — nightly flake watch (five rounds below).
