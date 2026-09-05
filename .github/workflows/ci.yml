@@ -18,7 +18,7 @@ jobs:
     name: Build and test
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0 (audit F-05: pin to SHA, Node 24)
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.1.0 (audit F-05: pin to SHA, Node 24)
       - name: Build
         run: |
           xcodebuild -version
@@ -57,13 +57,13 @@ jobs:
     if: github.event_name == 'push'
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0 (audit F-05: pin to SHA, Node 24)
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.1.0 (audit F-05: pin to SHA, Node 24)
       - name: Package
         run: zsh Scripts/package-dmg.sh 0.0.0-ci
       - name: Smoke test
         run: zsh Tests/Packaging/package-smoke.sh 0.0.0-ci
       - name: Upload DMG artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2 (audit F-05: pin to SHA)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4.6.2 (audit F-05: pin to SHA)
         with:
           name: SkillSelector-dmg-${{ github.sha }}
           path: |
@@ -81,6 +81,6 @@ jobs:
       matrix:
         round: [1, 2, 3, 4, 5]
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0 (audit F-05: pin to SHA, Node 24)
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.1.0 (audit F-05: pin to SHA, Node 24)
       - name: Test
         run: swift test
