@@ -7,7 +7,7 @@ final class SkillDocumentReaderTests: XCTestCase {
 
     override func setUpWithError() throws {
         fixture = FileManager.default.temporaryDirectory
-            .appending(path: "SkillDocumentReaderTests-\(UUID().uuidString)")
+            .appendingPathComponent("SkillDocumentReaderTests-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: fixture, withIntermediateDirectories: true)
     }
 
@@ -23,7 +23,7 @@ final class SkillDocumentReaderTests: XCTestCase {
         let document = try SkillDocumentReader().read(request(installation: installation))
 
         XCTAssertEqual(document.source, "# Demo\n\nHello")
-        XCTAssertEqual(document.fileURL, installation.appending(path: "SKILL.md").standardizedFileURL)
+        XCTAssertEqual(document.fileURL, installation.appendingPathComponent("SKILL.md").standardizedFileURL)
     }
 
     func testRejectsTraversalAndNonSimpleEntryFilenames() throws {
@@ -65,7 +65,7 @@ final class SkillDocumentReaderTests: XCTestCase {
     func testRejectsMismatchedOrEscapingResolvedTarget() throws {
         let installation = try makeSkill()
         let outside = FileManager.default.temporaryDirectory
-            .appending(path: "outside-\(UUID().uuidString)")
+            .appendingPathComponent("outside-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: outside) }
         try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
 
@@ -81,11 +81,11 @@ final class SkillDocumentReaderTests: XCTestCase {
     func testRejectsEntrySymlinkEscapingAuthorizedRoot() throws {
         let installation = try makeSkill(source: nil)
         let outside = FileManager.default.temporaryDirectory
-            .appending(path: "outside-\(UUID().uuidString).md")
+            .appendingPathComponent("outside-\(UUID().uuidString).md")
         defer { try? FileManager.default.removeItem(at: outside) }
         try Data("outside".utf8).write(to: outside)
         try FileManager.default.createSymbolicLink(
-            at: installation.appending(path: "SKILL.md"),
+            at: installation.appendingPathComponent("SKILL.md"),
             withDestinationURL: outside
         )
 
@@ -95,11 +95,11 @@ final class SkillDocumentReaderTests: XCTestCase {
     }
 
     func testAcceptsEntrySymlinkToRegularFileInsideAuthorizedRoot() throws {
-        let target = fixture.appending(path: "shared.md")
+        let target = fixture.appendingPathComponent("shared.md")
         try Data("shared source".utf8).write(to: target)
         let installation = try makeSkill(source: nil)
         try FileManager.default.createSymbolicLink(
-            at: installation.appending(path: "SKILL.md"),
+            at: installation.appendingPathComponent("SKILL.md"),
             withDestinationURL: target
         )
 
@@ -115,7 +115,7 @@ final class SkillDocumentReaderTests: XCTestCase {
 
     func testReadsSymlinkInstallationWithMatchingAuthorizedResolvedTarget() throws {
         let target = try makeSkill(name: "target", source: "linked installation")
-        let link = fixture.appending(path: "linked-skill")
+        let link = fixture.appendingPathComponent("linked-skill")
         try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
 
         let document = try SkillDocumentReader().read(
@@ -123,16 +123,16 @@ final class SkillDocumentReaderTests: XCTestCase {
         )
 
         XCTAssertEqual(document.source, "linked installation")
-        XCTAssertEqual(document.fileURL, target.appending(path: "SKILL.md").standardizedFileURL)
+        XCTAssertEqual(document.fileURL, target.appendingPathComponent("SKILL.md").standardizedFileURL)
     }
 
     func testReadsSymlinkInstallationAcrossTwoAuthorizedRoots() throws {
-        let linksRoot = fixture.appending(path: "links")
-        let targetsRoot = fixture.appending(path: "targets")
+        let linksRoot = fixture.appendingPathComponent("links")
+        let targetsRoot = fixture.appendingPathComponent("targets")
         try FileManager.default.createDirectory(at: linksRoot, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: targetsRoot, withIntermediateDirectories: true)
         let target = try makeSkill(parent: targetsRoot, name: "target", source: "cross root")
-        let link = linksRoot.appending(path: "linked-skill")
+        let link = linksRoot.appendingPathComponent("linked-skill")
         try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
 
         let document = try SkillDocumentReader().read(SkillDocumentRequest(
@@ -148,7 +148,7 @@ final class SkillDocumentReaderTests: XCTestCase {
     func testRejectsSymlinkInstallationWhenRecordedTargetDoesNotMatchActualTarget() throws {
         let target = try makeSkill(name: "actual-target")
         let otherTarget = try makeSkill(name: "recorded-target")
-        let link = fixture.appending(path: "mismatched-link")
+        let link = fixture.appendingPathComponent("mismatched-link")
         try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
 
         XCTAssertThrowsError(
@@ -162,7 +162,7 @@ final class SkillDocumentReaderTests: XCTestCase {
 
     func testRejectsSymlinkInstallationWithoutRecordedResolvedTarget() throws {
         let target = try makeSkill(name: "unrecorded-target")
-        let link = fixture.appending(path: "unrecorded-link")
+        let link = fixture.appendingPathComponent("unrecorded-link")
         try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
 
         XCTAssertThrowsError(try SkillDocumentReader().read(request(installation: link))) { error in
@@ -173,7 +173,7 @@ final class SkillDocumentReaderTests: XCTestCase {
     func testRejectsDirectoriesAndMissingFilesAsNonFiles() throws {
         let installation = try makeSkill(source: nil)
         try FileManager.default.createDirectory(
-            at: installation.appending(path: "SKILL.md"),
+            at: installation.appendingPathComponent("SKILL.md"),
             withIntermediateDirectories: false
         )
 
@@ -184,7 +184,7 @@ final class SkillDocumentReaderTests: XCTestCase {
 
     func testRejectsUnreadableAndInvalidUTF8Files() throws {
         let unreadable = try makeSkill(name: "unreadable", source: "secret")
-        let unreadableFile = unreadable.appending(path: "SKILL.md")
+        let unreadableFile = unreadable.appendingPathComponent("SKILL.md")
         try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: unreadableFile.path)
         defer {
             try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: unreadableFile.path)
@@ -280,11 +280,11 @@ final class SkillDocumentReaderTests: XCTestCase {
     }
 
     func testRejectsCanonicalPathThatEscapesWhenDirectoryChangesBeforeOpen() throws {
-        let parent = fixture.appending(path: "parent")
+        let parent = fixture.appendingPathComponent("parent")
         let installation = try makeSkill(parent: parent, name: "swapped", source: "authorized")
-        let backup = fixture.appending(path: "parent-backup")
+        let backup = fixture.appendingPathComponent("parent-backup")
         let outside = FileManager.default.temporaryDirectory
-            .appending(path: "SkillDocumentReaderOutside-\(UUID().uuidString)")
+            .appendingPathComponent("SkillDocumentReaderOutside-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: outside) }
         _ = try makeSkill(parent: outside, name: "swapped", source: "outside")
 
@@ -317,14 +317,14 @@ final class SkillDocumentReaderTests: XCTestCase {
     }
 
     func testRejectsEntrySymlinkSwappedOutsideBeforeOpenAt() throws {
-        let original = fixture.appending(path: "original.md")
+        let original = fixture.appendingPathComponent("original.md")
         try Data("authorized".utf8).write(to: original)
         let outside = FileManager.default.temporaryDirectory
-            .appending(path: "SkillDocumentReaderOutside-\(UUID().uuidString).md")
+            .appendingPathComponent("SkillDocumentReaderOutside-\(UUID().uuidString).md")
         defer { try? FileManager.default.removeItem(at: outside) }
         try Data("outside".utf8).write(to: outside)
         let installation = try makeSkill(name: "entry-swap", source: nil)
-        let entry = installation.appending(path: "SKILL.md")
+        let entry = installation.appendingPathComponent("SKILL.md")
         try FileManager.default.createSymbolicLink(at: entry, withDestinationURL: original)
 
         let live = SkillDocumentFileOperations.live
@@ -358,7 +358,7 @@ final class SkillDocumentReaderTests: XCTestCase {
     func testInstallationSymlinkSwapBeforeEntryOpenStillReadsRecordedTarget() throws {
         let targetA = try makeSkill(name: "target-a", source: "A")
         let targetB = try makeSkill(name: "target-b", source: "B")
-        let link = fixture.appending(path: "switched-installation")
+        let link = fixture.appendingPathComponent("switched-installation")
         try FileManager.default.createSymbolicLink(at: link, withDestinationURL: targetA)
 
         let live = SkillDocumentFileOperations.live
@@ -404,12 +404,12 @@ final class SkillDocumentReaderTests: XCTestCase {
         source: String? = "demo",
         data: Data? = nil
     ) throws -> URL {
-        let installation = (parent ?? fixture).appending(path: name)
+        let installation = (parent ?? fixture).appendingPathComponent(name)
         try FileManager.default.createDirectory(at: installation, withIntermediateDirectories: true)
         if let data {
-            try data.write(to: installation.appending(path: "SKILL.md"))
+            try data.write(to: installation.appendingPathComponent("SKILL.md"))
         } else if let source {
-            try Data(source.utf8).write(to: installation.appending(path: "SKILL.md"))
+            try Data(source.utf8).write(to: installation.appendingPathComponent("SKILL.md"))
         }
         return installation
     }

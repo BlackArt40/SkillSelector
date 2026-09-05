@@ -537,8 +537,8 @@ struct SettingsView: View {
     private func groupTitle(_ title: String, spaced: Bool = false) -> some View {
         Text(verbatim: title)
             .font(AppTheme.body(12, weight: .semibold))
-            .foregroundStyle(AppTheme.muted)
             .kerning(0.1)
+            .foregroundStyle(AppTheme.muted)
             .padding(.horizontal, 4)
             .padding(.top, spaced ? 24 : 0)
             .padding(.bottom, 8)

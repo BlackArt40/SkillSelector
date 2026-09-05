@@ -61,7 +61,7 @@ final class SkillScannerTests: XCTestCase {
     func testTraversalStopsAtPackageWithUnauthorizedEntrySymlink() async throws {
         let fixture = try ScanFixture()
         let externalEntry = fixture.url.deletingLastPathComponent()
-            .appending(path: "external-entry-\(UUID().uuidString).md")
+            .appendingPathComponent("external-entry-\(UUID().uuidString).md")
         defer { try? FileManager.default.removeItem(at: externalEntry) }
         try "---\nname: external\ndescription: External\n---\n".write(
             to: externalEntry,
@@ -69,10 +69,10 @@ final class SkillScannerTests: XCTestCase {
             encoding: .utf8
         )
 
-        let outer = fixture.url.appending(path: ".cursor/skills/outer")
+        let outer = fixture.url.appendingPathComponent(".cursor/skills/outer")
         try FileManager.default.createDirectory(at: outer, withIntermediateDirectories: true)
         try FileManager.default.createSymbolicLink(
-            at: outer.appending(path: "SKILL.md"),
+            at: outer.appendingPathComponent("SKILL.md"),
             withDestinationURL: externalEntry
         )
         try fixture.writeSkill(
@@ -109,14 +109,14 @@ final class SkillScannerTests: XCTestCase {
     func testSymbolicLinkUsesLinkPathIdentityAndRecordsResolvedTarget() async throws {
         let fixture = try ScanFixture()
         try fixture.writeSkill(at: "targets/demo", name: "demo")
-        let link = fixture.url.appending(path: ".cursor/skills/linked")
+        let link = fixture.url.appendingPathComponent(".cursor/skills/linked")
         try FileManager.default.createDirectory(
             at: link.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
         try FileManager.default.createSymbolicLink(
             at: link,
-            withDestinationURL: fixture.url.appending(path: "targets/demo")
+            withDestinationURL: fixture.url.appendingPathComponent("targets/demo")
         )
 
         let report = await SkillScanner().scan([fixture.projectRoot])
@@ -125,7 +125,7 @@ final class SkillScannerTests: XCTestCase {
         XCTAssertEqual(report.installations[0].path.path, link.standardizedFileURL.path)
         XCTAssertEqual(
             report.installations[0].resolvedTarget?.path,
-            fixture.url.appending(path: "targets/demo").standardizedFileURL.path
+            fixture.url.appendingPathComponent("targets/demo").standardizedFileURL.path
         )
         XCTAssertEqual(report.installations[0].document.name, "demo")
     }
@@ -133,19 +133,19 @@ final class SkillScannerTests: XCTestCase {
     func testDoesNotFollowSymbolicLinkOutsideAuthorizedRoots() async throws {
         let fixture = try ScanFixture()
         let external = fixture.url.deletingLastPathComponent()
-            .appending(path: "external-\(UUID().uuidString)")
+            .appendingPathComponent("external-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: external) }
         try fixture.writeSkill(at: "allowed/.cursor/skills/real", name: "real")
-        try ScanFixture.writeSkill(at: external.appending(path: "hidden"), name: "hidden")
+        try ScanFixture.writeSkill(at: external.appendingPathComponent("hidden"), name: "hidden")
 
-        let escapedLink = fixture.url.appending(path: "allowed/.cursor/skills/escaped")
+        let escapedLink = fixture.url.appendingPathComponent("allowed/.cursor/skills/escaped")
         try FileManager.default.createSymbolicLink(
             at: escapedLink,
-            withDestinationURL: external.appending(path: "hidden")
+            withDestinationURL: external.appendingPathComponent("hidden")
         )
         let authorized = ScanRoot.project(
             id: "allowed",
-            url: fixture.url.appending(path: "allowed"),
+            url: fixture.url.appendingPathComponent("allowed"),
             registry: BuiltInAgentRegistry.make()
         )
 
@@ -156,11 +156,11 @@ final class SkillScannerTests: XCTestCase {
 
     func testFollowsSymbolicLinkAcrossTwoAuthorizedRoots() async throws {
         let fixture = try ScanFixture()
-        let project = fixture.url.appending(path: "project")
-        let targets = fixture.url.appending(path: "authorized-targets")
-        let target = targets.appending(path: "demo")
+        let project = fixture.url.appendingPathComponent("project")
+        let targets = fixture.url.appendingPathComponent("authorized-targets")
+        let target = targets.appendingPathComponent("demo")
         try ScanFixture.writeSkill(at: target, name: "demo")
-        let link = project.appending(path: ".cursor/skills/linked")
+        let link = project.appendingPathComponent(".cursor/skills/linked")
         try FileManager.default.createDirectory(
             at: link.deletingLastPathComponent(),
             withIntermediateDirectories: true
@@ -180,10 +180,10 @@ final class SkillScannerTests: XCTestCase {
 
     func testRejectsTraversingCustomEntryFilenameAndReportsRootIssue() async throws {
         let fixture = try ScanFixture()
-        let authorizedRoot = fixture.url.appending(path: "allowed")
-        let package = authorizedRoot.appending(path: ".custom/skills/demo")
+        let authorizedRoot = fixture.url.appendingPathComponent("allowed")
+        let package = authorizedRoot.appendingPathComponent(".custom/skills/demo")
         try FileManager.default.createDirectory(at: package, withIntermediateDirectories: true)
-        let outside = fixture.url.appending(path: "outside.md")
+        let outside = fixture.url.appendingPathComponent("outside.md")
         try "---\nname: outside\ndescription: Must not be read\n---\n".write(
             to: outside,
             atomically: true,
@@ -234,10 +234,10 @@ final class SkillScannerTests: XCTestCase {
 
     func testDirectPackageWithUnauthorizedEntryStopsBeforeNestedSkill() async throws {
         let fixture = try ScanFixture()
-        let directPackage = fixture.url.appending(path: "direct-package")
+        let directPackage = fixture.url.appendingPathComponent("direct-package")
         try FileManager.default.createDirectory(at: directPackage, withIntermediateDirectories: true)
         let externalEntry = fixture.url.deletingLastPathComponent()
-            .appending(path: "direct-external-\(UUID().uuidString).md")
+            .appendingPathComponent("direct-external-\(UUID().uuidString).md")
         defer { try? FileManager.default.removeItem(at: externalEntry) }
         try "---\nname: external\ndescription: External\n---\n".write(
             to: externalEntry,
@@ -245,11 +245,11 @@ final class SkillScannerTests: XCTestCase {
             encoding: .utf8
         )
         try FileManager.default.createSymbolicLink(
-            at: directPackage.appending(path: "SKILL.md"),
+            at: directPackage.appendingPathComponent("SKILL.md"),
             withDestinationURL: externalEntry
         )
         try ScanFixture.writeSkill(
-            at: directPackage.appending(path: "nested"),
+            at: directPackage.appendingPathComponent("nested"),
             name: "nested",
             description: "Nested"
         )
@@ -273,7 +273,7 @@ final class SkillScannerTests: XCTestCase {
         let fixture = try ScanFixture()
         let missing = ScanRoot.project(
             id: "missing",
-            url: fixture.url.appending(path: "missing"),
+            url: fixture.url.appendingPathComponent("missing"),
             registry: BuiltInAgentRegistry.make()
         )
 
@@ -292,9 +292,9 @@ final class SkillScannerTests: XCTestCase {
         try fixture.writeSkill(at: ".codex/skills/demo", name: "demo")
         try fixture.writeSkill(at: ".claude/skills/demo-copy", name: "demo-copy")
         // Identical trees under different names and paths.
-        let source = fixture.url.appending(path: ".codex/skills/demo/SKILL.md")
+        let source = fixture.url.appendingPathComponent(".codex/skills/demo/SKILL.md")
         try String(contentsOf: source, encoding: .utf8).write(
-            to: fixture.url.appending(path: ".claude/skills/demo-copy/SKILL.md"),
+            to: fixture.url.appendingPathComponent(".claude/skills/demo-copy/SKILL.md"),
             atomically: true,
             encoding: .utf8
         )
@@ -311,11 +311,11 @@ final class SkillScannerTests: XCTestCase {
         // memory; the entry is capped at the render path's limit and the
         // skill surfaces an .unableToReadEntry diagnostic instead.
         let fixture = try ScanFixture()
-        let oversized = fixture.url.appending(path: ".codex/skills/huge")
+        let oversized = fixture.url.appendingPathComponent(".codex/skills/huge")
         try FileManager.default.createDirectory(at: oversized, withIntermediateDirectories: true)
         let padding = String(repeating: "x", count: SkillDocumentReader.maximumRenderBytes + 1)
         try "---\nname: huge\ndescription: Big\n---\n# Huge\n".appending(padding).write(
-            to: oversized.appending(path: "SKILL.md"),
+            to: oversized.appendingPathComponent("SKILL.md"),
             atomically: true,
             encoding: .utf8
         )
@@ -336,11 +336,11 @@ final class SkillScannerTests: XCTestCase {
         // The cap is inclusive of the render limit; a file exactly at it
         // must still parse.
         let fixture = try ScanFixture()
-        let boundary = fixture.url.appending(path: ".codex/skills/boundary")
+        let boundary = fixture.url.appendingPathComponent(".codex/skills/boundary")
         try FileManager.default.createDirectory(at: boundary, withIntermediateDirectories: true)
         let body = String(repeating: "x", count: SkillDocumentReader.maximumRenderBytes - 64)
         try "---\nname: boundary\ndescription: Edge\n---\n# Boundary\n".appending(body).write(
-            to: boundary.appending(path: "SKILL.md"),
+            to: boundary.appendingPathComponent("SKILL.md"),
             atomically: true,
             encoding: .utf8
         )
@@ -365,7 +365,7 @@ final class SkillScannerTests: XCTestCase {
         let alphabet = Array("abcdefghijklmnopqrstuvwxyz")
         var deep = fixture.url
         for index in 0...(SkillScanner.maximumProjectWalkDepth + 50) {
-            deep = deep.appending(path: String(alphabet[index % alphabet.count]))
+            deep = deep.appendingPathComponent(String(alphabet[index % alphabet.count]))
         }
         try FileManager.default.createDirectory(at: deep, withIntermediateDirectories: true)
 
@@ -381,7 +381,7 @@ private final class ScanFixture: @unchecked Sendable {
 
     init() throws {
         url = FileManager.default.temporaryDirectory
-            .appending(path: "SkillScannerTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+            .appendingPathComponent("SkillScannerTests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
     }
 
@@ -397,7 +397,7 @@ private final class ScanFixture: @unchecked Sendable {
         agentIDs.map { agentID in
             .skillDirectory(
                 id: agentID,
-                url: url.appending(path: ".agents/skills"),
+                url: url.appendingPathComponent(".agents/skills"),
                 agentIDs: [agentID]
             )
         }
@@ -405,7 +405,7 @@ private final class ScanFixture: @unchecked Sendable {
 
     func writeSkill(at relativePath: String, name: String, description: String? = nil) throws {
         try Self.writeSkill(
-            at: url.appending(path: relativePath),
+            at: url.appendingPathComponent(relativePath),
             name: name,
             description: description
         )
@@ -419,14 +419,14 @@ private final class ScanFixture: @unchecked Sendable {
         }
         document += "---\n# \(name)\n"
         try document.write(
-            to: directory.appending(path: "SKILL.md"),
+            to: directory.appendingPathComponent("SKILL.md"),
             atomically: true,
             encoding: .utf8
         )
     }
 
     func write(_ contents: String, at relativePath: String) throws {
-        let destination = url.appending(path: relativePath)
+        let destination = url.appendingPathComponent(relativePath)
         try FileManager.default.createDirectory(
             at: destination.deletingLastPathComponent(),
             withIntermediateDirectories: true

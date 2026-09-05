@@ -129,10 +129,10 @@ final class SkillSimilarityFingerprintTests: XCTestCase {
 
     func testComputePairReadsBothFingerprintsFromFile() throws {
         let directory = FileManager.default.temporaryDirectory
-            .appending(path: "SimilarityFingerprintTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+            .appendingPathComponent("SimilarityFingerprintTests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let entry = directory.appending(path: "SKILL.md")
+        let entry = directory.appendingPathComponent("SKILL.md")
         try "---\nname: sample\ndescription: sample skill\n---\n\(longBody)".write(
             to: entry, atomically: true, encoding: .utf8
         )

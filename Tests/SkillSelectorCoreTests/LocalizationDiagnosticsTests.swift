@@ -92,8 +92,8 @@ final class LocalizationDiagnosticsTests: XCTestCase {
 
     func testEveryStructuredDiagnosticHasEnglishAndChineseResources() throws {
         let resources = localizationResources()
-        let english = try stringsDictionary(at: resources.appending(path: "en.lproj/Localizable.strings"))
-        let chinese = try stringsDictionary(at: resources.appending(path: "zh-Hans.lproj/Localizable.strings"))
+        let english = try stringsDictionary(at: resources.appendingPathComponent("en.lproj/Localizable.strings"))
+        let chinese = try stringsDictionary(at: resources.appendingPathComponent("zh-Hans.lproj/Localizable.strings"))
         let diagnosticKeys = Set(DiagnosticCode.allCases.map(\.localizationKey))
 
         XCTAssertTrue(diagnosticKeys.isSubset(of: Set(english.keys)))
@@ -124,7 +124,7 @@ final class LocalizationDiagnosticsTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appending(path: "Sources/SkillSelector/Resources")
+            .appendingPathComponent("Sources/SkillSelector/Resources")
     }
 
     private func stringsDictionary(at url: URL) throws -> [String: String] {

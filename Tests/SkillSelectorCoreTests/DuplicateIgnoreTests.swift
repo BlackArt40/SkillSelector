@@ -12,15 +12,15 @@ final class DuplicateIgnorePersistenceTests: XCTestCase {
     /// Two content-identical Skills under one project root.
     private func makeFixture() throws -> (root: URL, fingerprints: [String: String]) {
         let base = FileManager.default.temporaryDirectory
-            .appending(path: "DuplicateIgnore-\(UUID().uuidString)", directoryHint: .isDirectory)
+            .appendingPathComponent("DuplicateIgnore-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
         let root = ScanRoot.project(id: "p", url: base, registry: BuiltInAgentRegistry.make())
         let content = "---\nname: twin\ndescription: identical\n---\n# twin\nshared body\n"
         var fingerprints: [String: String] = [:]
         for name in ["alpha", "beta"] {
-            let directory = base.appending(path: ".codex/skills/\(name)", directoryHint: .isDirectory)
+            let directory = base.appendingPathComponent(".codex/skills/\(name)", isDirectory: true)
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            let entry = directory.appending(path: "SKILL.md")
+            let entry = directory.appendingPathComponent("SKILL.md")
             try content.write(to: entry, atomically: true, encoding: .utf8)
             fingerprints[directory.standardizedFileURL.path] = try SkillContentFingerprint.compute(entryFileURL: entry)
         }
@@ -85,7 +85,7 @@ final class DuplicateIgnorePersistenceTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: base) }
         let root = ScanRoot.project(id: "p", url: base, registry: BuiltInAgentRegistry.make())
         let storeURL = FileManager.default.temporaryDirectory
-            .appending(path: "DuplicateIgnoreStore-\(UUID().uuidString).store")
+            .appendingPathComponent("DuplicateIgnoreStore-\(UUID().uuidString).store")
         defer { try? FileManager.default.removeItem(at: storeURL) }
 
         let first = try makeIndex(storeURL: storeURL)
@@ -132,10 +132,10 @@ final class DuplicateIgnorePersistenceTests: XCTestCase {
 final class FingerprintVersionMigrationTests: XCTestCase {
     func testFingerprintCarriesTheCurrentVersionPrefix() throws {
         let base = FileManager.default.temporaryDirectory
-            .appending(path: "FpVersion-\(UUID().uuidString)", directoryHint: .isDirectory)
+            .appendingPathComponent("FpVersion-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: base) }
         try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
-        let entry = base.appending(path: "SKILL.md")
+        let entry = base.appendingPathComponent("SKILL.md")
         try "---\nname: demo\n---\n# demo\nbody\n".write(to: entry, atomically: true, encoding: .utf8)
 
         let fingerprint = try SkillContentFingerprint.compute(entryFileURL: entry)
@@ -163,12 +163,12 @@ final class FingerprintVersionMigrationTests: XCTestCase {
     /// current-version fingerprint.
     func testStaleFingerprintCacheEntriesAreSkippedAndRescanned() async throws {
         let base = FileManager.default.temporaryDirectory
-            .appending(path: "FpVersionScan-\(UUID().uuidString)", directoryHint: .isDirectory)
+            .appendingPathComponent("FpVersionScan-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: base) }
-        let skill = base.appending(path: ".codex/skills/demo", directoryHint: .isDirectory)
+        let skill = base.appendingPathComponent(".codex/skills/demo", isDirectory: true)
         try FileManager.default.createDirectory(at: skill, withIntermediateDirectories: true)
         try "---\nname: demo\ndescription: same\n---\n# demo\nbody\n".write(
-            to: skill.appending(path: "SKILL.md"),
+            to: skill.appendingPathComponent("SKILL.md"),
             atomically: true,
             encoding: .utf8
         )
@@ -208,12 +208,12 @@ final class FingerprintVersionMigrationTests: XCTestCase {
     /// regression in the incremental fast path).
     func testCurrentFingerprintCacheEntriesStillHit() async throws {
         let base = FileManager.default.temporaryDirectory
-            .appending(path: "FpVersionHit-\(UUID().uuidString)", directoryHint: .isDirectory)
+            .appendingPathComponent("FpVersionHit-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: base) }
-        let skill = base.appending(path: ".codex/skills/demo", directoryHint: .isDirectory)
+        let skill = base.appendingPathComponent(".codex/skills/demo", isDirectory: true)
         try FileManager.default.createDirectory(at: skill, withIntermediateDirectories: true)
         try "---\nname: demo\ndescription: same\n---\n# demo\nbody\n".write(
-            to: skill.appending(path: "SKILL.md"),
+            to: skill.appendingPathComponent("SKILL.md"),
             atomically: true,
             encoding: .utf8
         )
@@ -271,10 +271,10 @@ final class FingerprintVersionMigrationTests: XCTestCase {
 /// moved or vanished is flagged without the app touching the file system.
 final class SymlinkReachabilityTests: XCTestCase {    func testLinkTargetUnreachableWhenDirectoryVanishes() throws {
         let base = FileManager.default.temporaryDirectory
-            .appending(path: "SymlinkReach-\(UUID().uuidString)", directoryHint: .isDirectory)
+            .appendingPathComponent("SymlinkReach-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: base) }
-        let target = base.appending(path: "real-skill", directoryHint: .isDirectory)
-        let link = base.appending(path: "linked-skill", directoryHint: .isDirectory)
+        let target = base.appendingPathComponent("real-skill", isDirectory: true)
+        let link = base.appendingPathComponent("linked-skill", isDirectory: true)
         try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
         try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
 

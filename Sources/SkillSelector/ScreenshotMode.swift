@@ -306,7 +306,7 @@ enum ScreenshotMode {
         guard let png = representation.representation(using: .png, properties: [:]) else {
             return
         }
-        try? png.write(to: outputDirectory!.appending(path: name))
+        try? png.write(to: outputDirectory!.appendingPathComponent(name))
     }
 }
 
@@ -319,62 +319,62 @@ enum ScreenshotMode {
 private enum FixtureBuilder {
     static func build() throws -> (home: URL, project: URL) {
         let base = FileManager.default.temporaryDirectory
-            .appending(path: "SkillSelectorScreenshots", directoryHint: .isDirectory)
+            .appendingPathComponent("SkillSelectorScreenshots", isDirectory: true)
         try? FileManager.default.removeItem(at: base)
-        let home = base.appending(path: "home", directoryHint: .isDirectory)
-        let project = base.appending(path: "Projects/demo-webapp", directoryHint: .isDirectory)
+        let home = base.appendingPathComponent("home", isDirectory: true)
+        let project = base.appendingPathComponent("Projects/demo-webapp", isDirectory: true)
 
         try writeSkill(
-            at: home.appending(path: ".claude/skills/code-reviewer"),
+            at: home.appendingPathComponent(".claude/skills/code-reviewer"),
             name: "code-reviewer",
             description: "Review staged changes for bugs, regressions, and style drift before commit.",
             body: richBody
         )
         try writeSkill(
-            at: home.appending(path: ".claude/skills/git-commit-writer"),
+            at: home.appendingPathComponent(".claude/skills/git-commit-writer"),
             name: "git-commit-writer",
             description: "Turn staged changes into a conventional commit message.",
             body: shortBody("git-commit-writer")
         )
         // Identical bytes under two agents: one duplicate group.
         try writeSkill(
-            at: home.appending(path: ".claude/skills/pdf"),
+            at: home.appendingPathComponent(".claude/skills/pdf"),
             name: "pdf",
             description: "Extract text, tables, and metadata from PDF files.",
             body: shortBody("pdf")
         )
         try writeSkill(
-            at: home.appending(path: ".codex/skills/pdf-toolkit"),
+            at: home.appendingPathComponent(".codex/skills/pdf-toolkit"),
             name: "pdf-toolkit",
             description: "Extract text, tables, and metadata from PDF files.",
             body: pdfBody
         )
         try writeSkill(
-            at: home.appending(path: ".cursor/skills/pdf-toolkit"),
+            at: home.appendingPathComponent(".cursor/skills/pdf-toolkit"),
             name: "pdf-toolkit",
             description: "Extract text, tables, and metadata from PDF files.",
             body: pdfBody
         )
         try writeSkill(
-            at: home.appending(path: ".kiro/skills/test-runner"),
+            at: home.appendingPathComponent(".kiro/skills/test-runner"),
             name: "test-runner",
             description: "Run the focused test target and summarize failures.",
             body: shortBody("test-runner")
         )
         try writeSkill(
-            at: home.appending(path: ".agents/skills/doc-style-guardian"),
+            at: home.appendingPathComponent(".agents/skills/doc-style-guardian"),
             name: "doc-style-guardian",
             description: "Keep headings, lists, and code fences consistent.",
             body: shortBody("doc-style-guardian")
         )
         try writeSkill(
-            at: project.appending(path: ".cursor/skills/api-mocking"),
+            at: project.appendingPathComponent(".cursor/skills/api-mocking"),
             name: "api-mocking",
             description: "Mock REST endpoints from an OpenAPI document.",
             body: shortBody("api-mocking")
         )
         try writeSkill(
-            at: project.appending(path: ".droid/skills/deploy-helper"),
+            at: project.appendingPathComponent(".droid/skills/deploy-helper"),
             name: "deploy-helper",
             description: "Walk through the staging deploy checklist.",
             body: shortBody("deploy-helper"),
@@ -383,35 +383,35 @@ private enum FixtureBuilder {
         // MCP fixtures: a Codex TOML and a Claude JSON, so the MCP entry —
         // sidebar count, list rows, and the Agent detail's MCP half — shows
         // real content in the captures.
-        try writeMcpCodexToml(at: home.appending(path: ".codex/config.toml"))
-        try writeMcpClaudeJson(at: home.appending(path: ".claude.json"))
+        try writeMcpCodexToml(at: home.appendingPathComponent(".codex/config.toml"))
+        try writeMcpClaudeJson(at: home.appendingPathComponent(".claude.json"))
         // Rules fixtures: global and project files plus directory sources,
         // so the rules page lists rows instead of its empty state.
         try writeText(
             "# Global Claude Rules\n\n- Review before commit, never after.\n- Prefer small, reversible changes.\n",
-            to: home.appending(path: ".claude/CLAUDE.md")
+            to: home.appendingPathComponent(".claude/CLAUDE.md")
         )
         // A same-named project CLAUDE.md so the rules detail's「同名文件对比」
         // section has a global↔project pair to diff in the capture.
         try writeText(
             "# Project Claude Rules\n\n- Review before commit, never after.\n- Always run the full test suite first.\n",
-            to: project.appending(path: "CLAUDE.md")
+            to: project.appendingPathComponent("CLAUDE.md")
         )
         try writeText(
             "# Docs Style\n\nKeep headings hierarchical and code fences tagged.\n",
-            to: home.appending(path: ".claude/rules/docs-style.md")
+            to: home.appendingPathComponent(".claude/rules/docs-style.md")
         )
         try writeText(
             "---\ndescription: API conventions\nglobs:\n  - \"src/api/**\"\nalwaysApply: false\n---\n\n# API Conventions\n\nReturn typed errors; never throw raw strings.\n",
-            to: home.appending(path: ".cursor/rules/api-conventions.mdc")
+            to: home.appendingPathComponent(".cursor/rules/api-conventions.mdc")
         )
         try writeText(
             "# Demo Webapp Agents\n\nRun `swift test` before proposing changes.\n",
-            to: project.appending(path: "AGENTS.md")
+            to: project.appendingPathComponent("AGENTS.md")
         )
         try writeText(
             "# Testing Rules\n\nEvery bug fix ships with a regression test.\n",
-            to: project.appending(path: ".roo/rules/testing.md")
+            to: project.appendingPathComponent(".roo/rules/testing.md")
         )
         return (home, project)
     }
@@ -477,7 +477,7 @@ private enum FixtureBuilder {
         \(body)
         """
         try document.write(
-            to: directory.appending(path: entryFilename),
+            to: directory.appendingPathComponent(entryFilename),
             atomically: true,
             encoding: .utf8
         )

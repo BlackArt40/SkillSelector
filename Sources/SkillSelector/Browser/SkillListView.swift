@@ -121,7 +121,7 @@ struct SkillListView: View {
                 Spacer(minLength: 12)
                 if sort == value {
                     Image(systemName: "checkmark")
-                        .fontWeight(.semibold)
+                        .font(.body.weight(.semibold))
                 }
             }
         }
@@ -159,16 +159,21 @@ struct SkillListView: View {
                 }
                 .padding(.vertical, 8)
             }
-            .onKeyPress(keys: [.downArrow]) { _ in moveSelection(1) }
-            .onKeyPress(keys: [.upArrow]) { _ in moveSelection(-1) }
+            .onMoveCommand { direction in
+                switch direction {
+                case .down: moveSelection(1)
+                case .up: moveSelection(-1)
+                default: break
+                }
+            }
         }
     }
 
     /// Moves the selection within the visible list; with nothing selected,
     /// Arrow Down picks the first row and Arrow Up the last. History is not
     /// recorded for keyboard moves — only explicit clicks open a detail.
-    private func moveSelection(_ delta: Int) -> KeyPress.Result {
-        guard !skills.isEmpty else { return .ignored }
+    private func moveSelection(_ delta: Int) {
+        guard !skills.isEmpty else { return }
         let current = selection.flatMap { selected in
             skills.firstIndex { $0.path == selected.path }
         }
@@ -179,7 +184,7 @@ struct SkillListView: View {
             next = delta > 0 ? 0 : skills.count - 1
         }
         (onArrowSelect ?? onPrimarySelect)?(skills[next].path)
-        return .handled
+        return
     }
 
     @ViewBuilder

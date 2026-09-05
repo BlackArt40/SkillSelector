@@ -465,15 +465,12 @@ struct SidebarItem: View {
                 Spacer(minLength: 4)
                 if let count {
                     Text(verbatim: "\(count)")
-                        .font(AppTheme.body(11))
                         .foregroundStyle(AppTheme.muted)
-                        .fontDesign(.monospaced)
-                        .fontWeight(isActive ? .medium : .regular)
+                        .font(AppTheme.mono(11, weight: isActive ? .medium : .regular))
                 }
             }
-            .font(AppTheme.body(13))
+            .font(AppTheme.body(13, weight: isActive ? .medium : .regular))
             .foregroundStyle(isActive ? AppTheme.accentActive : AppTheme.foreground)
-            .fontWeight(isActive ? .medium : .regular)
             .frame(height: 32)
             .padding(.horizontal, 10)
             .frame(maxWidth: .infinity, alignment: .leading)

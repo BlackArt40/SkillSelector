@@ -162,7 +162,7 @@ final class DepthFeaturesTests: XCTestCase {
 
     private func makeHarness(skills: [(name: String, body: String)]) throws -> Harness {
         let rootURL = FileManager.default.temporaryDirectory
-            .appending(path: "DepthFeaturesTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+            .appendingPathComponent("DepthFeaturesTests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
         for skill in skills {
             try writeSkill(in: rootURL, name: skill.name, body: skill.body)
@@ -194,10 +194,10 @@ final class DepthFeaturesTests: XCTestCase {
     }
 
     private func writeSkill(in root: URL, name: String, body: String) throws {
-        let skill = root.appending(path: ".cursor/skills/\(name)")
+        let skill = root.appendingPathComponent(".cursor/skills/\(name)")
         try FileManager.default.createDirectory(at: skill, withIntermediateDirectories: true)
         try "---\nname: \(name)\ndescription: \(name) skill\n---\n\(body)".write(
-            to: skill.appending(path: "SKILL.md"),
+            to: skill.appendingPathComponent("SKILL.md"),
             atomically: true,
             encoding: .utf8
         )

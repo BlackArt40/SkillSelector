@@ -36,7 +36,7 @@ final class IndexRefresherTests: XCTestCase {
         let bookmarks = BookmarkStore(database: database, adapter: FixtureBookmarkAdapter())
         let homeRoot = try bookmarks.save(url: fixture.home, kind: .home)
         let index = SkillIndex(database: database)
-        let sharedURL = fixture.home.appending(path: ".agents/skills/shared")
+        let sharedURL = fixture.home.appendingPathComponent(".agents/skills/shared")
         try index.apply(report: ScanReport(
             installations: [
                 ScannedSkill(
@@ -96,7 +96,7 @@ final class IndexRefresherTests: XCTestCase {
         let adapter = FixtureBookmarkAdapter()
         let database = try fixture.makeDatabase()
         let bookmarks = BookmarkStore(database: database, adapter: adapter)
-        _ = try bookmarks.save(url: fixture.home.appending(path: "custom"), kind: .custom)
+        _ = try bookmarks.save(url: fixture.home.appendingPathComponent("custom"), kind: .custom)
         adapter.shouldFailResolution = true
         let index = SkillIndex(database: database)
         let refresher = IndexRefresher(
@@ -113,7 +113,7 @@ final class IndexRefresherTests: XCTestCase {
     func testUnavailableProjectIsNotAlsoCountedAsChangedAndLeasesClose() async throws {
         let fixture = try RefreshFixture()
         try fixture.writeSkill(at: "project/packages/app/.cursor/skills/demo", name: "demo")
-        let project = fixture.home.appending(path: "project")
+        let project = fixture.home.appendingPathComponent("project")
         let adapter = FixtureBookmarkAdapter()
         let database = try fixture.makeDatabase()
         let bookmarks = BookmarkStore(database: database, adapter: adapter)
@@ -139,7 +139,7 @@ final class IndexRefresherTests: XCTestCase {
     func testInaccessibleAuthorizedProjectDropsItsPriorInstallations() async throws {
         let fixture = try RefreshFixture()
         try fixture.writeSkill(at: "project/.cursor/skills/demo", name: "demo")
-        let project = fixture.home.appending(path: "project")
+        let project = fixture.home.appendingPathComponent("project")
         let adapter = FixtureBookmarkAdapter()
         let database = try fixture.makeDatabase()
         let bookmarks = BookmarkStore(database: database, adapter: adapter)
@@ -188,7 +188,7 @@ final class IndexRefresherTests: XCTestCase {
     func testFailedMatchedSystemBookmarkDropsPreviouslyIndexedSkill() async throws {
         let fixture = try RefreshFixture()
         try fixture.writeSkill(at: "system/demo", name: "demo")
-        let system = fixture.home.appending(path: "system")
+        let system = fixture.home.appendingPathComponent("system")
         let registry = AgentRegistry(definitions: [
             AgentDefinition(
                 id: "system-agent",
@@ -221,8 +221,8 @@ final class IndexRefresherTests: XCTestCase {
         let fixture = try RefreshFixture()
         try fixture.writeSkill(at: "system/system-demo", name: "system-demo")
         try fixture.writeSkill(at: "custom/custom-demo", name: "custom-demo")
-        let system = fixture.home.appending(path: "system")
-        let custom = fixture.home.appending(path: "custom")
+        let system = fixture.home.appendingPathComponent("system")
+        let custom = fixture.home.appendingPathComponent("custom")
         let registry = AgentRegistry(definitions: [
             AgentDefinition(
                 id: "system-agent",
@@ -283,7 +283,7 @@ final class IndexRefresherTests: XCTestCase {
         let fixture = try RefreshFixture()
         try fixture.writeSkill(at: ".first/skills/first", name: "first")
         try fixture.writeSkill(at: ".second/skills/second", name: "second")
-        let firstRoot = fixture.home.appending(path: ".first/skills")
+        let firstRoot = fixture.home.appendingPathComponent(".first/skills")
         let registry = AgentRegistry(definitions: [
             AgentDefinition(
                 id: "first-agent",
@@ -324,7 +324,7 @@ final class IndexRefresherTests: XCTestCase {
     func testDisappearingRegisteredHomeRootRemovesItsPriorInstallations() async throws {
         let fixture = try RefreshFixture()
         try fixture.writeSkill(at: ".claude/skills/demo", name: "demo")
-        let skillsRoot = fixture.home.appending(path: ".claude/skills")
+        let skillsRoot = fixture.home.appendingPathComponent(".claude/skills")
         let adapter = FixtureBookmarkAdapter()
         let database = try fixture.makeDatabase()
         let bookmarks = BookmarkStore(database: database, adapter: adapter)
@@ -348,11 +348,11 @@ final class IndexRefresherTests: XCTestCase {
     func testTemplatedHomeRootDoesNotEnumerateSymlinkedParentOutsideHome() async throws {
         let fixture = try RefreshFixture()
         let outside = FileManager.default.temporaryDirectory
-            .appending(path: "IndexRefresherOutside-\(UUID().uuidString)")
+            .appendingPathComponent("IndexRefresherOutside-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: outside) }
-        try RefreshFixture.writeSkill(at: outside.appending(path: "skills-escape/private"), name: "private")
+        try RefreshFixture.writeSkill(at: outside.appendingPathComponent("skills-escape/private"), name: "private")
         try FileManager.default.createSymbolicLink(
-            at: fixture.home.appending(path: ".roo"),
+            at: fixture.home.appendingPathComponent(".roo"),
             withDestinationURL: outside
         )
         let fileSystem = RecordingIndexRefresherFileSystem()
@@ -372,7 +372,7 @@ final class IndexRefresherTests: XCTestCase {
         _ = try await refresher.refresh()
 
         XCTAssertTrue(try index.skills().isEmpty)
-        XCTAssertFalse(fileSystem.enumeratedURLs.contains(fixture.home.appending(path: ".roo")))
+        XCTAssertFalse(fileSystem.enumeratedURLs.contains(fixture.home.appendingPathComponent(".roo")))
         XCTAssertTrue(fileSystem.probedDirectoryURLs.allSatisfy {
             !$0.path.hasPrefix(outside.path)
         })
@@ -381,7 +381,7 @@ final class IndexRefresherTests: XCTestCase {
     func testDisappearingLastTemplatedHomeRootRemovesItsPriorInstallations() async throws {
         let fixture = try RefreshFixture()
         try fixture.writeSkill(at: ".roo/skills-code/demo", name: "demo")
-        let skillsRoot = fixture.home.appending(path: ".roo/skills-code")
+        let skillsRoot = fixture.home.appendingPathComponent(".roo/skills-code")
         let registry = AgentRegistry(definitions: [
             AgentDefinition(
                 id: "templated",
@@ -414,8 +414,8 @@ final class IndexRefresherTests: XCTestCase {
         let fixture = try RefreshFixture()
         try fixture.writeSkill(at: "first/.cursor/skills/one", name: "one")
         try fixture.writeSkill(at: "second/.cursor/skills/two", name: "two")
-        let firstURL = fixture.home.appending(path: "first")
-        let secondURL = fixture.home.appending(path: "second")
+        let firstURL = fixture.home.appendingPathComponent("first")
+        let secondURL = fixture.home.appendingPathComponent("second")
         let adapter = FixtureBookmarkAdapter()
         let database = try fixture.makeDatabase()
         let bookmarks = BookmarkStore(database: database, adapter: adapter)
@@ -444,10 +444,10 @@ final class IndexRefresherTests: XCTestCase {
     /// cache entries are what keeps later full refreshes fast).
     func testSelectedRootRefreshLeavesOtherRootsRecordsAndCachesIntact() async throws {
         let fixture = try RefreshFixture()
-        let firstURL = fixture.home.appending(path: "first")
-        let secondURL = fixture.home.appending(path: "second")
-        try RefreshFixture.writeSkill(at: firstURL.appending(path: ".cursor/skills/one"), name: "one")
-        try RefreshFixture.writeSkill(at: secondURL.appending(path: ".cursor/skills/two"), name: "two")
+        let firstURL = fixture.home.appendingPathComponent("first")
+        let secondURL = fixture.home.appendingPathComponent("second")
+        try RefreshFixture.writeSkill(at: firstURL.appendingPathComponent(".cursor/skills/one"), name: "one")
+        try RefreshFixture.writeSkill(at: secondURL.appendingPathComponent(".cursor/skills/two"), name: "two")
         let adapter = FixtureBookmarkAdapter()
         let database = try fixture.makeDatabase()
         let bookmarks = BookmarkStore(database: database, adapter: adapter)
@@ -484,20 +484,20 @@ private final class RefreshFixture: @unchecked Sendable {
 
     init() throws {
         home = FileManager.default.temporaryDirectory
-            .appending(path: "IndexRefresherTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+            .appendingPathComponent("IndexRefresherTests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
     }
 
     deinit { try? FileManager.default.removeItem(at: home) }
 
     func writeSkill(at relativePath: String, name: String) throws {
-        try Self.writeSkill(at: home.appending(path: relativePath), name: name)
+        try Self.writeSkill(at: home.appendingPathComponent(relativePath), name: name)
     }
 
     static func writeSkill(at directory: URL, name: String) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try "---\nname: \(name)\n---\n# \(name)\n".write(
-            to: directory.appending(path: "SKILL.md"), atomically: true, encoding: .utf8
+            to: directory.appendingPathComponent("SKILL.md"), atomically: true, encoding: .utf8
         )
     }
 

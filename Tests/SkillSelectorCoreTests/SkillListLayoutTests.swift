@@ -7,7 +7,7 @@ final class SkillListLayoutTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appending(path: "Sources/SkillSelector/Browser/SkillListView.swift")
+            .appendingPathComponent("Sources/SkillSelector/Browser/SkillListView.swift")
         let source = try String(contentsOf: sourceURL, encoding: .utf8)
 
         XCTAssertTrue(

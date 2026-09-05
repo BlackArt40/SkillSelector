@@ -288,7 +288,7 @@ private struct ScanPlanBuilder: Sendable {
                 }
                 candidates = expanded
             } else {
-                candidates = candidates.map { $0.appending(path: component).standardizedFileURL }
+                candidates = candidates.map { $0.appendingPathComponent(component).standardizedFileURL }
             }
         }
         return candidates.filter { isContained($0, in: home) }

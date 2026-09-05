@@ -40,7 +40,7 @@ final class DeferredFingerprintTests: XCTestCase {
             (
                 installation.path.standardizedFileURL.path,
                 try SkillContentFingerprint.compute(
-                    entryFileURL: installation.path.appending(path: "SKILL.md")
+                    entryFileURL: installation.path.appendingPathComponent("SKILL.md")
                 )
             )
         }
@@ -74,7 +74,7 @@ final class DeferredFingerprintTests: XCTestCase {
             (
                 installation.path.standardizedFileURL.path,
                 try SkillContentFingerprint.compute(
-                    entryFileURL: installation.path.appending(path: "SKILL.md")
+                    entryFileURL: installation.path.appendingPathComponent("SKILL.md")
                 )
             )
         }
@@ -145,16 +145,16 @@ final class DeferredFingerprintTests: XCTestCase {
     /// A project root with two content-identical Skills.
     private func makeFixture() throws -> Fixture {
         let url = FileManager.default.temporaryDirectory
-            .appending(path: "DeferredFingerprintTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+            .appendingPathComponent("DeferredFingerprintTests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         for name in ["alpha", "beta"] {
-            let skill = url.appending(path: ".cursor/skills/\(name)")
+            let skill = url.appendingPathComponent(".cursor/skills/\(name)")
             try FileManager.default.createDirectory(at: skill, withIntermediateDirectories: true)
             // Byte-identical entry files: the fingerprint covers the skill
             // directory's relative tree, so identical copies in different
             // folders share a fingerprint.
             try "---\nname: twin\ndescription: identical\n---\n# twin\n".write(
-                to: skill.appending(path: "SKILL.md"),
+                to: skill.appendingPathComponent("SKILL.md"),
                 atomically: true,
                 encoding: .utf8
             )

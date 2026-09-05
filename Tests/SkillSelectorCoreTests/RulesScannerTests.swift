@@ -10,7 +10,7 @@ final class RulesScannerTests: XCTestCase {
     /// 建一个带唯一名字的临时目录并在 teardown 时清理。
     private func makeDirectory(_ name: String) throws -> URL {
         let url = FileManager.default.temporaryDirectory
-            .appending(path: "\(name)-\(UUID().uuidString)", directoryHint: .isDirectory)
+            .appendingPathComponent("\(name)-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         addTeardownBlock { try? FileManager.default.removeItem(at: url) }
         return url
@@ -31,11 +31,11 @@ final class RulesScannerTests: XCTestCase {
     func testFindsGlobalAndProjectRulesFiles() throws {
         let home = try makeDirectory("RulesHome")
         let project = try makeDirectory("RulesProject")
-        try write("# Claude\n", to: home.appending(path: ".claude/CLAUDE.md"))
-        try write("# Codex\n", to: home.appending(path: ".codex/AGENTS.md"))
-        try write("# Project Claude\n", to: project.appending(path: "CLAUDE.md"))
-        try write("# Project Agents\n", to: project.appending(path: "AGENTS.md"))
-        try write("# Cursor\n", to: project.appending(path: ".cursorrules"))
+        try write("# Claude\n", to: home.appendingPathComponent(".claude/CLAUDE.md"))
+        try write("# Codex\n", to: home.appendingPathComponent(".codex/AGENTS.md"))
+        try write("# Project Claude\n", to: project.appendingPathComponent("CLAUDE.md"))
+        try write("# Project Agents\n", to: project.appendingPathComponent("AGENTS.md"))
+        try write("# Cursor\n", to: project.appendingPathComponent(".cursorrules"))
 
         let files = RulesScanner().scan(
             homeRoot: AuthorizedRootSnapshot(id: "home", url: home, kind: .home),
@@ -48,18 +48,18 @@ final class RulesScannerTests: XCTestCase {
         XCTAssertEqual(Set(files.map(\.filename)), ["CLAUDE.md", "AGENTS.md", ".cursorrules"])
 
         // Global files carry no project root and the declaring agent.
-        let claudeGlobal = files.first { $0.path == home.appending(path: ".claude/CLAUDE.md").path }
+        let claudeGlobal = files.first { $0.path == home.appendingPathComponent(".claude/CLAUDE.md").path }
         XCTAssertEqual(claudeGlobal?.agentIDs, ["claude-code"])
         XCTAssertNil(claudeGlobal?.projectRootID)
 
         // Project files carry the project root id; CLAUDE.md is shared by
         // every Agent that declares it, Claude Code among them.
-        let claudeProject = files.first { $0.path == project.appending(path: "CLAUDE.md").path }
+        let claudeProject = files.first { $0.path == project.appendingPathComponent("CLAUDE.md").path }
         XCTAssertEqual(claudeProject?.agentIDs.contains("claude-code"), true)
         XCTAssertTrue((claudeProject?.agentIDs.count ?? 0) > 1)
         XCTAssertEqual(claudeProject?.projectRootID, "proj")
         XCTAssertEqual(
-            files.first { $0.path == project.appending(path: ".cursorrules").path }?.agentIDs,
+            files.first { $0.path == project.appendingPathComponent(".cursorrules").path }?.agentIDs,
             ["cursor"]
         )
         // Sizes are captured for display.
@@ -83,7 +83,7 @@ final class RulesScannerTests: XCTestCase {
     /// 没有 home 授权时，全局声明被跳过，项目级文件仍被发现。
     func testWithoutHomeRootOnlyProjectFilesAreFound() throws {
         let project = try makeDirectory("RulesProjectOnly")
-        try write("# Project\n", to: project.appending(path: "CLAUDE.md"))
+        try write("# Project\n", to: project.appendingPathComponent("CLAUDE.md"))
         let files = RulesScanner().scan(homeRoot: nil, projectRoots: [
             AuthorizedRootSnapshot(id: "proj", url: project, kind: .project),
         ])
@@ -95,7 +95,7 @@ final class RulesScannerTests: XCTestCase {
     func testDirectoriesNamedLikeRulesAreIgnored() throws {
         let project = try makeDirectory("RulesProjectDir")
         try FileManager.default.createDirectory(
-            at: project.appending(path: "CLAUDE.md"),
+            at: project.appendingPathComponent("CLAUDE.md"),
             withIntermediateDirectories: true
         )
         let files = RulesScanner().scan(homeRoot: nil, projectRoots: [
@@ -108,7 +108,7 @@ final class RulesScannerTests: XCTestCase {
     func testOversizedRulesFilesAreSkipped() throws {
         let project = try makeDirectory("RulesProjectBig")
         let huge = Data(repeating: 0x41, count: RulesScanner.maximumRulesFileBytes + 1)
-        try huge.write(to: project.appending(path: "CLAUDE.md"))
+        try huge.write(to: project.appendingPathComponent("CLAUDE.md"))
         let files = RulesScanner().scan(homeRoot: nil, projectRoots: [
             AuthorizedRootSnapshot(id: "proj", url: project, kind: .project),
         ])
@@ -118,7 +118,7 @@ final class RulesScannerTests: XCTestCase {
     /// 项目内嵌套路径的规则文件（.github/copilot-instructions.md）被发现。
     func testNestedProjectRulesAreFound() throws {
         let project = try makeDirectory("RulesProjectNested")
-        try write("# Copilot\n", to: project.appending(path: ".github/copilot-instructions.md"))
+        try write("# Copilot\n", to: project.appendingPathComponent(".github/copilot-instructions.md"))
         let files = RulesScanner().scan(homeRoot: nil, projectRoots: [
             AuthorizedRootSnapshot(id: "proj", url: project, kind: .project),
         ])
@@ -133,20 +133,20 @@ final class RulesScannerTests: XCTestCase {
     /// 其他扩展名与嵌套子目录（仅一层，不递归）。
     func testCursorRulesDirectoryMdcFilesAreFound() throws {
         let project = try makeDirectory("RulesCursorDir")
-        try write("# API\n", to: project.appending(path: ".cursor/rules/api.mdc"))
-        try write("RULE.MDC upper\n", to: project.appending(path: ".cursor/rules/UPPER.MDC"))
+        try write("# API\n", to: project.appendingPathComponent(".cursor/rules/api.mdc"))
+        try write("RULE.MDC upper\n", to: project.appendingPathComponent(".cursor/rules/UPPER.MDC"))
         // Wrong extension, stray file type: not rules.
-        try write("# Not rules\n", to: project.appending(path: ".cursor/rules/notes.md"))
-        try write("text", to: project.appending(path: ".cursor/rules/data.txt"))
+        try write("# Not rules\n", to: project.appendingPathComponent(".cursor/rules/notes.md"))
+        try write("text", to: project.appendingPathComponent(".cursor/rules/data.txt"))
         // Nested files are out of scope: one level only.
-        try write("# Nested\n", to: project.appending(path: ".cursor/rules/sub/inner.mdc"))
+        try write("# Nested\n", to: project.appendingPathComponent(".cursor/rules/sub/inner.mdc"))
 
         let files = RulesScanner().scan(homeRoot: nil, projectRoots: [
             AuthorizedRootSnapshot(id: "proj", url: project, kind: .project),
         ])
         XCTAssertEqual(Set(files.map(\.path)), [
-            project.appending(path: ".cursor/rules/api.mdc").path,
-            project.appending(path: ".cursor/rules/UPPER.MDC").path,
+            project.appendingPathComponent(".cursor/rules/api.mdc").path,
+            project.appendingPathComponent(".cursor/rules/UPPER.MDC").path,
         ])
         XCTAssertTrue(files.allSatisfy { $0.agentIDs == ["cursor"] && $0.projectRootID == "proj" })
     }
@@ -156,10 +156,10 @@ final class RulesScannerTests: XCTestCase {
     func testClaudeRulesDirectoriesAreFoundInHomeAndProject() throws {
         let home = try makeDirectory("RulesClaudeHome")
         let project = try makeDirectory("RulesClaudeProject")
-        try write("# Global style\n", to: home.appending(path: ".claude/rules/style.md"))
-        try write("# Testing\n", to: project.appending(path: ".claude/rules/testing.md"))
+        try write("# Global style\n", to: home.appendingPathComponent(".claude/rules/style.md"))
+        try write("# Testing\n", to: project.appendingPathComponent(".claude/rules/testing.md"))
         // .mdc belongs to Cursor's directory, not Claude's.
-        try write("# Wrong kind\n", to: project.appending(path: ".claude/rules/nope.mdc"))
+        try write("# Wrong kind\n", to: project.appendingPathComponent(".claude/rules/nope.mdc"))
 
         let files = RulesScanner().scan(
             homeRoot: AuthorizedRootSnapshot(id: "home", url: home, kind: .home),
@@ -168,8 +168,8 @@ final class RulesScannerTests: XCTestCase {
             ]
         )
         XCTAssertEqual(Set(files.map(\.path)), [
-            home.appending(path: ".claude/rules/style.md").path,
-            project.appending(path: ".claude/rules/testing.md").path,
+            home.appendingPathComponent(".claude/rules/style.md").path,
+            project.appendingPathComponent(".claude/rules/testing.md").path,
         ])
         XCTAssertTrue(files.allSatisfy { $0.agentIDs == ["claude-code"] })
         XCTAssertEqual(
@@ -185,7 +185,7 @@ final class RulesScannerTests: XCTestCase {
     /// CLAUDE.local.md（Claude 的项目级本地规则）被发现。
     func testClaudeLocalMdIsFound() throws {
         let project = try makeDirectory("RulesClaudeLocal")
-        try write("# Local\n", to: project.appending(path: "CLAUDE.local.md"))
+        try write("# Local\n", to: project.appendingPathComponent("CLAUDE.local.md"))
         let files = RulesScanner().scan(homeRoot: nil, projectRoots: [
             AuthorizedRootSnapshot(id: "proj", url: project, kind: .project),
         ])
@@ -197,11 +197,11 @@ final class RulesScannerTests: XCTestCase {
     /// 规则目录内同样受大小上限约束：超限文件跳过，其余正常返回。
     func testOversizedFileInsideRulesDirectoryIsSkipped() throws {
         let project = try makeDirectory("RulesCursorBig")
-        let rulesDir = project.appending(path: ".cursor/rules", directoryHint: .isDirectory)
+        let rulesDir = project.appendingPathComponent(".cursor/rules", isDirectory: true)
         try FileManager.default.createDirectory(at: rulesDir, withIntermediateDirectories: true)
         let huge = Data(repeating: 0x41, count: RulesScanner.maximumRulesFileBytes + 1)
-        try huge.write(to: rulesDir.appending(path: "huge.mdc"))
-        try write("# Fine\n", to: rulesDir.appending(path: "fine.mdc"))
+        try huge.write(to: rulesDir.appendingPathComponent("huge.mdc"))
+        try write("# Fine\n", to: rulesDir.appendingPathComponent("fine.mdc"))
 
         let files = RulesScanner().scan(homeRoot: nil, projectRoots: [
             AuthorizedRootSnapshot(id: "proj", url: project, kind: .project),
@@ -213,7 +213,7 @@ final class RulesScannerTests: XCTestCase {
     func testMissingRulesDirectoryIsSkipped() throws {
         let project = try makeDirectory("RulesCursorMissing")
         try FileManager.default.createDirectory(
-            at: project.appending(path: ".cursor"),
+            at: project.appendingPathComponent(".cursor"),
             withIntermediateDirectories: true
         )
         let files = RulesScanner().scan(homeRoot: nil, projectRoots: [
@@ -225,8 +225,8 @@ final class RulesScannerTests: XCTestCase {
     func testRooRulesDirectoryIsFound() throws {
         let home = try makeDirectory("RulesRooHome")
         let project = try makeDirectory("RulesRooProject")
-        try write("# Global Roo\n", to: home.appending(path: ".roo/rules/global.md"))
-        try write("# Project Roo\n", to: project.appending(path: ".roo/rules/api.md"))
+        try write("# Global Roo\n", to: home.appendingPathComponent(".roo/rules/global.md"))
+        try write("# Project Roo\n", to: project.appendingPathComponent(".roo/rules/api.md"))
 
         let files = RulesScanner().scan(
             homeRoot: AuthorizedRootSnapshot(id: "home", url: home, kind: .home),
@@ -235,8 +235,8 @@ final class RulesScannerTests: XCTestCase {
             ]
         )
         XCTAssertEqual(Set(files.map(\.path)), [
-            home.appending(path: ".roo/rules/global.md").path,
-            project.appending(path: ".roo/rules/api.md").path,
+            home.appendingPathComponent(".roo/rules/global.md").path,
+            project.appendingPathComponent(".roo/rules/api.md").path,
         ])
         XCTAssertTrue(files.allSatisfy { $0.agentIDs == ["roo-code"] })
     }
@@ -244,7 +244,7 @@ final class RulesScannerTests: XCTestCase {
     /// .kilocode/rules 目录（Kilo Code 的规则目录）被发现。
     func testKiloRulesDirectoryIsFound() throws {
         let project = try makeDirectory("RulesKilo")
-        try write("# Kilo\n", to: project.appending(path: ".kilocode/rules/style.md"))
+        try write("# Kilo\n", to: project.appendingPathComponent(".kilocode/rules/style.md"))
         let files = RulesScanner().scan(homeRoot: nil, projectRoots: [
             AuthorizedRootSnapshot(id: "proj", url: project, kind: .project),
         ])
@@ -257,8 +257,8 @@ final class RulesScannerTests: XCTestCase {
     func testClineRulesDirectoryAndGlobalFolderAreFound() throws {
         let home = try makeDirectory("RulesClineHome")
         let project = try makeDirectory("RulesClineProject")
-        try write("# Cline global\n", to: home.appending(path: "Documents/Cline/Rules/base.md"))
-        try write("# Cline dir rule\n", to: project.appending(path: ".clinerules/api.md"))
+        try write("# Cline global\n", to: home.appendingPathComponent("Documents/Cline/Rules/base.md"))
+        try write("# Cline dir rule\n", to: project.appendingPathComponent(".clinerules/api.md"))
 
         let files = RulesScanner().scan(
             homeRoot: AuthorizedRootSnapshot(id: "home", url: home, kind: .home),
@@ -267,8 +267,8 @@ final class RulesScannerTests: XCTestCase {
             ]
         )
         XCTAssertEqual(Set(files.map(\.path)), [
-            home.appending(path: "Documents/Cline/Rules/base.md").path,
-            project.appending(path: ".clinerules/api.md").path,
+            home.appendingPathComponent("Documents/Cline/Rules/base.md").path,
+            project.appendingPathComponent(".clinerules/api.md").path,
         ])
         XCTAssertTrue(files.allSatisfy { $0.agentIDs == ["cline"] })
     }
@@ -277,10 +277,10 @@ final class RulesScannerTests: XCTestCase {
     func testWindsurfRulesDirectoryAndGlobalFileAreFound() throws {
         let home = try makeDirectory("RulesWindsurfHome")
         let project = try makeDirectory("RulesWindsurfProject")
-        try write("# Cascade rules\n", to: project.appending(path: ".windsurf/rules/cascade.md"))
+        try write("# Cascade rules\n", to: project.appendingPathComponent(".windsurf/rules/cascade.md"))
         try write(
             "# Global rules\n",
-            to: home.appending(path: ".codeium/windsurf/memories/global_rules.md")
+            to: home.appendingPathComponent(".codeium/windsurf/memories/global_rules.md")
         )
 
         let files = RulesScanner().scan(
@@ -290,8 +290,8 @@ final class RulesScannerTests: XCTestCase {
             ]
         )
         XCTAssertEqual(Set(files.map(\.path)), [
-            project.appending(path: ".windsurf/rules/cascade.md").path,
-            home.appending(path: ".codeium/windsurf/memories/global_rules.md").path,
+            project.appendingPathComponent(".windsurf/rules/cascade.md").path,
+            home.appendingPathComponent(".codeium/windsurf/memories/global_rules.md").path,
         ])
         XCTAssertEqual(
             files.first { $0.projectRootID == nil }?.filename,
@@ -304,8 +304,8 @@ final class RulesScannerTests: XCTestCase {
     func testGeminiMdHierarchyIsFound() throws {
         let home = try makeDirectory("RulesGeminiHome")
         let project = try makeDirectory("RulesGeminiProject")
-        try write("# Global Gemini\n", to: home.appending(path: ".gemini/GEMINI.md"))
-        try write("# Project Gemini\n", to: project.appending(path: "GEMINI.md"))
+        try write("# Global Gemini\n", to: home.appendingPathComponent(".gemini/GEMINI.md"))
+        try write("# Project Gemini\n", to: project.appendingPathComponent("GEMINI.md"))
 
         let files = RulesScanner().scan(
             homeRoot: AuthorizedRootSnapshot(id: "home", url: home, kind: .home),
@@ -314,8 +314,8 @@ final class RulesScannerTests: XCTestCase {
             ]
         )
         XCTAssertEqual(Set(files.map(\.path)), [
-            home.appending(path: ".gemini/GEMINI.md").path,
-            project.appending(path: "GEMINI.md").path,
+            home.appendingPathComponent(".gemini/GEMINI.md").path,
+            project.appendingPathComponent("GEMINI.md").path,
         ])
         XCTAssertTrue(files.allSatisfy { $0.agentIDs == ["gemini-cli"] })
     }
@@ -326,12 +326,12 @@ final class RulesScannerTests: XCTestCase {
         let project = try makeDirectory("RulesCopilotInstructions")
         try write(
             "---\napplyTo: \"**/*.py\"\n---\n# Python\n",
-            to: project.appending(path: ".github/instructions/python.instructions.md")
+            to: project.appendingPathComponent(".github/instructions/python.instructions.md")
         )
         // A plain .md file is not an instructions file, and the suffix must
         // not match without a dot boundary ("myinstructions.md").
-        try write("# Not instructions\n", to: project.appending(path: ".github/instructions/notes.md"))
-        try write("# Boundary\n", to: project.appending(path: ".github/instructions/myinstructions.md"))
+        try write("# Not instructions\n", to: project.appendingPathComponent(".github/instructions/notes.md"))
+        try write("# Boundary\n", to: project.appendingPathComponent(".github/instructions/myinstructions.md"))
 
         let files = RulesScanner().scan(homeRoot: nil, projectRoots: [
             AuthorizedRootSnapshot(id: "proj", url: project, kind: .project),
@@ -345,11 +345,11 @@ final class RulesScannerTests: XCTestCase {
     func testRooAndKiloModeRulesDirectoriesAreMatched() throws {
         let home = try makeDirectory("RulesRooModeHome")
         let project = try makeDirectory("RulesRooMode")
-        try write("# Mode code\n", to: home.appending(path: ".roo/rules-code/arch.md"))
-        try write("# Mode debug\n", to: project.appending(path: ".roo/rules-debug/dbg.md"))
-        try write("# Kilo mode\n", to: project.appending(path: ".kilocode/rules-code/km.md"))
+        try write("# Mode code\n", to: home.appendingPathComponent(".roo/rules-code/arch.md"))
+        try write("# Mode debug\n", to: project.appendingPathComponent(".roo/rules-debug/dbg.md"))
+        try write("# Kilo mode\n", to: project.appendingPathComponent(".kilocode/rules-code/km.md"))
         // The pattern requires the "rules-" prefix: not a mode directory.
-        try write("# Not a mode\n", to: project.appending(path: ".roo/rulesx/nope.md"))
+        try write("# Not a mode\n", to: project.appendingPathComponent(".roo/rulesx/nope.md"))
 
         let files = RulesScanner().scan(
             homeRoot: AuthorizedRootSnapshot(id: "home", url: home, kind: .home),
@@ -358,9 +358,9 @@ final class RulesScannerTests: XCTestCase {
             ]
         )
         XCTAssertEqual(Set(files.map(\.path)), [
-            home.appending(path: ".roo/rules-code/arch.md").path,
-            project.appending(path: ".roo/rules-debug/dbg.md").path,
-            project.appending(path: ".kilocode/rules-code/km.md").path,
+            home.appendingPathComponent(".roo/rules-code/arch.md").path,
+            project.appendingPathComponent(".roo/rules-debug/dbg.md").path,
+            project.appendingPathComponent(".kilocode/rules-code/km.md").path,
         ])
         XCTAssertEqual(
             files.first { $0.path.contains(".roo/rules-code") }?.agentIDs,
@@ -375,7 +375,7 @@ final class RulesScannerTests: XCTestCase {
     /// .qoder/rules 目录（Qoder 的规则目录）被发现。
     func testQoderRulesDirectoryIsFound() throws {
         let project = try makeDirectory("RulesQoder")
-        try write("# Qoder\n", to: project.appending(path: ".qoder/rules/api.md"))
+        try write("# Qoder\n", to: project.appendingPathComponent(".qoder/rules/api.md"))
         let files = RulesScanner().scan(homeRoot: nil, projectRoots: [
             AuthorizedRootSnapshot(id: "proj", url: project, kind: .project),
         ])
@@ -387,7 +387,7 @@ final class RulesScannerTests: XCTestCase {
     /// Amp 的项目根 AGENT.md（单数）被发现，归 Amp。
     func testAmpAgentFileIsFound() throws {
         let project = try makeDirectory("RulesAmp")
-        try write("# Amp\n", to: project.appending(path: "AGENT.md"))
+        try write("# Amp\n", to: project.appendingPathComponent("AGENT.md"))
         let files = RulesScanner().scan(homeRoot: nil, projectRoots: [
             AuthorizedRootSnapshot(id: "proj", url: project, kind: .project),
         ])

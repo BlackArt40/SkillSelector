@@ -53,7 +53,7 @@ final class AppModelTests: XCTestCase {
 
     func testCheckEnvironmentOnLaunchAuthorizesInjectedHomeDirectory() async throws {
         let home = FileManager.default.temporaryDirectory
-            .appending(path: "AppModelHome-\(UUID().uuidString)")
+            .appendingPathComponent("AppModelHome-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: home) }
         let model = makeModel(homeDirectory: home)
@@ -82,7 +82,7 @@ final class AppModelTests: XCTestCase {
         let bookmarks = BookmarkStore(database: database, adapter: adapter)
 
         let home = FileManager.default.temporaryDirectory
-            .appending(path: "AppModelReauthHome-\(UUID().uuidString)")
+            .appendingPathComponent("AppModelReauthHome-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: home) }
 
@@ -123,7 +123,7 @@ final class AppModelTests: XCTestCase {
         let staleRoot = try bookmarks.save(url: FileManager.default.homeDirectoryForCurrentUser, kind: .home)
 
         let home = FileManager.default.temporaryDirectory
-            .appending(path: "AppModelSandboxHome-\(UUID().uuidString)")
+            .appendingPathComponent("AppModelSandboxHome-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: home) }
 
@@ -403,7 +403,7 @@ final class AppModelTests: XCTestCase {
     /// MCP submodel reloads against the shared scoped-roots snapshot.
     func testMcpReloadScansAuthorizedRootFixtures() async throws {
         let project = FileManager.default.temporaryDirectory
-            .appending(path: "AppModelMcpProject-\(UUID().uuidString)", directoryHint: .isDirectory)
+            .appendingPathComponent("AppModelMcpProject-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: project) }
         try """
@@ -412,7 +412,7 @@ final class AppModelTests: XCTestCase {
             "filesystem": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "."] }
           }
         }
-        """.write(to: project.appending(path: ".mcp.json"), atomically: true, encoding: .utf8)
+        """.write(to: project.appendingPathComponent(".mcp.json"), atomically: true, encoding: .utf8)
 
         let suite = "AppModelMcpReloadTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
@@ -429,7 +429,7 @@ final class AppModelTests: XCTestCase {
         await model.refresh()
 
         let fixture = model.mcps.servers.first {
-            $0.configFile == project.appending(path: ".mcp.json").path
+            $0.configFile == project.appendingPathComponent(".mcp.json").path
         }
         XCTAssertNotNil(fixture, "project .mcp.json should be scanned into mcps.servers")
         XCTAssertEqual(fixture?.agentID, "claude-code")

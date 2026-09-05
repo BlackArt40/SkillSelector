@@ -246,17 +246,17 @@ final class McpScannerTests: XCTestCase {
     /// Writes ~/.codex/config.toml under a fake home root and a .mcp.json
     /// under a fake project root; the scanner should surface both.
     func testScansGlobalAndProjectConfigs() throws {
-        let home = tempRoot.appending(path: "home")
+        let home = tempRoot.appendingPathComponent("home")
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
-        let codexDir = home.appending(path: ".codex")
+        let codexDir = home.appendingPathComponent(".codex")
         try FileManager.default.createDirectory(at: codexDir, withIntermediateDirectories: true)
         try """
         [mcp_servers.context7]
         command = "npx"
         args = ["-y", "@upstash/context7-mcp"]
-        """.write(to: codexDir.appending(path: "config.toml"), atomically: true, encoding: .utf8)
+        """.write(to: codexDir.appendingPathComponent("config.toml"), atomically: true, encoding: .utf8)
 
-        let project = tempRoot.appending(path: "demo-webapp")
+        let project = tempRoot.appendingPathComponent("demo-webapp")
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
         try """
         {
@@ -264,7 +264,7 @@ final class McpScannerTests: XCTestCase {
             "filesystem": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "."] }
           }
         }
-        """.write(to: project.appending(path: ".mcp.json"), atomically: true, encoding: .utf8)
+        """.write(to: project.appendingPathComponent(".mcp.json"), atomically: true, encoding: .utf8)
 
         let homeSnapshot = AuthorizedRootSnapshot(id: "home", url: home, kind: .home)
         let projectSnapshot = AuthorizedRootSnapshot(id: "proj", url: project, kind: .project)
@@ -287,9 +287,9 @@ final class McpScannerTests: XCTestCase {
     /// Gemini CLI keeps its MCP servers under the top-level `mcpServers`
     /// key of settings.json — global and per-project.
     func testScansGeminiSettingsJsonMcpServers() throws {
-        let home = tempRoot.appending(path: "home")
+        let home = tempRoot.appendingPathComponent("home")
         try FileManager.default.createDirectory(
-            at: home.appending(path: ".gemini"),
+            at: home.appendingPathComponent(".gemini"),
             withIntermediateDirectories: true
         )
         try """
@@ -299,16 +299,16 @@ final class McpScannerTests: XCTestCase {
             "context7": { "command": "npx", "args": ["-y", "@upstash/context7-mcp"] }
           }
         }
-        """.write(to: home.appending(path: ".gemini/settings.json"), atomically: true, encoding: .utf8)
+        """.write(to: home.appendingPathComponent(".gemini/settings.json"), atomically: true, encoding: .utf8)
 
-        let project = tempRoot.appending(path: "demo-webapp")
+        let project = tempRoot.appendingPathComponent("demo-webapp")
         try FileManager.default.createDirectory(
-            at: project.appending(path: ".gemini"),
+            at: project.appendingPathComponent(".gemini"),
             withIntermediateDirectories: true
         )
         try """
         { "mcpServers": { "search": { "type": "http", "url": "https://example.com/mcp" } } }
-        """.write(to: project.appending(path: ".gemini/settings.json"), atomically: true, encoding: .utf8)
+        """.write(to: project.appendingPathComponent(".gemini/settings.json"), atomically: true, encoding: .utf8)
 
         let servers = McpScanner().scan(
             homeRoot: AuthorizedRootSnapshot(id: "home", url: home, kind: .home),
@@ -332,34 +332,34 @@ final class McpScannerTests: XCTestCase {
     /// ("servers" key), while Cline keeps mcpServers in its extension's
     /// globalStorage settings.
     func testScansVSCodeFamilyMcpConfigs() throws {
-        let home = tempRoot.appending(path: "home")
-        let codeUser = home.appending(path: "Library/Application Support/Code/User")
+        let home = tempRoot.appendingPathComponent("home")
+        let codeUser = home.appendingPathComponent("Library/Application Support/Code/User")
         try FileManager.default.createDirectory(at: codeUser, withIntermediateDirectories: true)
         try """
         { "servers": { "github": { "type": "http", "url": "https://api.githubcopilot.com/mcp" } } }
-        """.write(to: codeUser.appending(path: "mcp.json"), atomically: true, encoding: .utf8)
+        """.write(to: codeUser.appendingPathComponent("mcp.json"), atomically: true, encoding: .utf8)
 
-        let clineSettings = codeUser.appending(
-            path: "globalStorage/saoudrizwan.claude-dev/settings",
-            directoryHint: .isDirectory
+        let clineSettings = codeUser.appendingPathComponent(
+            "globalStorage/saoudrizwan.claude-dev/settings",
+            isDirectory: true
         )
         try FileManager.default.createDirectory(at: clineSettings, withIntermediateDirectories: true)
         try """
         { "mcpServers": { "browser": { "command": "npx", "args": ["-y", "@cline/browser"] } } }
         """.write(
-            to: clineSettings.appending(path: "cline_mcp_settings.json"),
+            to: clineSettings.appendingPathComponent("cline_mcp_settings.json"),
             atomically: true,
             encoding: .utf8
         )
 
-        let project = tempRoot.appending(path: "demo-webapp")
+        let project = tempRoot.appendingPathComponent("demo-webapp")
         try FileManager.default.createDirectory(
-            at: project.appending(path: ".vscode"),
+            at: project.appendingPathComponent(".vscode"),
             withIntermediateDirectories: true
         )
         try """
         { "servers": { "local-disk": { "command": "npx", "args": ["-y", "mcp-disk"] } } }
-        """.write(to: project.appending(path: ".vscode/mcp.json"), atomically: true, encoding: .utf8)
+        """.write(to: project.appendingPathComponent(".vscode/mcp.json"), atomically: true, encoding: .utf8)
 
         let servers = McpScanner().scan(
             homeRoot: AuthorizedRootSnapshot(id: "home", url: home, kind: .home),
@@ -374,7 +374,7 @@ final class McpScannerTests: XCTestCase {
 
         let browser = try XCTUnwrap(servers.first { $0.name == "browser" })
         XCTAssertEqual(browser.agentID, "cline")
-        XCTAssertEqual(browser.configFile, clineSettings.appending(path: "cline_mcp_settings.json").path)
+        XCTAssertEqual(browser.configFile, clineSettings.appendingPathComponent("cline_mcp_settings.json").path)
 
         let disk = try XCTUnwrap(servers.first { $0.name == "local-disk" })
         XCTAssertEqual(disk.agentID, "github-copilot")
@@ -384,9 +384,9 @@ final class McpScannerTests: XCTestCase {
     /// Goose (YAML `extensions`) and OpenCode (the `mcp` key) round-trip
     /// through the scanner at their declared paths.
     func testScansGooseAndOpenCodeConfigs() throws {
-        let home = tempRoot.appending(path: "home")
+        let home = tempRoot.appendingPathComponent("home")
         try FileManager.default.createDirectory(
-            at: home.appending(path: ".config/goose"),
+            at: home.appendingPathComponent(".config/goose"),
             withIntermediateDirectories: true
         )
         try """
@@ -395,21 +395,21 @@ final class McpScannerTests: XCTestCase {
             cmd: npx
             args: ["-y", "@upstash/context7-mcp"]
             type: stdio
-        """.write(to: home.appending(path: ".config/goose/config.yaml"), atomically: true, encoding: .utf8)
+        """.write(to: home.appendingPathComponent(".config/goose/config.yaml"), atomically: true, encoding: .utf8)
 
         try FileManager.default.createDirectory(
-            at: home.appending(path: ".config/opencode"),
+            at: home.appendingPathComponent(".config/opencode"),
             withIntermediateDirectories: true
         )
         try """
         { "mcp": { "agent-docs": { "type": "remote", "url": "https://opencode.ai/mcp" } } }
-        """.write(to: home.appending(path: ".config/opencode/opencode.json"), atomically: true, encoding: .utf8)
+        """.write(to: home.appendingPathComponent(".config/opencode/opencode.json"), atomically: true, encoding: .utf8)
 
-        let project = tempRoot.appending(path: "demo-webapp")
+        let project = tempRoot.appendingPathComponent("demo-webapp")
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
         try """
         { "mcp": { "disk": { "type": "local", "command": ["npx", "-y", "mcp-disk"] } } }
-        """.write(to: project.appending(path: "opencode.json"), atomically: true, encoding: .utf8)
+        """.write(to: project.appendingPathComponent("opencode.json"), atomically: true, encoding: .utf8)
 
         let servers = McpScanner().scan(
             homeRoot: AuthorizedRootSnapshot(id: "home", url: home, kind: .home),
@@ -452,9 +452,9 @@ final class McpScannerTests: XCTestCase {
     /// A declared server with neither command nor url is unusable and must
     /// not show up in the list.
     func testServerWithoutCommandOrUrlIsFilteredOut() throws {
-        let home = tempRoot.appending(path: "home")
+        let home = tempRoot.appendingPathComponent("home")
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
-        let codexDir = home.appending(path: ".codex")
+        let codexDir = home.appendingPathComponent(".codex")
         try FileManager.default.createDirectory(at: codexDir, withIntermediateDirectories: true)
         try """
         [mcp_servers.empty]
@@ -463,7 +463,7 @@ final class McpScannerTests: XCTestCase {
         [mcp_servers.valid]
         command = "npx"
         args = ["-y", "@upstash/context7-mcp"]
-        """.write(to: codexDir.appending(path: "config.toml"), atomically: true, encoding: .utf8)
+        """.write(to: codexDir.appendingPathComponent("config.toml"), atomically: true, encoding: .utf8)
 
         let homeSnapshot = AuthorizedRootSnapshot(id: "home", url: home, kind: .home)
         let servers = McpScanner().scan(homeRoot: homeSnapshot, projectRoots: [])
@@ -474,7 +474,7 @@ final class McpScannerTests: XCTestCase {
     /// Claude Code declares global MCP servers at the top level of
     /// ~/.claude.json — a large JSON whose non-MCP members must be ignored.
     func testScansClaudeGlobalMcpServersFromClaudeJson() throws {
-        let home = tempRoot.appending(path: "home")
+        let home = tempRoot.appendingPathComponent("home")
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
         try """
         {
@@ -494,7 +494,7 @@ final class McpScannerTests: XCTestCase {
             }
           }
         }
-        """.write(to: home.appending(path: ".claude.json"), atomically: true, encoding: .utf8)
+        """.write(to: home.appendingPathComponent(".claude.json"), atomically: true, encoding: .utf8)
 
         let homeSnapshot = AuthorizedRootSnapshot(id: "home", url: home, kind: .home)
         let servers = McpScanner().scan(homeRoot: homeSnapshot, projectRoots: [])
@@ -510,7 +510,7 @@ final class McpScannerTests: XCTestCase {
     }
 
     func testGlobalPathEscapesHomeIsIgnored() {
-        let home = tempRoot.appending(path: "home")
+        let home = tempRoot.appendingPathComponent("home")
         XCTAssertNil(McpScanner.resolve(globalPath: "~/../../etc/passwd", relativeTo: home))
         XCTAssertNil(McpScanner.resolve(globalPath: "no-tilde-prefix", relativeTo: home))
         XCTAssertNotNil(McpScanner.resolve(globalPath: "~/.codex/config.toml", relativeTo: home))
@@ -520,16 +520,16 @@ final class McpScannerTests: XCTestCase {
     /// of being slurped into memory during a scan (audit R3/F-01 parity with
     /// the Skill entry cap).
     func testOversizedConfigFileIsSkipped() throws {
-        let home = tempRoot.appending(path: "home")
+        let home = tempRoot.appendingPathComponent("home")
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
-        let codexDir = home.appending(path: ".codex")
+        let codexDir = home.appendingPathComponent(".codex")
         try FileManager.default.createDirectory(at: codexDir, withIntermediateDirectories: true)
         let oversized = String(
             repeating: "# padding line\n",
             count: McpScanner.maximumConfigFileBytes / 16 + 1
         )
         try oversized.write(
-            to: codexDir.appending(path: "config.toml"),
+            to: codexDir.appendingPathComponent("config.toml"),
             atomically: true,
             encoding: .utf8
         )

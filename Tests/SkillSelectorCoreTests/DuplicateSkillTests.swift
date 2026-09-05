@@ -7,7 +7,7 @@ final class SkillContentFingerprintTests: XCTestCase {
 
     override func setUpWithError() throws {
         workspace = FileManager.default.temporaryDirectory
-            .appending(path: "SkillContentFingerprintTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+            .appendingPathComponent("SkillContentFingerprintTests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: workspace, withIntermediateDirectories: true)
     }
 
@@ -16,19 +16,19 @@ final class SkillContentFingerprintTests: XCTestCase {
     }
 
     private func makeSkill(name: String, skillMDContent: String? = nil, extra: String? = nil) throws -> URL {
-        let directory = workspace.appending(path: name, directoryHint: .isDirectory)
+        let directory = workspace.appendingPathComponent(name, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let document = skillMDContent ?? "---\nname: \(name)\ndescription: demo\n---\n# \(name)\nbody\n"
         try document.write(
-            to: directory.appending(path: "SKILL.md"),
+            to: directory.appendingPathComponent("SKILL.md"),
             atomically: true,
             encoding: .utf8
         )
         if let extra {
-            let subdirectory = directory.appending(path: "scripts", directoryHint: .isDirectory)
+            let subdirectory = directory.appendingPathComponent("scripts", isDirectory: true)
             try FileManager.default.createDirectory(at: subdirectory, withIntermediateDirectories: true)
             try extra.write(
-                to: subdirectory.appending(path: "run.sh"),
+                to: subdirectory.appendingPathComponent("run.sh"),
                 atomically: true,
                 encoding: .utf8
             )
@@ -38,7 +38,7 @@ final class SkillContentFingerprintTests: XCTestCase {
 
     private func fingerprint(of directory: URL) throws -> String {
         try SkillContentFingerprint.compute(
-            entryFileURL: directory.appending(path: "SKILL.md")
+            entryFileURL: directory.appendingPathComponent("SKILL.md")
         )
     }
 
@@ -88,14 +88,14 @@ final class SkillContentFingerprintTests: XCTestCase {
         let before = try fingerprint(of: directory)
 
         try "notes".write(
-            to: directory.appending(path: "NOTES.txt"),
+            to: directory.appendingPathComponent("NOTES.txt"),
             atomically: true,
             encoding: .utf8
         )
-        let subdirectory = directory.appending(path: "docs", directoryHint: .isDirectory)
+        let subdirectory = directory.appendingPathComponent("docs", isDirectory: true)
         try FileManager.default.createDirectory(at: subdirectory, withIntermediateDirectories: true)
         try "extra documentation".write(
-            to: subdirectory.appending(path: "README.md"),
+            to: subdirectory.appendingPathComponent("README.md"),
             atomically: true,
             encoding: .utf8
         )
@@ -105,7 +105,7 @@ final class SkillContentFingerprintTests: XCTestCase {
 
     func testCopiesKeepByteLevelStabilityAcrossCopyOperations() throws {
         let original = try makeSkill(name: "original", extra: "echo one\necho two\n")
-        let copy = workspace.appending(path: "the-copy", directoryHint: .isDirectory)
+        let copy = workspace.appendingPathComponent("the-copy", isDirectory: true)
         try FileManager.default.copyItem(at: original, to: copy)
 
         XCTAssertEqual(

@@ -8,12 +8,12 @@ import XCTest
 final class McpFixtureScreenshotContentTests: XCTestCase {
     func testFixtureYieldsMCPListContent() throws {
         let base = FileManager.default.temporaryDirectory
-            .appending(path: "McpFixtureScreenshotContent-\(UUID().uuidString)")
+            .appendingPathComponent("McpFixtureScreenshotContent-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: base) }
-        let home = base.appending(path: "home")
+        let home = base.appendingPathComponent("home")
 
         // Same layouts as ScreenshotMode.writeMcpCodexToml / writeMcpClaudeJson.
-        let codexDir = home.appending(path: ".codex")
+        let codexDir = home.appendingPathComponent(".codex")
         try FileManager.default.createDirectory(at: codexDir, withIntermediateDirectories: true)
         try """
         [mcp_servers.context7]
@@ -22,7 +22,7 @@ final class McpFixtureScreenshotContentTests: XCTestCase {
 
         [mcp_servers.server-health]
         url = "https://example.com/mcp"
-        """.write(to: codexDir.appending(path: "config.toml"), atomically: true, encoding: .utf8)
+        """.write(to: codexDir.appendingPathComponent("config.toml"), atomically: true, encoding: .utf8)
         try """
         {
           "mcpServers": {
@@ -36,7 +36,7 @@ final class McpFixtureScreenshotContentTests: XCTestCase {
             }
           }
         }
-        """.write(to: home.appending(path: ".claude.json"), atomically: true, encoding: .utf8)
+        """.write(to: home.appendingPathComponent(".claude.json"), atomically: true, encoding: .utf8)
 
         let homeSnapshot = AuthorizedRootSnapshot(id: "home", url: home, kind: .home)
         let servers = McpScanner().scan(homeRoot: homeSnapshot, projectRoots: [])

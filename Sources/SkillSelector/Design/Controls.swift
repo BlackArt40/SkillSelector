@@ -343,10 +343,9 @@ struct ListSearchBar: View {
                 .accessibilityLabel(L10n.string(placeholderKey))
                 // Escape clears the term in every list's search bar (when
                 // the field is focused), matching NSSearchField behavior.
-                .onKeyPress(.escape) {
-                    guard !text.isEmpty else { return .ignored }
+                .onExitCommand {
+                    guard !text.isEmpty else { return }
                     text = ""
-                    return .handled
                 }
             if isIndexing {
                 // Background index in progress: search already works, hits

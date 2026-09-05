@@ -11,7 +11,7 @@ final class IncrementalScanTests: XCTestCase {
 
     override func setUpWithError() throws {
         workspace = FileManager.default.temporaryDirectory
-            .appending(path: "IncrementalScanTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+            .appendingPathComponent("IncrementalScanTests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: workspace, withIntermediateDirectories: true)
     }
 
@@ -25,10 +25,10 @@ final class IncrementalScanTests: XCTestCase {
 
     @discardableResult
     private func writeSkill(at relativePath: String, name: String, description: String) throws -> URL {
-        let directory = workspace.appending(path: relativePath, directoryHint: .isDirectory)
+        let directory = workspace.appendingPathComponent(relativePath, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try "---\nname: \(name)\ndescription: \(description)\n---\n# \(name)\n".write(
-            to: directory.appending(path: "SKILL.md"),
+            to: directory.appendingPathComponent("SKILL.md"),
             atomically: true,
             encoding: .utf8
         )
@@ -41,7 +41,7 @@ final class IncrementalScanTests: XCTestCase {
     private func ageEntry(at directory: URL) throws {
         try FileManager.default.setAttributes(
             [.modificationDate: Date(timeIntervalSinceNow: -600)],
-            ofItemAtPath: directory.appending(path: "SKILL.md").path
+            ofItemAtPath: directory.appendingPathComponent("SKILL.md").path
         )
     }
 
@@ -80,7 +80,7 @@ final class IncrementalScanTests: XCTestCase {
         let first = await SkillScanner().scan([projectRoot])
 
         try "---\nname: demo\ndescription: second\n---\n# demo\n".write(
-            to: directory.appending(path: "SKILL.md"),
+            to: directory.appendingPathComponent("SKILL.md"),
             atomically: true,
             encoding: .utf8
         )
@@ -101,7 +101,7 @@ final class IncrementalScanTests: XCTestCase {
         let firstFingerprint = try XCTUnwrap(first.installations.first?.contentFingerprint)
 
         try "echo hi".write(
-            to: directory.appending(path: "run.sh"),
+            to: directory.appendingPathComponent("run.sh"),
             atomically: true,
             encoding: .utf8
         )
@@ -143,7 +143,7 @@ final class IncrementalScanTests: XCTestCase {
         let first = await SkillScanner().scan([projectRoot])
         try index.apply(report: first)
         try FileManager.default.removeItem(
-            at: workspace.appending(path: ".codex/skills/demo", directoryHint: .isDirectory)
+            at: workspace.appendingPathComponent(".codex/skills/demo", isDirectory: true)
         )
 
         let second = await SkillScanner().scan([projectRoot], cache: SkillScanCache(entriesByPath: try index.cachedScanEntries()))

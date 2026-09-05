@@ -11,16 +11,16 @@ import XCTest
 final class RulesAppModelTests: XCTestCase {
     func testRefreshPopulatesRulesFilesAndLoadsDocuments() async throws {
         let home = FileManager.default.temporaryDirectory
-            .appending(path: "RulesAppModelHome-\(UUID().uuidString)", directoryHint: .isDirectory)
+            .appendingPathComponent("RulesAppModelHome-\(UUID().uuidString)", isDirectory: true)
         let project = FileManager.default.temporaryDirectory
-            .appending(path: "RulesAppModelProject-\(UUID().uuidString)", directoryHint: .isDirectory)
+            .appendingPathComponent("RulesAppModelProject-\(UUID().uuidString)", isDirectory: true)
         defer {
             try? FileManager.default.removeItem(at: home)
             try? FileManager.default.removeItem(at: project)
         }
-        try write("# Home Claude Rules\n\nKeep it local.\n", to: home.appending(path: ".claude/CLAUDE.md"))
-        try write("# Project Rules\n\nAlways test first.\n", to: project.appending(path: "CLAUDE.md"))
-        try write("# Cursor Rules\n", to: project.appending(path: ".cursorrules"))
+        try write("# Home Claude Rules\n\nKeep it local.\n", to: home.appendingPathComponent(".claude/CLAUDE.md"))
+        try write("# Project Rules\n\nAlways test first.\n", to: project.appendingPathComponent("CLAUDE.md"))
+        try write("# Cursor Rules\n", to: project.appendingPathComponent(".cursorrules"))
 
         let suite = "RulesAppModelTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
@@ -47,9 +47,9 @@ final class RulesAppModelTests: XCTestCase {
         await model.refresh()
 
         XCTAssertEqual(model.rules.files.count, 3)
-        let homeClaude = model.rules.files.first { $0.path == home.appending(path: ".claude/CLAUDE.md").path }
-        let projectClaude = model.rules.files.first { $0.path == project.appending(path: "CLAUDE.md").path }
-        let cursorRules = model.rules.files.first { $0.path == project.appending(path: ".cursorrules").path }
+        let homeClaude = model.rules.files.first { $0.path == home.appendingPathComponent(".claude/CLAUDE.md").path }
+        let projectClaude = model.rules.files.first { $0.path == project.appendingPathComponent("CLAUDE.md").path }
+        let cursorRules = model.rules.files.first { $0.path == project.appendingPathComponent(".cursorrules").path }
         XCTAssertNotNil(homeClaude)
         XCTAssertNotNil(projectClaude)
         XCTAssertNotNil(cursorRules)
@@ -75,15 +75,15 @@ final class RulesAppModelTests: XCTestCase {
     /// 两文件正文各有一行不同 → +1 −1；同一文件对自身 → 全 same。
     func testBodyDiffComparesSameNamedFiles() async throws {
         let home = FileManager.default.temporaryDirectory
-            .appending(path: "RulesDiffHome-\(UUID().uuidString)", directoryHint: .isDirectory)
+            .appendingPathComponent("RulesDiffHome-\(UUID().uuidString)", isDirectory: true)
         let project = FileManager.default.temporaryDirectory
-            .appending(path: "RulesDiffProject-\(UUID().uuidString)", directoryHint: .isDirectory)
+            .appendingPathComponent("RulesDiffProject-\(UUID().uuidString)", isDirectory: true)
         defer {
             try? FileManager.default.removeItem(at: home)
             try? FileManager.default.removeItem(at: project)
         }
-        try write("# Home Rules\n\nHome-only line.\n", to: home.appending(path: ".claude/CLAUDE.md"))
-        try write("# Home Rules\n\nProject-only line.\n", to: project.appending(path: "CLAUDE.md"))
+        try write("# Home Rules\n\nHome-only line.\n", to: home.appendingPathComponent(".claude/CLAUDE.md"))
+        try write("# Home Rules\n\nProject-only line.\n", to: project.appendingPathComponent("CLAUDE.md"))
 
         let suite = "RulesDiffTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
@@ -106,10 +106,10 @@ final class RulesAppModelTests: XCTestCase {
         await model.refresh()
 
         let homeClaude = try XCTUnwrap(
-            model.rules.files.first { $0.path == home.appending(path: ".claude/CLAUDE.md").path }
+            model.rules.files.first { $0.path == home.appendingPathComponent(".claude/CLAUDE.md").path }
         )
         let projectClaude = try XCTUnwrap(
-            model.rules.files.first { $0.path == project.appending(path: "CLAUDE.md").path }
+            model.rules.files.first { $0.path == project.appendingPathComponent("CLAUDE.md").path }
         )
 
         // Differing bodies → one added + one removed line.
@@ -134,14 +134,14 @@ final class RulesAppModelTests: XCTestCase {
     /// 需同步更新本测试（它锁定当前注册表行为，防止共享关联悄悄回退）。
     func testSharedProjectAgentsMdAssociatesEveryDeclaringAgent() async throws {
         let home = FileManager.default.temporaryDirectory
-            .appending(path: "RulesSharedHome-\(UUID().uuidString)", directoryHint: .isDirectory)
+            .appendingPathComponent("RulesSharedHome-\(UUID().uuidString)", isDirectory: true)
         let project = FileManager.default.temporaryDirectory
-            .appending(path: "RulesSharedProject-\(UUID().uuidString)", directoryHint: .isDirectory)
+            .appendingPathComponent("RulesSharedProject-\(UUID().uuidString)", isDirectory: true)
         defer {
             try? FileManager.default.removeItem(at: home)
             try? FileManager.default.removeItem(at: project)
         }
-        try write("# Shared project briefing\n", to: project.appending(path: "AGENTS.md"))
+        try write("# Shared project briefing\n", to: project.appendingPathComponent("AGENTS.md"))
 
         let suite = "RulesAppModelShared-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
@@ -167,7 +167,7 @@ final class RulesAppModelTests: XCTestCase {
 
         await model.refresh()
 
-        let agents = model.rules.files.first { $0.path == project.appending(path: "AGENTS.md").path }
+        let agents = model.rules.files.first { $0.path == project.appendingPathComponent("AGENTS.md").path }
         XCTAssertNotNil(agents, "the shared project AGENTS.md must be scanned")
         XCTAssertEqual(agents?.projectRootID, projectRoot.id)
         // A project-root AGENTS.md is read by every Agent that declares it —

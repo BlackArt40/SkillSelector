@@ -14,7 +14,7 @@ final class CircularSymlinkScanTests: XCTestCase {
 
     override func setUpWithError() throws {
         fixture = FileManager.default.temporaryDirectory
-            .appending(path: "CircularSymlinkScanTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+            .appendingPathComponent("CircularSymlinkScanTests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: fixture, withIntermediateDirectories: true)
     }
 
@@ -27,7 +27,7 @@ final class CircularSymlinkScanTests: XCTestCase {
     }
 
     private func makePackage(at relativePath: String) throws -> URL {
-        let directory = fixture.appending(path: relativePath, directoryHint: .isDirectory)
+        let directory = fixture.appendingPathComponent(relativePath, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
     }
@@ -35,7 +35,7 @@ final class CircularSymlinkScanTests: XCTestCase {
     private func writeSkill(at relativePath: String, name: String) throws {
         let directory = try makePackage(at: relativePath)
         try "---\nname: \(name)\ndescription: demo\n---\n# \(name)\n".write(
-            to: directory.appending(path: "SKILL.md"),
+            to: directory.appendingPathComponent("SKILL.md"),
             atomically: true,
             encoding: .utf8
         )
@@ -46,7 +46,7 @@ final class CircularSymlinkScanTests: XCTestCase {
     /// keeps scanning normally and the root stays available.
     func testSelfReferentialSkillDirectoryIsSkippedWithoutHanging() async throws {
         try writeSkill(at: ".cursor/skills/real", name: "real")
-        let loop = fixture.appending(path: ".cursor/skills/loop")
+        let loop = fixture.appendingPathComponent(".cursor/skills/loop")
         try FileManager.default.createSymbolicLink(at: loop, withDestinationURL: loop)
 
         let report = await SkillScanner().scan([projectRoot])
@@ -59,8 +59,8 @@ final class CircularSymlinkScanTests: XCTestCase {
     /// so neither becomes an installation while the real Skill is found.
     func testMutualSymlinkCycleIsSkippedWithoutHanging() async throws {
         try writeSkill(at: ".cursor/skills/real", name: "real")
-        let alpha = fixture.appending(path: ".cursor/skills/alpha")
-        let beta = fixture.appending(path: ".cursor/skills/beta")
+        let alpha = fixture.appendingPathComponent(".cursor/skills/alpha")
+        let beta = fixture.appendingPathComponent(".cursor/skills/beta")
         try FileManager.default.createSymbolicLink(at: alpha, withDestinationURL: beta)
         try FileManager.default.createSymbolicLink(at: beta, withDestinationURL: alpha)
 
@@ -77,11 +77,11 @@ final class CircularSymlinkScanTests: XCTestCase {
     func testSymlinkPointingBackAtAncestorDirectoryTerminatesWithOneInstallation() async throws {
         let skills = try makePackage(at: ".cursor/skills")
         try "---\nname: top\ndescription: container entry\n---\n# top\n".write(
-            to: skills.appending(path: "SKILL.md"),
+            to: skills.appendingPathComponent("SKILL.md"),
             atomically: true,
             encoding: .utf8
         )
-        let backlink = skills.appending(path: "backlink")
+        let backlink = skills.appendingPathComponent("backlink")
         try FileManager.default.createSymbolicLink(at: backlink, withDestinationURL: skills)
 
         let report = await SkillScanner().scan([projectRoot])
@@ -100,12 +100,12 @@ final class CircularSymlinkScanTests: XCTestCase {
     /// read.
     func testCircularEntrySymlinksSurfaceUnsafeDiagnosticsInsteadOfHanging() async throws {
         let selfLoop = try makePackage(at: ".cursor/skills/self-entry-loop")
-        let entry = selfLoop.appending(path: "SKILL.md")
+        let entry = selfLoop.appendingPathComponent("SKILL.md")
         try FileManager.default.createSymbolicLink(at: entry, withDestinationURL: entry)
 
         let mutual = try makePackage(at: ".cursor/skills/mutual-entry-loop")
-        let first = mutual.appending(path: "SKILL.md")
-        let second = mutual.appending(path: "OTHER.md")
+        let first = mutual.appendingPathComponent("SKILL.md")
+        let second = mutual.appendingPathComponent("OTHER.md")
         try FileManager.default.createSymbolicLink(at: first, withDestinationURL: second)
         try FileManager.default.createSymbolicLink(at: second, withDestinationURL: first)
 
