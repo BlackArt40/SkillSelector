@@ -1,31 +1,25 @@
 import Foundation
-import SwiftData
+import GRDB
 
-@Model
-public final class SkillRecord {
-    @Attribute(.unique) public var path: String
+/// Optional fields preserve compatibility notes from the SwiftData era:
+/// fields added later stay optional so older on-disk rows (had any future
+/// migration run) could decode — the fresh-state policy makes this moot for
+/// users, but the decoders stay total.
+public struct SkillRecord: Codable, FetchableRecord, PersistableRecord {
+    public static let databaseTableName = "skillRecords"
+
+    public var path: String
     public var resolvedTarget: String?
     public var name: String
     public var localDescription: String?
     public var modificationDate: Date?
-    // Optional preserves compatibility with stores created before source discovery existed.
     public var agentIDsByRootData: Data
     public var entryFilename: String
     public var parseDiagnosticsData: Data
-    // Optional so stores created before duplicate grouping open unchanged.
     public var contentFingerprint: String?
-    /// SimHash-64 of the body (`s1:`), nil for short bodies; optional so
-    /// stores created before near-duplicate grouping open unchanged.
     public var similarityFingerprint: String?
-    /// The content fingerprint of the duplicate group the user chose to
-    /// ignore; nil while the Skill participates in duplicate grouping
-    /// normally. Persisted with SwiftData, so the choice survives restarts.
     public var ignoredDuplicateGroup: String?
-    /// The near-duplicate cluster key the user chose to ignore; nil while
-    /// the Skill participates in near-duplicate grouping normally.
     public var ignoredNearDuplicateGroup: String?
-    // JSON-encoded ScannedSkillCacheEntry for incremental scans; nil on
-    // records never scanned fresh (or whose scan could not be trusted).
     public var scanStateData: Data?
 
     public init(

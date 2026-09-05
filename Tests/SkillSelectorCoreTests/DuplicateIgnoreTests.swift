@@ -1,12 +1,12 @@
 import Foundation
-import SwiftData
+import GRDB
 import XCTest
 @testable import SkillSelector
 @testable import SkillSelectorCore
 
 /// Duplicate-group ignore (spec §1.10, AC-6/AC-7): marking a group as
 /// ignored removes it from the duplicates view, and the choice is persisted
-/// with SwiftData so it survives restarts.
+/// with GRDB so it survives restarts.
 @MainActor
 final class DuplicateIgnorePersistenceTests: XCTestCase {
     /// Two content-identical Skills under one project root.
@@ -28,18 +28,13 @@ final class DuplicateIgnorePersistenceTests: XCTestCase {
     }
 
     private func makeIndex(storeURL: URL? = nil) throws -> SkillIndex {
-        let configuration: ModelConfiguration
+        let database: DatabaseQueue
         if let storeURL {
-            configuration = ModelConfiguration(url: storeURL)
+            database = try SkillStore.open(url: storeURL)
         } else {
-            configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+            database = try SkillStore.inMemory()
         }
-        let container = try ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: configuration
-        )
-        return SkillIndex(container: container)
+        return SkillIndex(database: database)
     }
 
     private func twinFingerprint(_ report: ScanReport) throws -> String {
@@ -166,19 +161,14 @@ final class FingerprintVersionMigrationTests: XCTestCase {
             encoding: .utf8
         )
 
-        let container = try ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
-        let index = SkillIndex(container: container)
+        let database = try SkillStore.inMemory()
+        let index = SkillIndex(database: database)
         let root = ScanRoot.project(id: "p", url: base, registry: BuiltInAgentRegistry.make())
         try index.apply(report: await SkillScanner(computesContentFingerprints: true).scan([root]))
 
         // Rewrite the cache entry with an old-style (pre-v2) fingerprint.
-        let context = ModelContext(container)
-        let record = try XCTUnwrap(
-            try context.fetch(FetchDescriptor<SkillRecord>()).first
+        var record = try XCTUnwrap(
+            try database.read { try SkillRecord.fetchAll($0) }.first
         )
         let data = try XCTUnwrap(record.scanStateData)
         let entry = try JSONDecoder().decode(ScannedSkillCacheEntry.self, from: data)
@@ -188,7 +178,7 @@ final class FingerprintVersionMigrationTests: XCTestCase {
             contentFingerprint: "5f5c6a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a",
             entryModificationDate: entry.entryModificationDate
         ))
-        try context.save()
+        try database.write { try record.upsert($0) }
 
         // The stale entry is excluded from the incremental cache…
         XCTAssertTrue(try index.cachedScanEntries().isEmpty)
@@ -218,12 +208,8 @@ final class FingerprintVersionMigrationTests: XCTestCase {
             encoding: .utf8
         )
 
-        let container = try ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
-        let index = SkillIndex(container: container)
+        let database = try SkillStore.inMemory()
+        let index = SkillIndex(database: database)
         let root = ScanRoot.project(id: "p", url: base, registry: BuiltInAgentRegistry.make())
         try index.apply(report: await SkillScanner(computesContentFingerprints: true).scan([root]))
 

@@ -1,5 +1,5 @@
 import Foundation
-import SwiftData
+import GRDB
 import XCTest
 @testable import SkillSelector
 @testable import SkillSelectorCore
@@ -21,13 +21,8 @@ final class LocalizationDiagnosticsTests: XCTestCase {
     }
 
     func testUnavailableRootDropsIndexedRecords() throws {
-        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: configuration
-        )
-        let index = SkillIndex(container: container)
+        let database = try SkillStore.inMemory()
+        let index = SkillIndex(database: database)
         let skill = ScannedSkill(
             installation: SkillInstallation(path: URL(fileURLWithPath: "/tmp/demo")),
             document: ParsedSkillDocument(name: "demo", description: "Demo"),

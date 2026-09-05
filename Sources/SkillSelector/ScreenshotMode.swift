@@ -4,7 +4,7 @@
 #if DEBUG
 import AppKit
 import SkillSelectorCore
-import SwiftData
+import GRDB
 import SwiftUI
 
 /// `--screenshots <dir> [--screenshot-language en|zh-Hans]`: renders every
@@ -177,19 +177,14 @@ enum ScreenshotMode {
 
     private static func makeModel() throws -> AppModel {
         let fixtures = try FixtureBuilder.build()
-        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: configuration
-        )
+        let database = try SkillStore.inMemory()
         let bookmarks = BookmarkStore(
-            container: container,
+            database: database,
             adapter: ScreenshotBookmarkAdapter()
         )
         try bookmarks.save(url: fixtures.home, kind: .home)
         try bookmarks.save(url: fixtures.project, kind: .project)
-        let index = SkillIndex(container: container)
+        let index = SkillIndex(database: database)
         let registry = BuiltInAgentRegistry.make()
         let refresher = IndexRefresher(
             registry: registry,

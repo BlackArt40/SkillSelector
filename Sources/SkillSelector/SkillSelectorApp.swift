@@ -1,14 +1,14 @@
 import AppKit
 import OSLog
 import SkillSelectorCore
-import SwiftData
+import GRDB
 import SwiftUI
 import Darwin
 
 private let logger = Logger(subsystem: "com.SkillSelector", category: "App")
 
 /// Holds a flock on a lock file for the whole process lifetime. Two
-/// SkillSelector instances would otherwise open the same SwiftData store
+/// SkillSelector instances would otherwise open the same index database
 /// concurrently — SQLite WAL contention made the second process crash on
 /// launch (the "flash-exit after restarting the terminal app" report).
 private final class SingleInstanceLock {
@@ -113,12 +113,12 @@ struct SkillSelectorApp: App {
     /// container cannot be constructed is the model nil, and the UI shows
     /// a recovery screen instead of terminating.
     private static func makeModel() -> AppModel? {
-        guard let container = Self.makeContainer() else {
-            logger.fault("Unable to initialize any ModelContainer (persistent and in-memory both failed)")
+        guard let database = Self.makeDatabase() else {
+            logger.fault("Unable to initialize any index database (persistent and in-memory both failed)")
             return nil
         }
-        let bookmarks = BookmarkStore(container: container)
-        let index = SkillIndex(container: container)
+        let bookmarks = BookmarkStore(database: database)
+        let index = SkillIndex(database: database)
         let registry = BuiltInAgentRegistry.make()
         let refresher = IndexRefresher(
             registry: registry,
@@ -137,86 +137,23 @@ struct SkillSelectorApp: App {
         )
     }
 
-    private static func makeContainer() -> ModelContainer? {
-        migrateLegacyStoreIfNeeded()
+    private static func makeDatabase() -> DatabaseQueue? {
         do {
-            // App-scoped store: the SwiftData default (a shared
-            // "default.store" in ~/Library/Application Support) collides
-            // with every other SwiftData app on the machine. A dedicated
-            // per-app directory keeps this app's store private.
-            let storeURL = Self.storeURL()
-            let configuration = ModelConfiguration(url: storeURL)
-            return try ModelContainer(
-                for: SkillRecord.self,
-                AuthorizedRootRecord.self,
-                configurations: configuration
-            )
+            // App-scoped store: 同目录（Application Support/SkillSelector/），
+            // SwiftData 时代的 SkillSelector.store 保留不动，新库用独立文件名。
+            return try SkillStore.open(url: Self.storeURL())
         } catch {
-            logger.fault("Persistent store initialization failed, falling back to in-memory: \(error.localizedDescription)")
+            logger.fault("Persistent database initialization failed, falling back to in-memory: \(error.localizedDescription)")
         }
-        return try? ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
+        return try? SkillStore.inMemory()
     }
 
-    /// `~/Library/Application Support/SkillSelector/SkillSelector.store` —
-    /// never the shared SwiftData default location.
     private static func storeURL() -> URL {
         let base = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("SkillSelector", isDirectory: true)
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
-        return base.appendingPathComponent("SkillSelector.store")
-    }
-
-    /// One-time upgrade migration: v1.8.0-and-earlier builds used the
-    /// SwiftData framework default (`~/Library/Application Support/
-    /// default.store`), a name shared with every other SwiftData app on
-    /// the machine. When the app-scoped store does not exist yet and a
-    /// legacy store carrying this app's schema is present, its files are
-    /// copied into the app-scoped location so upgraders keep their records
-    /// (authorized roots, ignore flags, scan cache) instead of silently
-    /// losing them and re-authorizing every root.
-    ///
-    /// Files are copied, never moved — the shared default name may belong
-    /// to another app, so the original is left untouched. The copy is
-    /// gated on a byte-level schema fingerprint (SwiftData's SQLite table
-    /// name for `SkillRecord`); a foreign store is skipped, and a copy
-    /// that still fails to open degrades through the existing in-memory
-    /// fallback.
-    private static func migrateLegacyStoreIfNeeded() {
-        migrateLegacyStoreIfNeeded(
-            applicationSupport: FileManager.default
-                .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0],
-            fileManager: .default
-        )
-    }
-
-    /// Testable core. `applicationSupport` holds `default.store{,-wal,-shm}`;
-    /// the migration fills the sibling `SkillSelector/` directory with
-    /// `SkillSelector.store{,-wal,-shm}` when that store is absent.
-    static func migrateLegacyStoreIfNeeded(
-        applicationSupport: URL,
-        fileManager: FileManager = .default
-    ) {
-        let targetDirectory = applicationSupport
-            .appendingPathComponent("SkillSelector", isDirectory: true)
-        let target = targetDirectory.appendingPathComponent("SkillSelector.store")
-        guard !fileManager.fileExists(atPath: target.path) else { return }
-        let legacy = applicationSupport.appendingPathComponent("default.store")
-        guard fileManager.fileExists(atPath: legacy.path),
-              (try? Data(contentsOf: legacy))?
-                  .firstRange(of: Data("SKILLRECORD".utf8)) != nil else { return }
-        try? fileManager.createDirectory(at: targetDirectory, withIntermediateDirectories: true)
-        for suffix in ["", "-wal", "-shm"] {
-            let source = applicationSupport.appendingPathComponent("default.store\(suffix)")
-            guard fileManager.fileExists(atPath: source.path) else { continue }
-            let destination = targetDirectory.appendingPathComponent("SkillSelector.store\(suffix)")
-            try? fileManager.removeItem(at: destination)
-            try? fileManager.copyItem(at: source, to: destination)
-        }
+        return base.appendingPathComponent("index.sqlite")
     }
 
     var body: some Scene {

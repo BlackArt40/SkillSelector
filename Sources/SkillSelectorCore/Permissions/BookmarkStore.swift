@@ -1,5 +1,5 @@
 import Foundation
-import SwiftData
+import GRDB
 
 public struct BookmarkResolution: Hashable, Sendable {
     public let url: URL
@@ -117,16 +117,16 @@ public enum BookmarkStoreError: Error, Equatable {
 }
 
 public final class BookmarkStore {
-    private let context: ModelContext
+    private let database: DatabaseQueue
     private let adapter: any BookmarkDataCreating
     private let accessLock = NSLock()
     private var activeAccesses: [String: [UUID: WeakAccessLease]] = [:]
 
     public init(
-        container: ModelContainer,
+        database: DatabaseQueue,
         adapter: any BookmarkDataCreating = SecurityScopedBookmarkAdapter()
     ) {
-        context = ModelContext(container)
+        self.database = database
         self.adapter = adapter
     }
 
@@ -143,22 +143,24 @@ public final class BookmarkStore {
             url = resolved
         }
         let data = try adapter.createBookmarkData(for: url)
-        let records = try context.fetch(FetchDescriptor<AuthorizedRootRecord>())
+        let records = try database.read {
+            try AuthorizedRootRecord.filter(Column("path") == url.path).fetchAll($0)
+        }
         let record: AuthorizedRootRecord
-        if let existing = records.first(where: { $0.path == url.path }) {
+        if var existing = records.first {
             existing.kindRawValue = kind.rawValue
             existing.bookmarkData = data
             record = existing
+            try database.write { try record.upsert($0) }
         } else {
             record = AuthorizedRootRecord(path: url.path, kind: kind, bookmarkData: data)
-            context.insert(record)
+            try database.write { try record.upsert($0) }
         }
-        try context.save()
         return AuthorizedRootSnapshot(id: record.id, url: url, kind: kind)
     }
 
     public func resolve(id: String) throws -> AuthorizedRootAccess {
-        guard let record = try record(id: id) else {
+        guard var record = try record(id: id) else {
             throw BookmarkStoreError.rootNotFound(id)
         }
         guard let kind = AuthorizedRootKind(rawValue: record.kindRawValue) else {
@@ -176,18 +178,20 @@ public final class BookmarkStore {
                 for: URL(fileURLWithPath: record.path)
             )
             record.bookmarkData = rebuilt
-            try context.save()
+            try database.write { try record.upsert($0) }
             resolution = try adapter.resolveBookmarkData(rebuilt)
         }
         let url = resolution.url.standardizedFileURL
         if resolution.isStale {
-            let records = try context.fetch(FetchDescriptor<AuthorizedRootRecord>())
-            if records.contains(where: { $0.id != record.id && $0.path == url.path }) {
+            let records = try database.read {
+                try AuthorizedRootRecord.filter(Column("path") == url.path).fetchAll($0)
+            }
+            if records.contains(where: { $0.id != record.id }) {
                 throw BookmarkStoreError.duplicateRootPath(url.path)
             }
             record.bookmarkData = try adapter.createBookmarkData(for: url)
             record.path = url.path
-            try context.save()
+            try database.write { try record.upsert($0) }
         }
 
         let didStart = adapter.startAccessing(url)
@@ -208,10 +212,9 @@ public final class BookmarkStore {
     }
 
     public func roots() throws -> [AuthorizedRootSnapshot] {
-        let descriptor = FetchDescriptor<AuthorizedRootRecord>(
-            sortBy: [SortDescriptor(\.path)]
-        )
-        return try context.fetch(descriptor).map { record in
+        try database.read {
+            try AuthorizedRootRecord.order(Column("path")).fetchAll($0)
+        }.map { record in
             guard let kind = AuthorizedRootKind(rawValue: record.kindRawValue) else {
                 throw BookmarkStoreError.invalidRootKind(record.kindRawValue)
             }
@@ -224,20 +227,20 @@ public final class BookmarkStore {
     }
 
     public func revoke(id: String) throws {
-        guard let record = try record(id: id) else {
+        guard try record(id: id) != nil else {
             throw BookmarkStoreError.rootNotFound(id)
         }
         accessLock.lock()
         let leases = activeAccesses.removeValue(forKey: id)?.values.compactMap(\.value) ?? []
         accessLock.unlock()
         leases.forEach { $0.close() }
-        context.delete(record)
-        try context.save()
+        try database.write { _ = try AuthorizedRootRecord.deleteOne($0, key: id) }
     }
 
     private func record(id: String) throws -> AuthorizedRootRecord? {
-        try context.fetch(FetchDescriptor<AuthorizedRootRecord>())
-            .first { $0.id == id }
+        try database.read {
+            try AuthorizedRootRecord.filter(Column("id") == id).fetchOne($0)
+        }
     }
 
 

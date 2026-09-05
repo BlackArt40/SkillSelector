@@ -1,9 +1,10 @@
 import Foundation
-import SwiftData
+import GRDB
 
-@Model
-public final class AuthorizedRootRecord {
-    @Attribute(.unique) public var id: String
+public struct AuthorizedRootRecord: Codable, FetchableRecord, PersistableRecord {
+    public static let databaseTableName = "authorizedRootRecords"
+
+    public var id: String
     public var path: String
     public var kindRawValue: String
     public var bookmarkData: Data

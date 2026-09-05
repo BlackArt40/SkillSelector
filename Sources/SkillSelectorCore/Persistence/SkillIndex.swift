@@ -1,5 +1,5 @@
 import Foundation
-import SwiftData
+import GRDB
 
 public enum SkillIndexError: Error, Equatable {
     case skillNotFound(path: String)
@@ -8,52 +8,49 @@ public enum SkillIndexError: Error, Equatable {
 }
 
 public final class SkillIndex {
-    private let context: ModelContext
+    private let database: DatabaseQueue
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
-    public init(container: ModelContainer) {
-        context = ModelContext(container)
+    public init(database: DatabaseQueue) {
+        self.database = database
     }
 
     public func apply(report: ScanReport) throws {
-        do {
-            var records = try recordsByPath()
-
-            // Decode each record's root associations once, not once per
-            // available root × record (audit R6: the old code was
-            // O(roots × records) JSON decodes on the main thread).
+        try database.write { db in
+            var records = try self.recordsByPath(db)
             var associationsByPath: [String: [String: Set<String>]] = [:]
-            func associations(for record: SkillRecord) throws -> [String: Set<String>] {
-                if let cached = associationsByPath[record.path] { return cached }
-                let value = try agentIDsByRoot(for: record)
-                associationsByPath[record.path] = value
+
+            func associations(for path: String) throws -> [String: Set<String>] {
+                if let cached = associationsByPath[path] { return cached }
+                guard let record = records[path] else { return [:] }
+                let value = try self.agentIDsByRoot(record)
+                associationsByPath[path] = value
                 return value
             }
-            func setAssociations(_ value: [String: Set<String>], for record: SkillRecord) throws {
-                associationsByPath[record.path] = value
-                record.agentIDsByRootData = try encode(value, path: record.path)
+            func setAssociations(_ value: [String: Set<String>], for path: String) throws {
+                associationsByPath[path] = value
+                guard var record = records[path] else { return }
+                record.agentIDsByRootData = try self.encode(value, path: path)
+                records[path] = record
+                try record.upsert(db)
             }
-            func drop(_ record: SkillRecord) {
-                context.delete(record)
-                records[record.path] = nil
-                associationsByPath[record.path] = nil
+            func drop(_ path: String) throws {
+                guard records[path] != nil else { return }
+                _ = try SkillRecord.deleteOne(db, key: path)
+                records[path] = nil
+                associationsByPath[path] = nil
             }
 
-            // Roots that are no longer accessible (missing directory, revoked
-            // authorization) drop their associated records entirely: the index
-            // only ever reflects Skills that exist on disk right now.
+            // Roots that are no longer accessible drop their associated
+            // records entirely (semantics unchanged from the SwiftData era).
             for root in report.roots {
                 guard case .unavailable = root.availability else { continue }
-                for record in Array(records.values) {
-                    var associations = try associations(for: record)
-                    guard associations[root.id] != nil else { continue }
-                    associations[root.id] = nil
-                    if associations.isEmpty {
-                        drop(record)
-                    } else {
-                        try setAssociations(associations, for: record)
-                    }
+                for path in Array(records.keys) {
+                    var ass = try associations(for: path)
+                    guard ass[root.id] != nil else { continue }
+                    ass[root.id] = nil
+                    if ass.isEmpty { try drop(path) } else { try setAssociations(ass, for: path) }
                 }
             }
 
@@ -63,24 +60,17 @@ public final class SkillIndex {
                         .filter { $0.rootIDs.contains(root.id) }
                         .map { $0.path.standardizedFileURL.path }
                 )
-                for record in Array(records.values) {
-                    var associations = try associations(for: record)
-                    guard associations[root.id] != nil,
-                          !reportedPaths.contains(record.path) else {
-                        continue
-                    }
-                    associations[root.id] = nil
-                    if associations.isEmpty {
-                        drop(record)
-                    } else {
-                        try setAssociations(associations, for: record)
-                    }
+                for path in Array(records.keys) {
+                    var ass = try associations(for: path)
+                    guard ass[root.id] != nil, !reportedPaths.contains(path) else { continue }
+                    ass[root.id] = nil
+                    if ass.isEmpty { try drop(path) } else { try setAssociations(ass, for: path) }
                 }
             }
 
             for scanned in report.installations {
                 let path = scanned.path.standardizedFileURL.path
-                let record: SkillRecord
+                var record: SkillRecord
                 if let existing = records[path] {
                     record = existing
                 } else {
@@ -89,167 +79,148 @@ public final class SkillIndex {
                         name: resolvedName(for: scanned),
                         entryFilename: scanned.entryFilename
                     )
-                    context.insert(record)
                     records[path] = record
                     associationsByPath[path] = [:]
                 }
-                try update(record, from: scanned)
-                // update() rewrites agentIDsByRootData; keep the cache in sync
-                // so later disassociation passes read the merged state.
+                try update(&record, from: scanned)
+                records[path] = record
+                try record.upsert(db)
                 if let fresh = try? decoder.decode([String: Set<String>].self, from: record.agentIDsByRootData) {
                     associationsByPath[path] = fresh
                 }
             }
-
-            try context.save()
-        } catch {
-            context.rollback()
-            throw error
+            // 单事务：write 闭包抛错自动回滚，等价于原 context.rollback()
         }
     }
 
     public func skills() throws -> [SkillSnapshot] {
-        let descriptor = FetchDescriptor<SkillRecord>(
-            sortBy: [SortDescriptor(\.path)]
-        )
-        return try context.fetch(descriptor).map { try snapshot($0) }
-    }
-
-    /// The persisted incremental-scan cache: last fresh scan state and its
-    /// derived data, by installation path. Records without a trustworthy
-    /// state are absent — they simply rescan.
-    ///
-    /// Entries whose fingerprint was produced by an older algorithm (the
-    /// pre-v2 directory-tree hash) are excluded: a cache hit would keep
-    /// serving the stale grouping forever. They rescan once and the new
-    /// body-only fingerprint replaces them.
-    public func cachedScanEntries() throws -> [String: ScannedSkillCacheEntry] {
-        var entries: [String: ScannedSkillCacheEntry] = [:]
-        for record in try context.fetch(FetchDescriptor<SkillRecord>()) {
-            guard let data = record.scanStateData,
-                  let entry = try? decoder.decode(ScannedSkillCacheEntry.self, from: data) else {
-                continue
-            }
-            if let fingerprint = entry.contentFingerprint,
-               !SkillContentFingerprint.isCurrentVersion(fingerprint) {
-                continue
-            }
-            entries[record.path] = entry
+        try database.read { db in
+            try SkillRecord.order(Column("path")).fetchAll(db).map { try snapshot($0) }
         }
-        return entries
     }
 
-    /// Writes fingerprints deferred from the scan (computed in the
-    /// background after the list was shown) into their records and their
-    /// incremental-scan cache entries, so the next cache hit serves the
-    /// fingerprint without re-reading the files. Paths without a record are
-    /// skipped — the Skill is gone and the next scan drops it anyway.
-    /// Returns how many records were updated.
+    public func cachedScanEntries() throws -> [String: ScannedSkillCacheEntry] {
+        try database.read { db in
+            var entries: [String: ScannedSkillCacheEntry] = [:]
+            for record in try SkillRecord.fetchAll(db) {
+                guard let data = record.scanStateData,
+                      let entry = try? decoder.decode(ScannedSkillCacheEntry.self, from: data) else { continue }
+                if let fingerprint = entry.contentFingerprint,
+                   !SkillContentFingerprint.isCurrentVersion(fingerprint) { continue }
+                entries[record.path] = entry
+            }
+            return entries
+        }
+    }
+
     @discardableResult
     public func backfillContentFingerprints(_ fingerprintsByPath: [String: String]) throws -> Int {
-        try backfillFingerprints(
-            contentByPath: fingerprintsByPath,
-            similarityByPath: [:]
-        )
+        try backfillFingerprints(contentByPath: fingerprintsByPath, similarityByPath: [:])
     }
 
-    /// Combined write-back for both deferred fingerprints (exact SHA-256
-    /// and similarity SimHash). A record is updated when either value
-    /// changes; its cache entry is rewritten so cache hits keep serving
-    /// both without re-reading the file.
     @discardableResult
     public func backfillFingerprints(
         contentByPath: [String: String],
         similarityByPath: [String: String]
     ) throws -> Int {
         guard !contentByPath.isEmpty || !similarityByPath.isEmpty else { return 0 }
-        do {
-            let records = try recordsByPath()
+        try database.write { db in
             var updated = 0
+            var records = try self.recordsByPath(db)
             for (path, content) in contentByPath {
-                guard let record = records[path] else { continue }
+                guard var record = records[path] else { continue }
                 let similarity = similarityByPath[path]
-                let contentChanged = record.contentFingerprint != content
-                let similarityChanged = record.similarityFingerprint != similarity
-                guard contentChanged || similarityChanged else { continue }
-                if contentChanged {
-                    record.contentFingerprint = content
-                }
-                if similarityChanged {
-                    record.similarityFingerprint = similarity
-                }
-                if let data = record.scanStateData,
-                   let entry = try? decoder.decode(ScannedSkillCacheEntry.self, from: data) {
-                    record.scanStateData = try encoder.encode(ScannedSkillCacheEntry(
-                        state: entry.state,
-                        document: entry.document,
-                        contentFingerprint: content,
-                        similarityFingerprint: similarity ?? entry.similarityFingerprint,
-                        entryModificationDate: entry.entryModificationDate
-                    ))
-                }
+                guard record.contentFingerprint != content || record.similarityFingerprint != similarity else { continue }
+                if record.contentFingerprint != content { record.contentFingerprint = content }
+                if record.similarityFingerprint != similarity { record.similarityFingerprint = similarity }
+                record.scanStateData = try self.cacheEntryData(record)
+                records[path] = record
+                try record.upsert(db)
                 updated += 1
             }
-            // Similarity-only backfill (content fingerprint was already
-            // current): still write the record and its cache entry.
             for (path, similarity) in similarityByPath where contentByPath[path] == nil {
-                guard let record = records[path],
-                      record.similarityFingerprint != similarity else { continue }
+                guard var record = records[path], record.similarityFingerprint != similarity else { continue }
                 record.similarityFingerprint = similarity
-                if let data = record.scanStateData,
-                   let entry = try? decoder.decode(ScannedSkillCacheEntry.self, from: data) {
-                    record.scanStateData = try encoder.encode(ScannedSkillCacheEntry(
-                        state: entry.state,
-                        document: entry.document,
-                        contentFingerprint: entry.contentFingerprint,
-                        similarityFingerprint: similarity,
-                        entryModificationDate: entry.entryModificationDate
-                    ))
-                }
+                record.scanStateData = try self.cacheEntryData(record)
+                records[path] = record
+                try record.upsert(db)
                 updated += 1
-            }
-            if updated > 0 {
-                try context.save()
             }
             return updated
-        } catch {
-            context.rollback()
-            throw error
         }
+    }
+
+    @discardableResult
+    public func setIgnoredDuplicateGroup(_ fingerprint: String, ignored: Bool) throws -> Int {
+        try database.write { db in
+            var updated = 0
+            var records = try SkillRecord.fetchAll(db)
+            for index in records.indices where records[index].contentFingerprint == fingerprint {
+                let target = ignored ? fingerprint : nil
+                guard records[index].ignoredDuplicateGroup != target else { continue }
+                records[index].ignoredDuplicateGroup = target
+                try records[index].upsert(db)
+                updated += 1
+            }
+            return updated
+        }
+    }
+
+    @discardableResult
+    public func setIgnoredNearDuplicateGroup(
+        paths: [String],
+        key: String,
+        ignored: Bool
+    ) throws -> Int {
+        try database.write { db in
+            var updated = 0
+            var records = try self.recordsByPath(db)
+            for path in paths {
+                guard var record = records[path] else { continue }
+                let target = ignored ? key : nil
+                guard record.ignoredNearDuplicateGroup != target else { continue }
+                record.ignoredNearDuplicateGroup = target
+                records[path] = record
+                try record.upsert(db)
+                updated += 1
+            }
+            return updated
+        }
+    }
+
+    // MARK: - Private helpers
+
+    /// Loads all records once, keyed by path. The old store's dedup note
+    /// (cc4bc7b) no longer applies: the primary key on `path` makes duplicate
+    /// rows impossible in a GRDB store, and the fresh-state policy means no
+    /// legacy duplicated store is ever opened.
+    private func recordsByPath(_ db: Database) throws -> [String: SkillRecord] {
+        let records = try SkillRecord.order(Column("path")).fetchAll(db)
+        return Dictionary(records.map { ($0.path, $0) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    private func cacheEntryData(_ record: SkillRecord) throws -> Data? {
+        guard let data = record.scanStateData,
+              let entry = try? decoder.decode(ScannedSkillCacheEntry.self, from: data) else { return record.scanStateData }
+        return try encoder.encode(ScannedSkillCacheEntry(
+            state: entry.state,
+            document: entry.document,
+            contentFingerprint: record.contentFingerprint,
+            similarityFingerprint: record.similarityFingerprint,
+            entryModificationDate: entry.entryModificationDate
+        ))
     }
 
     private func resolvedName(for scanned: ScannedSkill) -> String {
-        scanned.document.name
-            ?? scanned.document.title
-            ?? scanned.path.lastPathComponent
+        scanned.document.name ?? scanned.document.title ?? scanned.path.lastPathComponent
     }
 
-    private func recordsByPath() throws -> [String: SkillRecord] {
-        let records = try context.fetch(FetchDescriptor<SkillRecord>())
-        var byPath: [String: SkillRecord] = [:]
-        for record in records {
-            if let existing = byPath[record.path] {
-                // SwiftData's unique constraint is non-deterministic on
-                // conflicting inserts (cc4bc7b). A store that already holds
-                // duplicate rows must not crash on Dictionary(uniqueKeysWithValues:)
-                // and no longer needs them: keep the first, drop the rest.
-                // apply() saves below, persisting the cleanup.
-                if existing !== record {
-                    context.delete(record)
-                }
-            } else {
-                byPath[record.path] = record
-            }
-        }
-        return byPath
-    }
-
-    private func update(_ record: SkillRecord, from scanned: ScannedSkill) throws {
+    private func update(_ record: inout SkillRecord, from scanned: ScannedSkill) throws {
         record.resolvedTarget = scanned.resolvedTarget?.standardizedFileURL.path
         record.name = resolvedName(for: scanned)
         record.localDescription = scanned.document.description
         record.modificationDate = scanned.entryModificationDate
-        var associations = try agentIDsByRoot(for: record)
+        var associations = try agentIDsByRoot(record)
         for (rootID, agentIDs) in scanned.agentIDsByRoot {
             associations[rootID] = agentIDs
         }
@@ -258,9 +229,6 @@ public final class SkillIndex {
         record.parseDiagnosticsData = (try? encoder.encode(scanned.document.issues)) ?? Data()
         record.contentFingerprint = scanned.contentFingerprint
         record.similarityFingerprint = scanned.similarityFingerprint
-        // Fresh scans persist their stat state for the next incremental
-        // pass; cache hits keep what they have; diagnostic candidates have
-        // no trustworthy state and drop any stale one.
         if scanned.reusedCachedScan {
             // unchanged
         } else if let state = scanned.scanState {
@@ -277,16 +245,14 @@ public final class SkillIndex {
     }
 
     private func snapshot(_ record: SkillRecord) throws -> SkillSnapshot {
-        let associations = try agentIDsByRoot(for: record)
+        let associations = try agentIDsByRoot(record)
         return SkillSnapshot(
             path: record.path,
             resolvedTarget: record.resolvedTarget,
             name: record.name,
             localDescription: record.localDescription,
             modificationDate: record.modificationDate,
-            agentIDs: associations.values.reduce(into: Set<String>()) { result, agentIDs in
-                result.formUnion(agentIDs)
-            }.sorted(),
+            agentIDs: associations.values.reduce(into: Set<String>()) { $0.formUnion($1) }.sorted(),
             rootIDs: associations.keys.sorted(),
             entryFilename: record.entryFilename,
             parseDiagnostics: (try? decoder.decode([ParseIssue].self, from: record.parseDiagnosticsData)) ?? [],
@@ -297,63 +263,7 @@ public final class SkillIndex {
         )
     }
 
-    /// Marks every Skill sharing `fingerprint` as ignored for duplicate
-    /// grouping (or, with `ignored: false`, lifts the ignore). Persisted
-    /// with the records, so the choice survives restarts. Returns how many
-    /// records were updated.
-    @discardableResult
-    public func setIgnoredDuplicateGroup(_ fingerprint: String, ignored: Bool) throws -> Int {
-        do {
-            var updated = 0
-            for record in try context.fetch(FetchDescriptor<SkillRecord>())
-            where record.contentFingerprint == fingerprint {
-                let target = ignored ? fingerprint : nil
-                guard record.ignoredDuplicateGroup != target else { continue }
-                record.ignoredDuplicateGroup = target
-                updated += 1
-            }
-            if updated > 0 {
-                try context.save()
-            }
-            return updated
-        } catch {
-            context.rollback()
-            throw error
-        }
-    }
-
-    /// Marks (or unmarks) the Skills of one near-duplicate cluster as
-    /// ignored. The cluster key derives from the member paths, so the
-    /// caller passes them explicitly; a membership change leaves the old
-    /// key stale and the group reappears until ignored again. Returns how
-    /// many records were updated.
-    @discardableResult
-    public func setIgnoredNearDuplicateGroup(
-        paths: [String],
-        key: String,
-        ignored: Bool
-    ) throws -> Int {
-        do {
-            let records = try recordsByPath()
-            var updated = 0
-            for path in paths {
-                guard let record = records[path] else { continue }
-                let target = ignored ? key : nil
-                guard record.ignoredNearDuplicateGroup != target else { continue }
-                record.ignoredNearDuplicateGroup = target
-                updated += 1
-            }
-            if updated > 0 {
-                try context.save()
-            }
-            return updated
-        } catch {
-            context.rollback()
-            throw error
-        }
-    }
-
-    private func agentIDsByRoot(for record: SkillRecord) throws -> [String: Set<String>] {
+    private func agentIDsByRoot(_ record: SkillRecord) throws -> [String: Set<String>] {
         do {
             return try decoder.decode([String: Set<String>].self, from: record.agentIDsByRootData)
         } catch {

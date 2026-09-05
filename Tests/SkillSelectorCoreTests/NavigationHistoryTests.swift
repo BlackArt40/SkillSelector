@@ -1,5 +1,5 @@
 import Foundation
-import SwiftData
+import GRDB
 import XCTest
 @testable import SkillSelector
 @testable import SkillSelectorCore
@@ -139,14 +139,9 @@ final class NavigationHistoryTests: XCTestCase {
         if defaults == nil {
             isolatedDefaults.removePersistentDomain(forName: suite)
         }
-        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: configuration
-        )
-        let bookmarks = BookmarkStore(container: container, adapter: AppModelBookmarkAdapter())
-        let index = SkillIndex(container: container)
+        let database = try SkillStore.inMemory()
+        let bookmarks = BookmarkStore(database: database, adapter: AppModelBookmarkAdapter())
+        let index = SkillIndex(database: database)
         let registry = BuiltInAgentRegistry.make()
         let refresher = IndexRefresher(registry: registry, bookmarks: bookmarks, index: index)
         return AppModel(

@@ -1,15 +1,11 @@
 import Foundation
-import SwiftData
+import GRDB
 import XCTest
 @testable import SkillSelectorCore
 
 final class PersistenceRecordTests: XCTestCase {
-    private func makeContainer() throws -> ModelContainer {
-        try ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
+    private func makeDatabase() throws -> DatabaseQueue {
+        try SkillStore.inMemory()
     }
 
     // MARK: - AuthorizedRootKind
@@ -30,17 +26,16 @@ final class PersistenceRecordTests: XCTestCase {
     // MARK: - AuthorizedRootRecord
 
     func testRootRecordPersistsAndFetches() throws {
-        let context = ModelContext(try makeContainer())
+        let database = try makeDatabase()
         let record = AuthorizedRootRecord(
             id: "root-1",
             path: "/tmp/roots/project",
             kind: .project,
             bookmarkData: Data("bookmark".utf8)
         )
-        context.insert(record)
-        try context.save()
+        try database.write { try record.upsert($0) }
 
-        let fetched = try context.fetch(FetchDescriptor<AuthorizedRootRecord>())
+        let fetched = try database.read { try AuthorizedRootRecord.fetchAll($0) }
         XCTAssertEqual(fetched.count, 1)
         XCTAssertEqual(fetched[0].id, "root-1")
         XCTAssertEqual(fetched[0].path, "/tmp/roots/project")
@@ -57,21 +52,20 @@ final class PersistenceRecordTests: XCTestCase {
     }
 
     func testRootRecordUniqueIdentifierKeepsSinglePersistedRecord() throws {
-        let context = ModelContext(try makeContainer())
-        context.insert(AuthorizedRootRecord(
-            id: "same", path: "/tmp/a", kind: .home, bookmarkData: Data()
-        ))
-        context.insert(AuthorizedRootRecord(
-            id: "same", path: "/tmp/b", kind: .project, bookmarkData: Data()
-        ))
-        try context.save()
+        let database = try makeDatabase()
+        try database.write { db in
+            try AuthorizedRootRecord(
+                id: "same", path: "/tmp/a", kind: .home, bookmarkData: Data()
+            ).upsert(db)
+            try AuthorizedRootRecord(
+                id: "same", path: "/tmp/b", kind: .project, bookmarkData: Data()
+            ).upsert(db)
+        }
 
-        let fetched = try context.fetch(FetchDescriptor<AuthorizedRootRecord>())
+        let fetched = try database.read { try AuthorizedRootRecord.fetchAll($0) }
         XCTAssertEqual(fetched.count, 1)
-        // Which of two conflicting inserts survives is not defined by SwiftData
-        // and is not stable across runs, so asserting either direction yields a
-        // flaky test. The contract worth pinning down is that the unique
-        // constraint collapses them into a single row.
+        // The primary key on `id` collapses conflicting inserts into a
+        // single row: the second upsert replaces the first.
         XCTAssertTrue(["/tmp/a", "/tmp/b"].contains(fetched[0].path))
     }
 
@@ -91,7 +85,7 @@ final class PersistenceRecordTests: XCTestCase {
     // MARK: - SkillRecord
 
     func testSkillRecordPersistsAllFields() throws {
-        let context = ModelContext(try makeContainer())
+        let database = try makeDatabase()
         let date = Date(timeIntervalSince1970: 1_700_000_000)
         let record = SkillRecord(
             path: "/tmp/skills/demo",
@@ -103,10 +97,9 @@ final class PersistenceRecordTests: XCTestCase {
             entryFilename: "SKILL.md",
             parseDiagnosticsData: Data("issues".utf8)
         )
-        context.insert(record)
-        try context.save()
+        try database.write { try record.upsert($0) }
 
-        let fetched = try context.fetch(FetchDescriptor<SkillRecord>())
+        let fetched = try database.read { try SkillRecord.fetchAll($0) }
         XCTAssertEqual(fetched.count, 1)
         let loaded = fetched[0]
         XCTAssertEqual(loaded.path, "/tmp/skills/demo")
@@ -133,17 +126,16 @@ final class PersistenceRecordTests: XCTestCase {
     }
 
     func testSkillRecordUniquePathKeepsSinglePersistedRecord() throws {
-        let context = ModelContext(try makeContainer())
-        context.insert(SkillRecord(path: "/tmp/skills/demo", name: "a", entryFilename: "SKILL.md"))
-        context.insert(SkillRecord(path: "/tmp/skills/demo", name: "b", entryFilename: "SKILL.md"))
-        try context.save()
+        let database = try makeDatabase()
+        try database.write { db in
+            try SkillRecord(path: "/tmp/skills/demo", name: "a", entryFilename: "SKILL.md").upsert(db)
+            try SkillRecord(path: "/tmp/skills/demo", name: "b", entryFilename: "SKILL.md").upsert(db)
+        }
 
-        let fetched = try context.fetch(FetchDescriptor<SkillRecord>())
+        let fetched = try database.read { try SkillRecord.fetchAll($0) }
         XCTAssertEqual(fetched.count, 1)
-        // As above: the winner of a unique-constraint collision is undefined and
-        // observably non-deterministic. Production code never depends on it —
-        // `SkillIndex.apply(report:)` fetches and reuses an existing record
-        // rather than blind-inserting a duplicate.
+        // The primary key on `path` collapses conflicting inserts into a
+        // single row: the second upsert replaces the first.
         XCTAssertTrue(["a", "b"].contains(fetched[0].name))
     }
 

@@ -1,5 +1,5 @@
 import Foundation
-import SwiftData
+import GRDB
 import XCTest
 @testable import SkillSelector
 @testable import SkillSelectorCore
@@ -25,15 +25,11 @@ final class RulesAppModelTests: XCTestCase {
         let suite = "RulesAppModelTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
-        let container = try ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
-        let bookmarks = BookmarkStore(container: container, adapter: RulesPathBookmarkAdapter())
+        let database = try SkillStore.inMemory()
+        let bookmarks = BookmarkStore(database: database, adapter: RulesPathBookmarkAdapter())
         let homeRoot = try bookmarks.save(url: home, kind: .home)
         let projectRoot = try bookmarks.save(url: project, kind: .project)
-        let index = SkillIndex(container: container)
+        let index = SkillIndex(database: database)
         let registry = BuiltInAgentRegistry.make()
         let refresher = IndexRefresher(
             registry: registry,
@@ -92,15 +88,11 @@ final class RulesAppModelTests: XCTestCase {
         let suite = "RulesDiffTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
-        let container = try ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
-        let bookmarks = BookmarkStore(container: container, adapter: RulesPathBookmarkAdapter())
+        let database = try SkillStore.inMemory()
+        let bookmarks = BookmarkStore(database: database, adapter: RulesPathBookmarkAdapter())
         _ = try bookmarks.save(url: home, kind: .home)
         _ = try bookmarks.save(url: project, kind: .project)
-        let index = SkillIndex(container: container)
+        let index = SkillIndex(database: database)
         let registry = BuiltInAgentRegistry.make()
         let refresher = IndexRefresher(registry: registry, bookmarks: bookmarks, index: index)
         let model = AppModel(
@@ -154,15 +146,11 @@ final class RulesAppModelTests: XCTestCase {
         let suite = "RulesAppModelShared-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
-        let container = try ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
-        let bookmarks = BookmarkStore(container: container, adapter: RulesPathBookmarkAdapter())
+        let database = try SkillStore.inMemory()
+        let bookmarks = BookmarkStore(database: database, adapter: RulesPathBookmarkAdapter())
         _ = try bookmarks.save(url: home, kind: .home)
         let projectRoot = try bookmarks.save(url: project, kind: .project)
-        let index = SkillIndex(container: container)
+        let index = SkillIndex(database: database)
         let registry = BuiltInAgentRegistry.make()
         let refresher = IndexRefresher(
             registry: registry,
@@ -196,13 +184,9 @@ final class RulesAppModelTests: XCTestCase {
         let suite = "RulesNoRoot-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
-        let container = try ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
-        let bookmarks = BookmarkStore(container: container, adapter: RulesPathBookmarkAdapter())
-        let index = SkillIndex(container: container)
+        let database = try SkillStore.inMemory()
+        let bookmarks = BookmarkStore(database: database, adapter: RulesPathBookmarkAdapter())
+        let index = SkillIndex(database: database)
         let registry = BuiltInAgentRegistry.make()
         let refresher = IndexRefresher(
             registry: registry,

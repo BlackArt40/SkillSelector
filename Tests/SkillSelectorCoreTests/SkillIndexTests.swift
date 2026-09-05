@@ -1,5 +1,5 @@
 import Foundation
-import SwiftData
+import GRDB
 import XCTest
 @testable import SkillSelectorCore
 
@@ -97,34 +97,30 @@ final class SkillIndexTests: XCTestCase {
     }
 
     func testNewRecordStoresDecodableEmptyProvenanceMap() throws {
-        let container = try makeContainer()
-        let context = ModelContext(container)
+        let database = try makeDatabase()
         let record = SkillRecord(path: "/tmp/new", name: "new", entryFilename: "SKILL.md")
-        context.insert(record)
-        try context.save()
+        try database.write { try record.upsert($0) }
 
-        let saved = try context.fetch(FetchDescriptor<SkillRecord>()).first { $0.path == "/tmp/new" }
+        let saved = try database.read { try SkillRecord.fetchAll($0) }.first { $0.path == "/tmp/new" }
         XCTAssertEqual(try JSONDecoder().decode([String: Set<String>].self, from: try XCTUnwrap(saved?.agentIDsByRootData)), [:])
     }
 
     func testLegacyNilDiscoveredSourceBindingsDecodeAsEmpty() throws {
-        let container = try makeContainer()
-        let context = ModelContext(container)
+        let database = try makeDatabase()
         let record = SkillRecord(
             path: "/tmp/legacy",
             name: "legacy",
             entryFilename: "SKILL.md"
         )
-        context.insert(record)
-        try context.save()
+        try database.write { try record.upsert($0) }
 
-        let snapshot = try XCTUnwrap(try SkillIndex(container: container).skills().first)
+        let snapshot = try XCTUnwrap(try SkillIndex(database: database).skills().first)
         // discoveredSourceBindings removed
     }
 
     func testCorruptProvenanceFailsQueriesAndReconciliation() throws {
-        let container = try makeContainer()
-        let index = SkillIndex(container: container)
+        let database = try makeDatabase()
+        let index = SkillIndex(database: database)
         try index.apply(
             report: report(
                 rootID: "project",
@@ -132,10 +128,9 @@ final class SkillIndexTests: XCTestCase {
                 installations: [skill(path: "/tmp/project/.agents/skills/demo")]
             )
         )
-        let context = ModelContext(container)
-        let record = try XCTUnwrap(try context.fetch(FetchDescriptor<SkillRecord>()).first)
+        var record = try XCTUnwrap(try database.read { try SkillRecord.fetchAll($0) }.first)
         record.agentIDsByRootData = Data("not-json".utf8)
-        try context.save()
+        try database.write { try record.upsert($0) }
 
         XCTAssertThrowsError(try index.skills()) { error in
             XCTAssertEqual(
@@ -156,15 +151,16 @@ final class SkillIndexTests: XCTestCase {
     func testDuplicateRowsInStoreAreDedupedInsteadOfCrashing() throws {
         // Audit R2: a store holding duplicate path rows (SwiftData unique
         // constraint non-determinism) must not crash on the dictionary build
-        // and must converge to a single row.
-        let container = try makeContainer()
-        let context = ModelContext(container)
+        // and must converge to a single row. The GRDB primary key on `path`
+        // makes this structural: two upserts of one path leave one row.
+        let database = try makeDatabase()
         let path = "/tmp/project/.agents/skills/demo"
-        context.insert(SkillRecord(path: path, name: "first", entryFilename: "SKILL.md"))
-        context.insert(SkillRecord(path: path, name: "second", entryFilename: "SKILL.md"))
-        try context.save()
+        try database.write { db in
+            try SkillRecord(path: path, name: "first", entryFilename: "SKILL.md").upsert(db)
+            try SkillRecord(path: path, name: "second", entryFilename: "SKILL.md").upsert(db)
+        }
 
-        let index = SkillIndex(container: container)
+        let index = SkillIndex(database: database)
         try index.apply(
             report: report(
                 rootID: "project",
@@ -175,21 +171,16 @@ final class SkillIndexTests: XCTestCase {
 
         let skills = try index.skills()
         XCTAssertEqual(skills.count, 1)
-        let remaining = try context.fetch(FetchDescriptor<SkillRecord>())
+        let remaining = try database.read { try SkillRecord.fetchAll($0) }
         XCTAssertEqual(remaining.count, 1)
     }
 
     private func makeIndex() throws -> SkillIndex {
-        SkillIndex(container: try makeContainer())
+        SkillIndex(database: try makeDatabase())
     }
 
-    private func makeContainer() throws -> ModelContainer {
-        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        return try ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: configuration
-        )
+    private func makeDatabase() throws -> DatabaseQueue {
+        try SkillStore.inMemory()
     }
 
     private func report(

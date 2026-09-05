@@ -1,5 +1,5 @@
 import Foundation
-import SwiftData
+import GRDB
 import XCTest
 @testable import SkillSelectorCore
 
@@ -114,11 +114,7 @@ final class IncrementalScanTests: XCTestCase {
 
     func testIndexPersistsScanCacheForTheNextRefresh() async throws {
         try writeSkill(at: ".codex/skills/demo", name: "demo", description: "first")
-        let index = SkillIndex(container: try ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        ))
+        let index = SkillIndex(database: try SkillStore.inMemory())
 
         let first = await SkillScanner().scan([projectRoot])
         try index.apply(report: first)
@@ -142,11 +138,7 @@ final class IncrementalScanTests: XCTestCase {
 
     func testRemovedSkillDropsItsCacheWithTheRecord() async throws {
         try writeSkill(at: ".codex/skills/demo", name: "demo", description: "first")
-        let index = SkillIndex(container: try ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        ))
+        let index = SkillIndex(database: try SkillStore.inMemory())
 
         let first = await SkillScanner().scan([projectRoot])
         try index.apply(report: first)

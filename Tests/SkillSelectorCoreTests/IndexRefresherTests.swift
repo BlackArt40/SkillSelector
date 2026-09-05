@@ -1,5 +1,5 @@
 import Foundation
-import SwiftData
+import GRDB
 import XCTest
 @testable import SkillSelectorCore
 
@@ -10,10 +10,10 @@ final class IndexRefresherTests: XCTestCase {
         try fixture.writeSkill(at: ".codex/skills/codex-only", name: "codex-only")
         try fixture.writeSkill(at: ".claude/skills/claude-only", name: "claude-only")
         try fixture.writeSkill(at: ".agents/skills/shared", name: "shared")
-        let container = try fixture.makeContainer()
-        let bookmarks = BookmarkStore(container: container, adapter: FixtureBookmarkAdapter())
+        let database = try fixture.makeDatabase()
+        let bookmarks = BookmarkStore(database: database, adapter: FixtureBookmarkAdapter())
         _ = try bookmarks.save(url: fixture.home, kind: .home)
-        let index = SkillIndex(container: container)
+        let index = SkillIndex(database: database)
         let refresher = IndexRefresher(
             registry: BuiltInAgentRegistry.make(),
             bookmarks: bookmarks,
@@ -32,10 +32,10 @@ final class IndexRefresherTests: XCTestCase {
     func testAccessibleRefreshRemovesLegacyCompatibilityAssociations() async throws {
         let fixture = try RefreshFixture()
         try fixture.writeSkill(at: ".agents/skills/shared", name: "shared")
-        let container = try fixture.makeContainer()
-        let bookmarks = BookmarkStore(container: container, adapter: FixtureBookmarkAdapter())
+        let database = try fixture.makeDatabase()
+        let bookmarks = BookmarkStore(database: database, adapter: FixtureBookmarkAdapter())
         let homeRoot = try bookmarks.save(url: fixture.home, kind: .home)
-        let index = SkillIndex(container: container)
+        let index = SkillIndex(database: database)
         let sharedURL = fixture.home.appending(path: ".agents/skills/shared")
         try index.apply(report: ScanReport(
             installations: [
@@ -70,10 +70,10 @@ final class IndexRefresherTests: XCTestCase {
         try fixture.writeSkill(at: "Documents/private", name: "private")
 
         let adapter = FixtureBookmarkAdapter()
-        let container = try fixture.makeContainer()
-        let bookmarks = BookmarkStore(container: container, adapter: adapter)
+        let database = try fixture.makeDatabase()
+        let bookmarks = BookmarkStore(database: database, adapter: adapter)
         let home = try bookmarks.save(url: fixture.home, kind: .home)
-        let index = SkillIndex(container: container)
+        let index = SkillIndex(database: database)
         let refresher = IndexRefresher(
             registry: BuiltInAgentRegistry.make(),
             bookmarks: bookmarks,
@@ -94,11 +94,11 @@ final class IndexRefresherTests: XCTestCase {
         let fixture = try RefreshFixture()
         try fixture.writeSkill(at: "custom/private", name: "private")
         let adapter = FixtureBookmarkAdapter()
-        let container = try fixture.makeContainer()
-        let bookmarks = BookmarkStore(container: container, adapter: adapter)
+        let database = try fixture.makeDatabase()
+        let bookmarks = BookmarkStore(database: database, adapter: adapter)
         _ = try bookmarks.save(url: fixture.home.appending(path: "custom"), kind: .custom)
         adapter.shouldFailResolution = true
-        let index = SkillIndex(container: container)
+        let index = SkillIndex(database: database)
         let refresher = IndexRefresher(
             registry: BuiltInAgentRegistry.make(),
             bookmarks: bookmarks,
@@ -115,10 +115,10 @@ final class IndexRefresherTests: XCTestCase {
         try fixture.writeSkill(at: "project/packages/app/.cursor/skills/demo", name: "demo")
         let project = fixture.home.appending(path: "project")
         let adapter = FixtureBookmarkAdapter()
-        let container = try fixture.makeContainer()
-        let bookmarks = BookmarkStore(container: container, adapter: adapter)
+        let database = try fixture.makeDatabase()
+        let bookmarks = BookmarkStore(database: database, adapter: adapter)
         _ = try bookmarks.save(url: project, kind: .project)
-        let index = SkillIndex(container: container)
+        let index = SkillIndex(database: database)
         let refresher = IndexRefresher(
             registry: BuiltInAgentRegistry.make(),
             bookmarks: bookmarks,
@@ -141,10 +141,10 @@ final class IndexRefresherTests: XCTestCase {
         try fixture.writeSkill(at: "project/.cursor/skills/demo", name: "demo")
         let project = fixture.home.appending(path: "project")
         let adapter = FixtureBookmarkAdapter()
-        let container = try fixture.makeContainer()
-        let bookmarks = BookmarkStore(container: container, adapter: adapter)
+        let database = try fixture.makeDatabase()
+        let bookmarks = BookmarkStore(database: database, adapter: adapter)
         _ = try bookmarks.save(url: project, kind: .project)
-        let index = SkillIndex(container: container)
+        let index = SkillIndex(database: database)
         let fileSystem = RecordingIndexRefresherFileSystem()
         let refresher = IndexRefresher(
             registry: BuiltInAgentRegistry.make(),
@@ -166,10 +166,10 @@ final class IndexRefresherTests: XCTestCase {
         let fixture = try RefreshFixture()
         try fixture.writeSkill(at: ".claude/skills/demo", name: "demo")
         let adapter = FixtureBookmarkAdapter()
-        let container = try fixture.makeContainer()
-        let bookmarks = BookmarkStore(container: container, adapter: adapter)
+        let database = try fixture.makeDatabase()
+        let bookmarks = BookmarkStore(database: database, adapter: adapter)
         _ = try bookmarks.save(url: fixture.home, kind: .home)
-        let index = SkillIndex(container: container)
+        let index = SkillIndex(database: database)
         let refresher = IndexRefresher(
             registry: BuiltInAgentRegistry.make(),
             bookmarks: bookmarks,
@@ -198,10 +198,10 @@ final class IndexRefresherTests: XCTestCase {
             ),
         ])
         let adapter = FixtureBookmarkAdapter()
-        let container = try fixture.makeContainer()
-        let bookmarks = BookmarkStore(container: container, adapter: adapter)
+        let database = try fixture.makeDatabase()
+        let bookmarks = BookmarkStore(database: database, adapter: adapter)
         _ = try bookmarks.save(url: system, kind: .system)
-        let index = SkillIndex(container: container)
+        let index = SkillIndex(database: database)
         let refresher = IndexRefresher(
             registry: registry,
             bookmarks: bookmarks,
@@ -232,11 +232,11 @@ final class IndexRefresherTests: XCTestCase {
             ),
         ])
         let adapter = FixtureBookmarkAdapter()
-        let container = try fixture.makeContainer()
-        let bookmarks = BookmarkStore(container: container, adapter: adapter)
+        let database = try fixture.makeDatabase()
+        let bookmarks = BookmarkStore(database: database, adapter: adapter)
         _ = try bookmarks.save(url: system, kind: .system)
         _ = try bookmarks.save(url: custom, kind: .custom)
-        let index = SkillIndex(container: container)
+        let index = SkillIndex(database: database)
         let fileSystem = RecordingIndexRefresherFileSystem()
         let refresher = IndexRefresher(
             registry: registry,
@@ -258,10 +258,10 @@ final class IndexRefresherTests: XCTestCase {
         let fixture = try RefreshFixture()
         try fixture.writeSkill(at: ".claude/skills/demo", name: "demo")
         let adapter = FixtureBookmarkAdapter()
-        let container = try fixture.makeContainer()
-        let bookmarks = BookmarkStore(container: container, adapter: adapter)
+        let database = try fixture.makeDatabase()
+        let bookmarks = BookmarkStore(database: database, adapter: adapter)
         _ = try bookmarks.save(url: fixture.home, kind: .home)
-        let index = SkillIndex(container: container)
+        let index = SkillIndex(database: database)
         let fileSystem = RecordingIndexRefresherFileSystem()
         let refresher = IndexRefresher(
             registry: BuiltInAgentRegistry.make(),
@@ -299,10 +299,10 @@ final class IndexRefresherTests: XCTestCase {
             ),
         ])
         let adapter = FixtureBookmarkAdapter()
-        let container = try fixture.makeContainer()
-        let bookmarks = BookmarkStore(container: container, adapter: adapter)
+        let database = try fixture.makeDatabase()
+        let bookmarks = BookmarkStore(database: database, adapter: adapter)
         _ = try bookmarks.save(url: fixture.home, kind: .home)
-        let index = SkillIndex(container: container)
+        let index = SkillIndex(database: database)
         let fileSystem = RecordingIndexRefresherFileSystem()
         let refresher = IndexRefresher(
             registry: registry,
@@ -326,10 +326,10 @@ final class IndexRefresherTests: XCTestCase {
         try fixture.writeSkill(at: ".claude/skills/demo", name: "demo")
         let skillsRoot = fixture.home.appending(path: ".claude/skills")
         let adapter = FixtureBookmarkAdapter()
-        let container = try fixture.makeContainer()
-        let bookmarks = BookmarkStore(container: container, adapter: adapter)
+        let database = try fixture.makeDatabase()
+        let bookmarks = BookmarkStore(database: database, adapter: adapter)
         _ = try bookmarks.save(url: fixture.home, kind: .home)
-        let index = SkillIndex(container: container)
+        let index = SkillIndex(database: database)
         let refresher = IndexRefresher(
             registry: BuiltInAgentRegistry.make(),
             bookmarks: bookmarks,
@@ -357,10 +357,10 @@ final class IndexRefresherTests: XCTestCase {
         )
         let fileSystem = RecordingIndexRefresherFileSystem()
         let adapter = FixtureBookmarkAdapter()
-        let container = try fixture.makeContainer()
-        let bookmarks = BookmarkStore(container: container, adapter: adapter)
+        let database = try fixture.makeDatabase()
+        let bookmarks = BookmarkStore(database: database, adapter: adapter)
         _ = try bookmarks.save(url: fixture.home, kind: .home)
-        let index = SkillIndex(container: container)
+        let index = SkillIndex(database: database)
         let refresher = IndexRefresher(
             registry: BuiltInAgentRegistry.make(),
             bookmarks: bookmarks,
@@ -391,10 +391,10 @@ final class IndexRefresherTests: XCTestCase {
             ),
         ])
         let adapter = FixtureBookmarkAdapter()
-        let container = try fixture.makeContainer()
-        let bookmarks = BookmarkStore(container: container, adapter: adapter)
+        let database = try fixture.makeDatabase()
+        let bookmarks = BookmarkStore(database: database, adapter: adapter)
         _ = try bookmarks.save(url: fixture.home, kind: .home)
-        let index = SkillIndex(container: container)
+        let index = SkillIndex(database: database)
         let refresher = IndexRefresher(
             registry: registry,
             bookmarks: bookmarks,
@@ -417,11 +417,11 @@ final class IndexRefresherTests: XCTestCase {
         let firstURL = fixture.home.appending(path: "first")
         let secondURL = fixture.home.appending(path: "second")
         let adapter = FixtureBookmarkAdapter()
-        let container = try fixture.makeContainer()
-        let bookmarks = BookmarkStore(container: container, adapter: adapter)
+        let database = try fixture.makeDatabase()
+        let bookmarks = BookmarkStore(database: database, adapter: adapter)
         let first = try bookmarks.save(url: firstURL, kind: .project)
         _ = try bookmarks.save(url: secondURL, kind: .project)
-        let index = SkillIndex(container: container)
+        let index = SkillIndex(database: database)
         let refresher = IndexRefresher(
             registry: BuiltInAgentRegistry.make(),
             bookmarks: bookmarks,
@@ -449,11 +449,11 @@ final class IndexRefresherTests: XCTestCase {
         try RefreshFixture.writeSkill(at: firstURL.appending(path: ".cursor/skills/one"), name: "one")
         try RefreshFixture.writeSkill(at: secondURL.appending(path: ".cursor/skills/two"), name: "two")
         let adapter = FixtureBookmarkAdapter()
-        let container = try fixture.makeContainer()
-        let bookmarks = BookmarkStore(container: container, adapter: adapter)
+        let database = try fixture.makeDatabase()
+        let bookmarks = BookmarkStore(database: database, adapter: adapter)
         _ = try bookmarks.save(url: firstURL, kind: .project)
         let second = try bookmarks.save(url: secondURL, kind: .project)
-        let index = SkillIndex(container: container)
+        let index = SkillIndex(database: database)
         let refresher = IndexRefresher(
             registry: BuiltInAgentRegistry.make(),
             bookmarks: bookmarks,
@@ -501,12 +501,8 @@ private final class RefreshFixture: @unchecked Sendable {
         )
     }
 
-    func makeContainer() throws -> ModelContainer {
-        try ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
+    func makeDatabase() throws -> DatabaseQueue {
+        try SkillStore.inMemory()
     }
 }
 

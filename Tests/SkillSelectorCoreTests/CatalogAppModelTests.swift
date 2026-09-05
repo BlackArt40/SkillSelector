@@ -1,5 +1,5 @@
 import Foundation
-import SwiftData
+import GRDB
 import XCTest
 @testable import SkillSelector
 @testable import SkillSelectorCore
@@ -76,19 +76,15 @@ final class CatalogAppModelTests: XCTestCase {
         let suite = "CatalogAppModelTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defaults.removePersistentDomain(forName: suite)
-        let container = try! ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
+        let database = try! SkillStore.inMemory()
         let registry = BuiltInAgentRegistry.make()
         return AppModel(
             refresher: IndexRefresher(
                 registry: registry,
-                bookmarks: BookmarkStore(container: container, adapter: CatalogPathBookmarkAdapter()),
-                index: SkillIndex(container: container)
+                bookmarks: BookmarkStore(database: database, adapter: CatalogPathBookmarkAdapter()),
+                index: SkillIndex(database: database)
             ),
-            index: SkillIndex(container: container),
+            index: SkillIndex(database: database),
             registry: registry,
             defaults: defaults,
             catalogFetcher: fetcher
@@ -327,19 +323,15 @@ final class CatalogAppModelTests: XCTestCase {
         let suite = "CatalogImport-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
-        let container = try! ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
+        let database = try! SkillStore.inMemory()
         let registry = BuiltInAgentRegistry.make()
         let model = AppModel(
             refresher: IndexRefresher(
                 registry: registry,
-                bookmarks: BookmarkStore(container: container, adapter: CatalogPathBookmarkAdapter()),
-                index: SkillIndex(container: container)
+                bookmarks: BookmarkStore(database: database, adapter: CatalogPathBookmarkAdapter()),
+                index: SkillIndex(database: database)
             ),
-            index: SkillIndex(container: container),
+            index: SkillIndex(database: database),
             registry: registry,
             defaults: defaults,
             catalogFetcher: fetcher,
@@ -364,10 +356,10 @@ final class CatalogAppModelTests: XCTestCase {
         let reopened = AppModel(
             refresher: IndexRefresher(
                 registry: registry,
-                bookmarks: BookmarkStore(container: container, adapter: CatalogPathBookmarkAdapter()),
-                index: SkillIndex(container: container)
+                bookmarks: BookmarkStore(database: database, adapter: CatalogPathBookmarkAdapter()),
+                index: SkillIndex(database: database)
             ),
-            index: SkillIndex(container: container),
+            index: SkillIndex(database: database),
             registry: registry,
             defaults: defaults,
             catalogFetcher: fetcher,
@@ -390,20 +382,16 @@ final class CatalogAppModelTests: XCTestCase {
         let suite = "CatalogBuiltIn-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
-        let container = try! ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
+        let database = try! SkillStore.inMemory()
         let registry = BuiltInAgentRegistry.make()
         let makeModel = { () -> AppModel in
             AppModel(
                 refresher: IndexRefresher(
                     registry: registry,
-                    bookmarks: BookmarkStore(container: container, adapter: CatalogPathBookmarkAdapter()),
-                    index: SkillIndex(container: container)
+                    bookmarks: BookmarkStore(database: database, adapter: CatalogPathBookmarkAdapter()),
+                    index: SkillIndex(database: database)
                 ),
-                index: SkillIndex(container: container),
+                index: SkillIndex(database: database),
                 registry: registry,
                 defaults: defaults,
                 catalogFetcher: fetcher,
@@ -445,20 +433,16 @@ final class CatalogAppModelTests: XCTestCase {
         let suite = "CatalogRestore-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
-        let container = try! ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
+        let database = try! SkillStore.inMemory()
         let registry = BuiltInAgentRegistry.make()
         let makeModel = { () -> AppModel in
             AppModel(
                 refresher: IndexRefresher(
                     registry: registry,
-                    bookmarks: BookmarkStore(container: container, adapter: CatalogPathBookmarkAdapter()),
-                    index: SkillIndex(container: container)
+                    bookmarks: BookmarkStore(database: database, adapter: CatalogPathBookmarkAdapter()),
+                    index: SkillIndex(database: database)
                 ),
-                index: SkillIndex(container: container),
+                index: SkillIndex(database: database),
                 registry: registry,
                 defaults: defaults,
                 catalogFetcher: fetcher,
@@ -498,19 +482,15 @@ final class CatalogAppModelTests: XCTestCase {
         let suite = "CatalogRestoreNoop-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
-        let container = try! ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
+        let database = try! SkillStore.inMemory()
         let registry = BuiltInAgentRegistry.make()
         let model = AppModel(
             refresher: IndexRefresher(
                 registry: registry,
-                bookmarks: BookmarkStore(container: container, adapter: CatalogPathBookmarkAdapter()),
-                index: SkillIndex(container: container)
+                bookmarks: BookmarkStore(database: database, adapter: CatalogPathBookmarkAdapter()),
+                index: SkillIndex(database: database)
             ),
-            index: SkillIndex(container: container),
+            index: SkillIndex(database: database),
             registry: registry,
             defaults: defaults,
             catalogFetcher: fetcher,
@@ -535,19 +515,15 @@ final class CatalogAppModelTests: XCTestCase {
         let suite = "CatalogRestoreReid-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
-        let container = try! ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
+        let database = try! SkillStore.inMemory()
         let registry = BuiltInAgentRegistry.make()
         let model = AppModel(
             refresher: IndexRefresher(
                 registry: registry,
-                bookmarks: BookmarkStore(container: container, adapter: CatalogPathBookmarkAdapter()),
-                index: SkillIndex(container: container)
+                bookmarks: BookmarkStore(database: database, adapter: CatalogPathBookmarkAdapter()),
+                index: SkillIndex(database: database)
             ),
-            index: SkillIndex(container: container),
+            index: SkillIndex(database: database),
             registry: registry,
             defaults: defaults,
             catalogFetcher: fetcher,
@@ -577,20 +553,16 @@ final class CatalogAppModelTests: XCTestCase {
         let suite = "CatalogUpdate-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
-        let container = try! ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
+        let database = try! SkillStore.inMemory()
         let registry = BuiltInAgentRegistry.make()
         let makeModel = { () -> AppModel in
             AppModel(
                 refresher: IndexRefresher(
                     registry: registry,
-                    bookmarks: BookmarkStore(container: container, adapter: CatalogPathBookmarkAdapter()),
-                    index: SkillIndex(container: container)
+                    bookmarks: BookmarkStore(database: database, adapter: CatalogPathBookmarkAdapter()),
+                    index: SkillIndex(database: database)
                 ),
-                index: SkillIndex(container: container),
+                index: SkillIndex(database: database),
                 registry: registry,
                 defaults: defaults,
                 catalogFetcher: fetcher,
@@ -641,19 +613,15 @@ final class CatalogAppModelTests: XCTestCase {
         let suite = "CatalogPartial-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
-        let container = try! ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
+        let database = try! SkillStore.inMemory()
         let registry = BuiltInAgentRegistry.make()
         let model = AppModel(
             refresher: IndexRefresher(
                 registry: registry,
-                bookmarks: BookmarkStore(container: container, adapter: CatalogPathBookmarkAdapter()),
-                index: SkillIndex(container: container)
+                bookmarks: BookmarkStore(database: database, adapter: CatalogPathBookmarkAdapter()),
+                index: SkillIndex(database: database)
             ),
-            index: SkillIndex(container: container),
+            index: SkillIndex(database: database),
             registry: registry,
             defaults: defaults,
             catalogFetcher: fetcher,

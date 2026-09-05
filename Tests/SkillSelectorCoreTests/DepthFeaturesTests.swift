@@ -1,5 +1,5 @@
 import Foundation
-import SwiftData
+import GRDB
 import XCTest
 @testable import SkillSelector
 @testable import SkillSelectorCore
@@ -170,14 +170,10 @@ final class DepthFeaturesTests: XCTestCase {
 
         let suite = "DepthFeaturesTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
-        let container = try ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
-        let bookmarks = BookmarkStore(container: container, adapter: PathBookmarkAdapter())
+        let database = try SkillStore.inMemory()
+        let bookmarks = BookmarkStore(database: database, adapter: PathBookmarkAdapter())
         try bookmarks.save(url: rootURL, kind: .project)
-        let index = SkillIndex(container: container)
+        let index = SkillIndex(database: database)
         let registry = BuiltInAgentRegistry.make()
         let refresher = IndexRefresher(
             registry: registry,

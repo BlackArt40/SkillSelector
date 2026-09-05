@@ -1,7 +1,7 @@
 import Foundation
 @testable import SkillSelector
 import SkillSelectorCore
-import SwiftData
+import GRDB
 import XCTest
 
 @MainActor
@@ -75,16 +75,11 @@ final class AppModelTests: XCTestCase {
         let suiteName = "AppModelReauthHome-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)
         defer { defaults?.removePersistentDomain(forName: suiteName) }
-        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: configuration
-        )
+        let database = try SkillStore.inMemory()
         // Adapter whose resolution always fails: the saved home bookmark
         // can never resolve, so the home root is (and stays) unhealthy.
         let adapter = AlwaysFailingBookmarkAdapter()
-        let bookmarks = BookmarkStore(container: container, adapter: adapter)
+        let bookmarks = BookmarkStore(database: database, adapter: adapter)
 
         let home = FileManager.default.temporaryDirectory
             .appending(path: "AppModelReauthHome-\(UUID().uuidString)")
@@ -94,7 +89,7 @@ final class AppModelTests: XCTestCase {
         let model = makeModel(
             defaults: defaults,
             homeDirectory: home,
-            container: container,
+            database: database,
             bookmarks: bookmarks
         )
 
@@ -120,13 +115,8 @@ final class AppModelTests: XCTestCase {
         let suite = "AppModelSandboxLaunch-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
-        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: configuration
-        )
-        let bookmarks = BookmarkStore(container: container, adapter: AppModelBookmarkAdapter())
+        let database = try SkillStore.inMemory()
+        let bookmarks = BookmarkStore(database: database, adapter: AppModelBookmarkAdapter())
         // The pre-fix build recorded whatever homeDirectoryForCurrentUser
         // returned (the container path under sandbox; the real home in this
         // non-sandboxed test process — the same bogus-root shape).
@@ -140,7 +130,7 @@ final class AppModelTests: XCTestCase {
         let model = makeModel(
             defaults: defaults,
             homeDirectory: home,
-            container: container,
+            database: database,
             bookmarks: bookmarks
         )
         model.environmentIsSandboxed = true
@@ -188,7 +178,7 @@ final class AppModelTests: XCTestCase {
     private func makeModel(
         defaults: UserDefaults? = nil,
         homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
-        container: ModelContainer? = nil,
+        database: DatabaseQueue? = nil,
         bookmarks: BookmarkStore? = nil
     ) -> AppModel {
         let suite = "AppModelGeneralTests-\(UUID().uuidString)"
@@ -196,14 +186,9 @@ final class AppModelTests: XCTestCase {
         if defaults == nil {
             isolatedDefaults.removePersistentDomain(forName: suite)
         }
-        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = container ?? (try! ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: configuration
-        ))
-        let index = SkillIndex(container: container)
-        let bookmarks = bookmarks ?? BookmarkStore(container: container, adapter: AppModelBookmarkAdapter())
+        let database = database ?? (try! SkillStore.inMemory())
+        let index = SkillIndex(database: database)
+        let bookmarks = bookmarks ?? BookmarkStore(database: database, adapter: AppModelBookmarkAdapter())
         let registry = BuiltInAgentRegistry.make()
         let refresher = IndexRefresher(registry: registry, bookmarks: bookmarks, index: index)
         return AppModel(
@@ -220,15 +205,10 @@ final class AppModelTests: XCTestCase {
         let suite = "AppModelCustomAgentTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
-        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: configuration
-        )
-        let index = SkillIndex(container: container)
+        let database = try SkillStore.inMemory()
+        let index = SkillIndex(database: database)
         let registry = BuiltInAgentRegistry.make()
-        let bookmarks = BookmarkStore(container: container, adapter: AppModelBookmarkAdapter())
+        let bookmarks = BookmarkStore(database: database, adapter: AppModelBookmarkAdapter())
         let refresher = IndexRefresher(registry: registry, bookmarks: bookmarks, index: index)
         let store = RecordingAgentDefinitionStore()
         let model = AppModel(
@@ -271,15 +251,10 @@ final class AppModelTests: XCTestCase {
         let suite = "AppModelCustomAgentDeleteTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
-        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: configuration
-        )
-        let index = SkillIndex(container: container)
+        let database = try SkillStore.inMemory()
+        let index = SkillIndex(database: database)
         let registry = BuiltInAgentRegistry.make()
-        let bookmarks = BookmarkStore(container: container, adapter: AppModelBookmarkAdapter())
+        let bookmarks = BookmarkStore(database: database, adapter: AppModelBookmarkAdapter())
         let refresher = IndexRefresher(registry: registry, bookmarks: bookmarks, index: index)
         let store = RecordingAgentDefinitionStore()
         let model = AppModel(
@@ -442,17 +417,12 @@ final class AppModelTests: XCTestCase {
         let suite = "AppModelMcpReloadTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
-        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: configuration
-        )
-        let bookmarks = BookmarkStore(container: container, adapter: AppModelBookmarkAdapter())
+        let database = try SkillStore.inMemory()
+        let bookmarks = BookmarkStore(database: database, adapter: AppModelBookmarkAdapter())
         _ = try bookmarks.save(url: project, kind: .project)
         let model = makeModel(
             defaults: defaults,
-            container: container,
+            database: database,
             bookmarks: bookmarks
         )
 
@@ -485,15 +455,10 @@ final class AppModelTests: XCTestCase {
     private func makeValidationModel() throws -> (AppModel, RecordingAgentDefinitionStore) {
         let suite = "AppModelValidationTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
-        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: configuration
-        )
-        let index = SkillIndex(container: container)
+        let database = try SkillStore.inMemory()
+        let index = SkillIndex(database: database)
         let registry = BuiltInAgentRegistry.make()
-        let bookmarks = BookmarkStore(container: container, adapter: AppModelBookmarkAdapter())
+        let bookmarks = BookmarkStore(database: database, adapter: AppModelBookmarkAdapter())
         let refresher = IndexRefresher(registry: registry, bookmarks: bookmarks, index: index)
         let store = RecordingAgentDefinitionStore()
         let model = AppModel(

@@ -1,5 +1,5 @@
 import Foundation
-import SwiftData
+import GRDB
 import XCTest
 @testable import SkillSelector
 @testable import SkillSelectorCore
@@ -23,12 +23,8 @@ final class DocumentManagerTests: XCTestCase {
     }
 
     private func makeStore() throws -> BookmarkStore {
-        let container = try ModelContainer(
-            for: SkillRecord.self,
-            AuthorizedRootRecord.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
-        return BookmarkStore(container: container, adapter: PathEncodingBookmarkAdapter())
+        let database = try SkillStore.inMemory()
+        return BookmarkStore(database: database, adapter: PathEncodingBookmarkAdapter())
     }
 
     private func makeSnapshot(
