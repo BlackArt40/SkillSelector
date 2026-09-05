@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - macos-12
   pull_request:
   schedule:
     # 03:00 Asia/Shanghai — nightly flake watch (five rounds below).
@@ -19,9 +21,28 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0 (audit F-05: pin to SHA, Node 24)
       - name: Build
-        run: swift build
+        run: |
+          xcodebuild -version
+          set -o pipefail
+          swift build 2>&1 | tee /tmp/build-output.txt
+      - name: Build failure annotations
+        if: failure()
+        run: |
+          grep -E "error: " /tmp/build-output.txt | head -40 | while IFS= read -r line; do echo "::error::$line"; done
+          grep -cE "error: " /tmp/build-output.txt
       - name: Test
-        run: swift test
+        run: |
+          set -o pipefail
+          swift test 2>&1 | tee /tmp/test-output.txt
+      - name: Test failure annotations
+        if: failure()
+        run: |
+          { awk '/Failing tests:/{f=6} f>0{print; f--}' /tmp/test-output.txt; grep -E "^Executed [0-9]+ tests" /tmp/test-output.txt; } > /tmp/test-summary.txt
+          if [ -s /tmp/test-summary.txt ]; then
+            while IFS= read -r line; do echo "::error::$line"; done < /tmp/test-summary.txt
+          else
+            echo "::error::no failing-test summary found — see logs"
+          fi
 
   package:
     name: Package DMG (clean checkout)
