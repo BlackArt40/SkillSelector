@@ -8,9 +8,11 @@ import XCTest
 /// 继续生效；这里只测新存储层自身的机制。
 final class SkillStoreTests: XCTestCase {
     private func makeStore() throws -> DatabaseQueue {
-        // GRDB 7: `DatabaseQueue()` opens an independent in-memory database
-        // (the GRDB 6-era `DatabaseQueue.inMemory()` factory is gone).
-        try DatabaseQueue()
+        // Through SkillStore so the schema migration runs: a raw in-memory
+        // DatabaseQueue has no tables (GRDB 7: `DatabaseQueue()` is the
+        // independent in-memory store; the GRDB 6-era `.inMemory()`
+        // factory is gone).
+        try SkillStore.inMemory()
     }
 
     func testOpenCreatesSchemaAtURL() throws {
