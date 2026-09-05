@@ -108,11 +108,9 @@ struct RootThemeToggleButton: View {
 /// Settings entry point in the window toolbar (top-right), replacing the
 /// old sidebar footer link. Icon-only, matching the other toolbar actions.
 struct RootSettingsButton: View {
-    @Environment(\.openSettings) private var openSettings
-
     var body: some View {
         Button {
-            openSettings()
+            NotificationCenter.default.post(name: .openSettingsWindow, object: nil)
         } label: {
             Image(systemName: "gearshape")
                 .font(.system(size: 14))

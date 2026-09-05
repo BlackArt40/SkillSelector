@@ -8,7 +8,6 @@ import SwiftUI
 /// and the appearance toggle.
 struct RootView: View {
     @EnvironmentObject private var model: AppModel
-    @Environment(\.openSettings) private var openSettings
     @AppStorage(ThemePreference.storageKey) private var themeMode = "system"
     @State private var destination: BrowserDestination
     /// Local NSEvent monitors (click-outside ends search-field editing;
@@ -76,6 +75,12 @@ struct RootView: View {
                 onOpenSelection: { openCurrentSelection() },
                 onToggleAppearance: { toggleAppearance() }
             ))
+            .onReceive(NotificationCenter.default.publisher(for: .openSettingsWindow)) { notification in
+                SettingsWindowController.shared.show(model: model)
+                if let tab = notification.object as? SettingsTab {
+                    NotificationCenter.default.post(name: .openSettingsTab, object: tab)
+                }
+            }
             .onAppear { onAppear() }
             .onDisappear { onDisappear() }
             .onChange(of: destination) { _, newValue in
@@ -147,6 +152,7 @@ struct RootView: View {
                 detailPane
             }
         }
+        .background(MainWindowFrame())
         .frame(minWidth: 960, minHeight: 600)
         .animation(.smooth(duration: 0.22), value: destination)
         .navigationTitle(title)
@@ -746,11 +752,12 @@ struct RootView: View {
         return panel.runModal() == .OK ? panel.url?.standardizedFileURL : nil
     }
 
-    /// Opens the Settings scene on the directories pane — used by the
-    /// re-authorization banner.
+    /// Opens the Settings window on the directories pane — used by the
+    /// re-authorization banner. The request rides `.openSettingsWindow`
+    /// (RootView shows the AppKit window via `SettingsWindowController` and
+    /// forwards the tab payload to SettingsView's panes).
     private func openSettingsDirectories() {
-        openSettings()
-        NotificationCenter.default.post(name: .openSettingsTab, object: SettingsTab.directories)
+        NotificationCenter.default.post(name: .openSettingsWindow, object: SettingsTab.directories)
     }
 }
 

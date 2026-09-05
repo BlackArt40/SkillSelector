@@ -21,6 +21,7 @@ enum ScreenshotMode {
 
     private static var savedLanguage: String?
     private static var savedTheme: String?
+    private static var savedMainWindowFrame: String?
     private static var mainWindow: NSWindow?
 
     static var isActive: Bool {
@@ -48,6 +49,12 @@ enum ScreenshotMode {
         // UserDefaults.standard; borrow it for the run, restore after.
         savedLanguage = UserDefaults.standard.string(forKey: "SkillSelector.preferredLanguage")
         savedTheme = UserDefaults.standard.string(forKey: ThemePreference.storageKey)
+        // MainWindowFrame (frame autosave in RootView) reads the saved
+        // "MainWindow" frame and would resize every capture window to the
+        // host's stale frame; borrow-and-remove it so captures stay at the
+        // seeded 1440x900 regardless of how the real app was last sized.
+        savedMainWindowFrame = UserDefaults.standard.string(forKey: "NSWindow Frame MainWindow")
+        UserDefaults.standard.removeObject(forKey: "NSWindow Frame MainWindow")
         UserDefaults.standard.set(language, forKey: "SkillSelector.preferredLanguage")
         UserDefaults.standard.set("light", forKey: ThemePreference.storageKey)
         do {
@@ -223,6 +230,11 @@ enum ScreenshotMode {
             UserDefaults.standard.set(savedTheme, forKey: ThemePreference.storageKey)
         } else {
             UserDefaults.standard.removeObject(forKey: ThemePreference.storageKey)
+        }
+        if let savedMainWindowFrame {
+            UserDefaults.standard.set(savedMainWindowFrame, forKey: "NSWindow Frame MainWindow")
+        } else {
+            UserDefaults.standard.removeObject(forKey: "NSWindow Frame MainWindow")
         }
     }
 

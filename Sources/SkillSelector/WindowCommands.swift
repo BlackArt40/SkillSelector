@@ -54,6 +54,16 @@ struct WindowCommands: Commands {
             .keyboardShortcut("]", modifiers: .command)
         }
 
+        // Replaces the default appSettings item: the SwiftUI Settings scene
+        // is gone (it requires macOS 13), so ⌘, asks RootView to show the
+        // plain AppKit settings window instead (SettingsWindowController).
+        CommandGroup(replacing: .appSettings) {
+            Button(L10n.string("Settings")) {
+                NotificationCenter.default.post(name: .openSettingsWindow, object: nil)
+            }
+            .keyboardShortcut(KeyEquivalent(","), modifiers: .command)
+        }
+
         // ⌘F focuses the search field. The default Edit menu has no Find
         // group, so the item lands at the end of the text-editing section.
         CommandGroup(after: .textEditing) {

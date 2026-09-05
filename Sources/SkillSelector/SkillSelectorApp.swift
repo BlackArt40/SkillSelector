@@ -168,15 +168,12 @@ struct SkillSelectorApp: App {
                 StorageUnavailableView()
             }
         }
-            .defaultSize(width: 1440, height: 900)
+            // Main-window initial size and persistence live in
+            // MainWindowFrame (frame autosave), which works on every
+            // supported macOS; the macOS 13-only default-size modifier and
+            // the `Settings` scene were removed with it.
             .commands {
                 WindowCommands()
             }
-        Settings {
-            if let model {
-                SettingsView()
-                    .environmentObject(model)
-            }
-        }
     }
 }
