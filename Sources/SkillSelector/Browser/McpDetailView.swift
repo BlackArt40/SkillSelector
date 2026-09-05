@@ -171,7 +171,7 @@ struct McpDetailView: View {
     private func configurationSection(_ server: McpServerDescriptor) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             DetailViewSupport.sectionHeading(L10n.string("Configuration"))
-            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {
+            VStack(alignment: .leading, spacing: 10) {
                 DetailViewSupport.keyValueRow(L10n.string("Transport"), value: transportLabel(server.transport), monospaced: true)
                 switch server.transport {
                 case .stdio:

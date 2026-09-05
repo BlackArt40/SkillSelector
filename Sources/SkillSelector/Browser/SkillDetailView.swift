@@ -168,7 +168,7 @@ struct SkillDetailView: View {
     private func locationsSection(_ skill: SkillSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             DetailViewSupport.sectionHeading(L10n.string("Locations"))
-            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {
+            VStack(alignment: .leading, spacing: 10) {
                 DetailViewSupport.keyValueRow(L10n.string("Level"), value: scopeLabel(skill), monospaced: false)
                 DetailViewSupport.keyValueRow(L10n.string("Root"), value: rootLabel(skill), monospaced: true)
                 DetailViewSupport.keyValueRow(L10n.string("Installation Path"), value: skill.path, monospaced: true)

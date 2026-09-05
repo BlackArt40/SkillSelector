@@ -492,7 +492,7 @@ private struct ShimmerHighlight: View {
             guard !reduceMotion else { return }
             startSweep()
         }
-        .onChange(of: reduceMotion) { _, reduced in
+        .onChangeCompat(of: reduceMotion) { reduced in
             if reduced {
                 withAnimation(.easeOut(duration: 0.15)) { phase = 0 }
             } else {

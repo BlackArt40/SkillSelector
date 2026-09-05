@@ -5,14 +5,15 @@ import SwiftUI
 /// views don't each re-declare the same label/value rows, section headings
 /// and informational shells.
 enum DetailViewSupport {
-    /// A label/value row for use inside a `Grid`: fixed-width label, value
-    /// is selectable and right-flexible, mono typeface opt-in.
+    /// A label/value row for use inside the detail views' label/value stacks
+    /// (a `VStack` of these rows): fixed-width label, value is selectable and
+    /// right-flexible, mono typeface opt-in.
     static func keyValueRow(
         _ label: String,
         value: String,
         monospaced: Bool
     ) -> some View {
-        GridRow(alignment: .firstTextBaseline) {
+        HStack(alignment: .firstTextBaseline, spacing: 16) {
             Text(verbatim: label)
                 .font(AppTheme.body(13))
                 .foregroundStyle(AppTheme.muted)

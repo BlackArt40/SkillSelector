@@ -83,16 +83,16 @@ struct RootView: View {
             }
             .onAppear { onAppear() }
             .onDisappear { onDisappear() }
-            .onChange(of: destination) { _, newValue in
+            .onChangeCompat(of: destination) { newValue in
                 destinationChanged(newValue)
             }
-            .onChange(of: searchFocused) { _, focused in
+            .onChangeCompat(of: searchFocused) { focused in
                 searchFocusChanged(focused)
             }
-            .onChange(of: searchText) { _, newValue in
+            .onChangeCompat(of: searchText) { newValue in
                 searchTextChanged(newValue)
             }
-            .onChange(of: model.refreshState) { _, newState in
+            .onChangeCompat(of: model.refreshState) { newState in
                 refreshStateChanged(newState)
             }
             .languageReloading()

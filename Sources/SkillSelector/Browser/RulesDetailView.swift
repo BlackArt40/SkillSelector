@@ -182,7 +182,7 @@ struct RulesDetailView: View {
     private func metadataSection(_ file: RulesFileDescriptor) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             DetailViewSupport.sectionHeading(L10n.string("Configuration"))
-            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {
+            VStack(alignment: .leading, spacing: 10) {
                 DetailViewSupport.keyValueRow(L10n.string("Level"), value: scopeLabel(file), monospaced: false)
                 DetailViewSupport.keyValueRow(
                     L10n.string("Agent"),

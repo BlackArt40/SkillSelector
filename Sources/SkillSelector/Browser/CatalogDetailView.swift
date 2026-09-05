@@ -131,7 +131,7 @@ struct CatalogDetailView: View {
         NSPasteboard.general.setString(value, forType: .string)
         copied = field
         Task {
-            try? await Task.sleep(for: .seconds(2))
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
             copied = nil
         }
     }
@@ -313,7 +313,7 @@ struct CatalogDetailView: View {
     private func metadataSection(_ skill: CatalogSkill) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             DetailViewSupport.sectionHeading(L10n.string("Configuration"))
-            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {
+            VStack(alignment: .leading, spacing: 10) {
                 DetailViewSupport.keyValueRow(
                     L10n.string("Source"),
                     value: sourceNamesByID[skill.sourceID] ?? skill.sourceID,
@@ -335,7 +335,7 @@ struct CatalogDetailView: View {
         if let repo = model.catalog.repoInfoBySourceID[skill.sourceID] {
             VStack(alignment: .leading, spacing: 12) {
                 DetailViewSupport.sectionHeading(L10n.string("Repository"))
-                Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {
+                VStack(alignment: .leading, spacing: 10) {
                     DetailViewSupport.keyValueRow(
                         L10n.string("Repository Author"),
                         value: repo.owner,

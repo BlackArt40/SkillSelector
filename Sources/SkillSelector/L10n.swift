@@ -100,7 +100,7 @@ struct LanguageReloading: ViewModifier {
     func body(content: Content) -> some View {
         content
             .id(languageVersion)
-            .onChange(of: preferredLanguage) { _, _ in
+            .onChangeCompat(of: preferredLanguage) { _ in
                 languageVersion += 1
             }
     }
