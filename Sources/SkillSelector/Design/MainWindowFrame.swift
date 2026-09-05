@@ -25,7 +25,7 @@ struct MainWindowFrame: NSViewRepresentable {
 private final class MainFrameView: NSView {
     private var observers: [NSObjectProtocol] = []
 
-    override func viewDidMoveToWindow {
+    override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         guard window != nil else {
             removeObservers()
@@ -39,7 +39,9 @@ private final class MainFrameView: NSView {
                 object: window,
                 queue: .main
             ) { [weak self] _ in
-                self?.saveFrame()
+                MainActor.assumeIsolated {
+                    self?.saveFrame()
+                }
             })
         }
         restoreOrSeed()
@@ -50,10 +52,6 @@ private final class MainFrameView: NSView {
             NotificationCenter.default.removeObserver(observer)
         }
         observers.removeAll()
-    }
-
-    deinit {
-        removeObservers()
     }
 
     private func restoreOrSeed() {
