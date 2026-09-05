@@ -57,7 +57,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         // already .regular, so this is a no-op for them.
         if NSApp.activationPolicy() == .prohibited {
             NSApp.setActivationPolicy(.regular)
-            NSApp.activate()
+            NSApp.activate(ignoringOtherApps: true)
         }
         #if DEBUG
         if ScreenshotMode.isActive {
