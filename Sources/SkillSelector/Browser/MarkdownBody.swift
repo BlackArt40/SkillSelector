@@ -73,14 +73,30 @@ extension View {
 
 /// A self-contained structured-markdown body: AppTheme styling, best-effort
 /// text selection, and the http/https link policy.
+///
+/// GFM tables are pulled out by `GFMTableSegmenter` and rendered by the app's
+/// own `GFMTableView` — MarkdownUI 2.4.1's table path is gated behind macOS 13
+/// with no fallback and would render empty at a macOS 12 deployment target.
+/// The segmenter keeps every non-table fragment a byte-exact substring of the
+/// source, so MarkdownUI still owns all other block layout unchanged.
 struct MarkdownBodyView: View {
     let text: String
 
     var body: some View {
-        Markdown(text, baseURL: nil)
-            .markdownTheme(.appTheme)
-            .textSelection(.enabled)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .markdownLinkPolicy()
+        VStack(alignment: .leading, spacing: 12) {
+            let segments = GFMTableSegmenter.segments(in: text)
+            ForEach(segments.indices, id: \.self) { index in
+                switch segments[index] {
+                case .markdown(let markdown):
+                    Markdown(markdown, baseURL: nil)
+                        .markdownTheme(.appTheme)
+                case .table(let table):
+                    GFMTableView(table: table)
+                }
+            }
+        }
+        .textSelection(.enabled)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .markdownLinkPolicy()
     }
 }
