@@ -146,6 +146,18 @@ final class FingerprintVersionMigrationTests: XCTestCase {
         XCTAssertFalse(SkillContentFingerprint.isCurrentVersion(""))
     }
 
+    /// GRDB 7 exposes both sync and async `read`/`write` overloads; from an
+    /// async test method Swift prefers the async `@Sendable` ones, which
+    /// reject non-Sendable records and captured vars. These sync wrappers
+    /// keep the direct database access on the sync overloads.
+    private func firstRecord(in database: DatabaseQueue) throws -> SkillRecord? {
+        try database.read { try SkillRecord.fetchAll($0) }.first
+    }
+
+    private func upsert(_ record: SkillRecord, in database: DatabaseQueue) throws {
+        try database.write { try record.upsert($0) }
+    }
+
     /// An entry whose cache carries a pre-v2 fingerprint is excluded from
     /// the incremental cache; the next scan re-reads it and produces a
     /// current-version fingerprint.
@@ -167,9 +179,7 @@ final class FingerprintVersionMigrationTests: XCTestCase {
         try index.apply(report: await SkillScanner(computesContentFingerprints: true).scan([root]))
 
         // Rewrite the cache entry with an old-style (pre-v2) fingerprint.
-        var record = try XCTUnwrap(
-            try database.read { try SkillRecord.fetchAll($0) }.first
-        )
+        var record = try XCTUnwrap(try firstRecord(in: database))
         let data = try XCTUnwrap(record.scanStateData)
         let entry = try JSONDecoder().decode(ScannedSkillCacheEntry.self, from: data)
         record.scanStateData = try JSONEncoder().encode(ScannedSkillCacheEntry(
@@ -178,7 +188,7 @@ final class FingerprintVersionMigrationTests: XCTestCase {
             contentFingerprint: "5f5c6a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a",
             entryModificationDate: entry.entryModificationDate
         ))
-        try database.write { try record.upsert($0) }
+        try upsert(record, in: database)
 
         // The stale entry is excluded from the incremental cache…
         XCTAssertTrue(try index.cachedScanEntries().isEmpty)
@@ -213,8 +223,7 @@ final class FingerprintVersionMigrationTests: XCTestCase {
         let root = ScanRoot.project(id: "p", url: base, registry: BuiltInAgentRegistry.make())
         try index.apply(report: await SkillScanner(computesContentFingerprints: true).scan([root]))
 
-        XCTAssertEqual(try index.cachedScanEntries().count, 1)
-        let second = await SkillScanner(computesContentFingerprints: true).scan(
+        XCTAssertEqual(try index.cachedScanEntries().count, 1)        let second = await SkillScanner(computesContentFingerprints: true).scan(
             [root],
             cache: SkillScanCache(entriesByPath: try index.cachedScanEntries())
         )
