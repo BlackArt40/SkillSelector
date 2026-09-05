@@ -16,7 +16,7 @@ let testTargets: [Target] = FileManager.default.fileExists(atPath: "Tests")
 let package = Package(
     name: "SkillSelector",
     defaultLocalization: "en",
-    platforms: [.macOS(.v15)],
+    platforms: [.macOS(.v12)],
     products: [
         .library(name: "SkillSelectorCore", targets: ["SkillSelectorCore"]),
         .executable(name: "SkillSelector", targets: ["SkillSelector"]),
