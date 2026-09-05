@@ -24,8 +24,13 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/jpsim/Yams.git", from: "6.0.0"),
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
-        // textual 暂留，Task 6 移除
-        .package(url: "https://github.com/gonzalezreal/textual", from: "0.5.0"),
+        // Pinned exactly (GRDB precedent): MarkdownUI 2.4.1 is the newest tag
+        // whose Package.swift still declares .macOS(.v12); a floating range
+        // could pick up a release that raises the floor above 12.
+        .package(
+            url: "https://github.com/gonzalezreal/swift-markdown-ui",
+            exact: "2.4.1"
+        ),
     ],
     targets: [
         .target(
@@ -36,7 +41,7 @@ let package = Package(
             name: "SkillSelector",
             dependencies: [
                 "SkillSelectorCore",
-                .product(name: "Textual", package: "textual"),
+                .product(name: "MarkdownUI", package: "swift-markdown-ui"),
             ],
             resources: [
                 .process("Resources"),

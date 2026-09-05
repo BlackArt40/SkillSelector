@@ -2,9 +2,9 @@ import SkillSelectorCore
 import XCTest
 @testable import SkillSelector
 
-/// Tests for the Textual-backed Markdown pipeline.
+/// Tests for the Markdown rendering pipeline.
 ///
-/// Rendering itself now belongs to the Textual dependency, so these tests
+/// Rendering itself now belongs to the MarkdownUI dependency, so these tests
 /// pin the parts that are still app-owned and pure:
 ///
 /// - **body extraction** — the `FrontmatterParser.bodyLines` boundary
@@ -104,5 +104,11 @@ final class MarkdownBodyTests: XCTestCase {
         XCTAssertFalse(MarkdownLinkPolicy.isAllowedLink(URL(fileURLWithPath: "/tmp/pwn.command")))
         XCTAssertFalse(MarkdownLinkPolicy.isAllowedLink(URL(string: "shortcuts://run")!))
         XCTAssertFalse(MarkdownLinkPolicy.isAllowedLink(URL(string: "file:///etc/passwd")!))
+    }
+
+    /// Script schemes hand execution to code outside the sandbox and must be
+    /// discarded like any other non-http destination.
+    func testLinkPolicyDiscardsNonHttpSchemes() {
+        XCTAssertFalse(MarkdownLinkPolicy.isAllowedLink(URL(string: "javascript:alert(1)")!))
     }
 }

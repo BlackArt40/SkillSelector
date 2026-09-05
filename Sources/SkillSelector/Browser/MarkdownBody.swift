@@ -1,12 +1,12 @@
 import AppKit
+import MarkdownUI
 import SkillSelectorCore
 import SwiftUI
-import Textual
 
-/// Textual-backed rendering for Skill / rules / marketplace document bodies.
+/// MarkdownUI-backed rendering for Skill / rules / marketplace document bodies.
 ///
-/// Textual wraps Foundation's `AttributedString(markdown:)` parser and owns
-/// the block layout (headings, lists, tables, code blocks, selection). This
+/// MarkdownUI wraps the cmark-gfm parser and owns the block layout (headings,
+/// lists, tables, code blocks). This
 /// type keeps only the two things that remain app concerns: hardening
 /// CommonMark soft breaks and the http/https link policy.
 enum MarkdownBody {
@@ -71,15 +71,15 @@ extension View {
     }
 }
 
-/// A self-contained structured-markdown body: AppTheme styling, native text
-/// selection, and the http/https link policy.
+/// A self-contained structured-markdown body: AppTheme styling, best-effort
+/// text selection, and the http/https link policy.
 struct MarkdownBodyView: View {
     let text: String
 
     var body: some View {
-        StructuredText(markdown: text)
-            .textual.structuredTextStyle(AppMarkdownStyle())
-            .textual.textSelection(.enabled)
+        Markdown(text, baseURL: nil)
+            .markdownTheme(.appTheme)
+            .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
             .markdownLinkPolicy()
     }
