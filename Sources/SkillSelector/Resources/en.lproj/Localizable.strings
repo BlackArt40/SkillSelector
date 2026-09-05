@@ -348,14 +348,3 @@
 "Refresh Complete Banner" = "Refresh complete · %lld added · %lld changed · %lld removed";
 "View Changes" = "View Changes";
 "Scanning" = "Scanning…";
-"Translate Description" = "Translate Description";
-"Show Original" = "Show Original";
-"Translating" = "Translating…";
-"Description Translation Timeout" = "Translation timed out — showing the original. Check that translation languages are downloaded in System Settings > General > Language & Region.";
-"Description Translation Failed" = "Translation failed — showing the original. Try again, or check that translation languages are downloaded in System Settings > General > Language & Region.";
-"Download Translation Model" = "Download Translation Model";
-"Download Translation Model Help" = "Opens System Settings → Translation Languages to download the English model (required on first use).";
-"Translation" = "Translation";
-"Translation Languages" = "Translation Languages";
-"Translation Languages Sub" = "Apple's on-device models power translation. Download the English model on first use — this opens System Settings → Translation Languages.";
-"Download Model…" = "Download Model…";

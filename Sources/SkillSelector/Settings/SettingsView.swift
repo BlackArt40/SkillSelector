@@ -184,21 +184,6 @@ struct SettingsView: View {
                 languageSegment
             }
 
-            groupTitle(L10n.string("Translation"))
-                .padding(.top, 4)
-            SettingsGroup {
-                SettingsRow(
-                    label: L10n.string("Translation Languages"),
-                    sub: L10n.string("Translation Languages Sub")
-                ) {
-                    Button(L10n.string("Download Model…")) {
-                        model.openTranslationLanguageSettings()
-                    }
-                    .buttonStyle(SettingsButtonStyle())
-                    .help(L10n.string("Download Translation Model Help"))
-                }
-            }
-
             groupTitle(L10n.string("Legacy Agents"))
                 .padding(.top, 4)
             SettingsGroup {
