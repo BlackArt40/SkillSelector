@@ -26,12 +26,12 @@ cp Sources/SkillSelector/Resources/AppIcon.icns Sources/SkillSelector/Resources/
 cp Sources/SkillSelector/Resources/en.lproj/Localizable.strings "$OUT/Contents/Resources/en.lproj/"
 cp Sources/SkillSelector/Resources/zh-Hans.lproj/Localizable.strings "$OUT/Contents/Resources/zh-Hans.lproj/"
 
-# SwiftPM resource bundles: same dual placement as package-dmg.sh — the .app
-# root for Bundle.module, Resources for Bundle.main.url(forResource:) (L10n).
+# Resource bundles ship ONLY in Contents/Resources (same contract as
+# package-dmg.sh): the app resolves them through Bundle.appResources, and a
+# .app-root copy would break codesign (unsealed bundle-root contents).
 for resource_bundle in .build/release/*.bundle; do
     [[ -e "$resource_bundle" ]] || continue
     ditto "$resource_bundle" "$OUT/Contents/Resources/${resource_bundle:t}"
-    ditto "$resource_bundle" "$OUT/${resource_bundle:t}"
 done
 
 # A per-invocation temp path keeps parallel builds from overwriting each

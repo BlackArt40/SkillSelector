@@ -20,9 +20,6 @@ ROOT_DIR="${0:A:h:h:h}"
 
 test -x "$APP/Contents/MacOS/SkillSelector"
 test -d "$APP/Contents/Resources/SkillSelector_SkillSelector.bundle"
-# Bundle.module resolves against Bundle.main.bundleURL (the .app root): a
-# Resources-only copy ships fine but SIGILLs the first brand-icon render.
-test -d "$APP/SkillSelector_SkillSelector.bundle"
 lipo "$APP/Contents/MacOS/SkillSelector" -verify_arch arm64 x86_64
 
 # `--deep` is deprecated for signing but is the correct flag for verification:

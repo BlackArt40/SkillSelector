@@ -33,15 +33,13 @@ lipo -create \
     "$X86_RELEASE/SkillSelector" \
     -output "$APP/Contents/MacOS/SkillSelector"
 
-# SwiftPM 6 resolves `Bundle.module` against Bundle.main.bundleURL (the .app
-# root) and its compiled build-machine path — never Contents/Resources. A
-# Resources-only copy makes the first brand-icon render fatalError (found by
-# the macOS 12 real-device smoke: SIGILL in AgentBrandIcon). Ship it in both
-# locations: the .app root for Bundle.module, Resources for
-# Bundle.main.url(forResource:) lookups (L10n).
+# Resource bundles ship ONLY in Contents/Resources. Never copy them to the
+# .app root: codesign rejects unsealed contents at the bundle root ("unsealed
+# contents present in the bundle root") and the app-side resolver
+# (`Bundle.appResources`, mirroring L10n) reads this location. Direct
+# `Bundle.module` use is forbidden in app code for the same reason.
 for resource_bundle in "$ARM_RELEASE"/*.bundle(N); do
     ditto "$resource_bundle" "$APP/Contents/Resources/${resource_bundle:t}"
-    ditto "$resource_bundle" "$APP/${resource_bundle:t}"
 done
 
 # App icon (design/assets) for Finder, Dock and the About pane.

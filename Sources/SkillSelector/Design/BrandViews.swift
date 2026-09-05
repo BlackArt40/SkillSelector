@@ -193,8 +193,16 @@ struct AgentMonoView: View {
 /// legible in both light and dark appearances.
 enum AgentBrandIcon {
     /// The bundled brand mark for an agent id, if one is shipped.
+    ///
+    /// Resolves through `appResources`, never `Bundle.module`: the SwiftPM
+    /// accessor searches the .app root and the build machine's absolute path,
+    /// so in a packaged (non-builder) install it fatals on first use — the
+    /// macOS 12 real-device smoke caught exactly that (SIGILL in
+    /// AgentIconView). `appResources` mirrors L10n's lookup against
+    /// Contents/Resources and only falls back to `Bundle.module` for tests
+    /// and `swift run`.
     static func image(for agentID: String) -> NSImage? {
-        guard let url = Bundle.module.url(
+        guard let url = Bundle.appResources.url(
             forResource: agentID,
             withExtension: "svg",
             subdirectory: "AgentIcons"
