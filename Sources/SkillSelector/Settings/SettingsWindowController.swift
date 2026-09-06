@@ -53,9 +53,14 @@ final class SettingsWindowController {
         // WindowGroup main window presents them reliably. Attach the panel
         // to that window instead and bring it forward.
         let settingsWindow = window
-        let host = NSApp.windows.first {
+        guard let host = NSApp.windows.first({
             $0 !== settingsWindow && $0.isVisible && !$0.isSheet && !$0.isModalPanel
-        } ?? settingsWindow
+        }) ?? settingsWindow else {
+            // No window at all to host the panel.
+            Self.log.info("presentAsSheet: no host window — runModal fallback")
+            completion(panel.runModal() == .OK ? panel.url : nil)
+            return
+        }
         Self.log.info(
             "presentAsSheet: host is settingsWindow=\(host === settingsWindow, privacy: .public)"
         )
