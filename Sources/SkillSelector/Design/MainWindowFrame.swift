@@ -34,7 +34,7 @@ final class MainWindowFrameCoordinator {
     static let autosaveKey = "SkillSelector.mainWindowFrame"
     static let shared = MainWindowFrameCoordinator()
 
-    private var observers: [NSObjectProtocol] = []
+    private var observers: [Any] = []
     private var restoredWindowID: Int?
 
     private init() {}
@@ -60,6 +60,19 @@ final class MainWindowFrameCoordinator {
                 }
             })
         }
+        // Belt-and-braces: AX-driven and scripted resizes can bypass the
+        // AppKit live-resize notifications (the macOS 12 smoke harness set
+        // frames programmatically), so also persist on a slow timer while a
+        // tracked window exists. Idempotent — same value as the events write.
+        let timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, let id = self.restoredWindowID else { return }
+                for window in NSApp.windows where window.windowNumber == id {
+                    self.saveFrame(of: window)
+                }
+            }
+        }
+        observers.append(timer)
     }
 
     private func restoreIfNeeded(on window: NSWindow) {
