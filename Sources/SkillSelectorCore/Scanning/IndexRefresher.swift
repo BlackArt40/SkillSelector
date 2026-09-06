@@ -431,7 +431,7 @@ public final class IndexRefresher {
         )
         try index.apply(report: report)
         let after = try index.skills()
-        return summary(before: before, after: after)
+        return Self.summary(before: before, after: after)
     }
 
     private func coalescedRoots(_ roots: [ScannedRoot]) -> [ScannedRoot] {
@@ -454,7 +454,9 @@ public final class IndexRefresher {
             }
     }
 
-    private func summary(before: [SkillSnapshot], after: [SkillSnapshot]) -> RefreshSummary {
+    /// Pure delta between the pre- and post-apply snapshots, static (and
+    /// internal) so the change semantics are unit-testable.
+    static func summary(before: [SkillSnapshot], after: [SkillSnapshot]) -> RefreshSummary {
         // Favor the first snapshot on duplicate paths (defensive: paths are
         // unique in practice, but a corrupted store must not crash here).
         let oldByPath = Dictionary(before.map { ($0.path, $0) }, uniquingKeysWith: { first, _ in first })

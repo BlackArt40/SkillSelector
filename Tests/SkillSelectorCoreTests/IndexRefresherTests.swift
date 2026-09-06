@@ -5,6 +5,39 @@ import XCTest
 
 @MainActor
 final class IndexRefresherTests: XCTestCase {
+    /// The refresh delta counts user-visible file changes only: the
+    /// deferred fingerprint backfill enriching records mid-refresh must
+    /// not turn an unchanged refresh into a history entry.
+    func testSummaryCountsUserVisibleChangesOnly() {
+        let old = SkillSnapshot(
+            path: "/root/.claude/skills/alpha",
+            resolvedTarget: nil,
+            name: "alpha",
+            localDescription: "does things",
+            modificationDate: nil,
+            agentIDs: ["claude-code"],
+            rootIDs: ["home"],
+            entryFilename: "SKILL.md",
+            parseDiagnostics: []
+        )
+        XCTAssertEqual(IndexRefresher.summary(before: [old], after: [old]).changed, 0)
+
+        // Fingerprint-only enrichment (nil → backfilled values) is
+        // internal cache state, not a change.
+        var enriched = old
+        enriched.contentFingerprint = "c1"
+        enriched.similarityFingerprint = "s1:0000000000000001"
+        XCTAssertTrue(
+            IndexRefresher.summary(before: [old], after: [enriched]).isEmpty,
+            "fingerprint-only deltas must not pollute the refresh summary"
+        )
+
+        // A user-visible metadata change still counts.
+        var renamed = old
+        renamed.name = "alpha2"
+        XCTAssertEqual(IndexRefresher.summary(before: [old], after: [renamed]).changed, 1)
+    }
+
     func testHomeRefreshUsesCanonicalOwnersAndLeavesSharedAgentsEmpty() async throws {
         let fixture = try RefreshFixture()
         try fixture.writeSkill(at: ".codex/skills/codex-only", name: "codex-only")
