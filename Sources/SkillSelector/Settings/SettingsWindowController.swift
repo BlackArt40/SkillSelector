@@ -53,7 +53,7 @@ final class SettingsWindowController {
         // WindowGroup main window presents them reliably. Attach the panel
         // to that window instead and bring it forward.
         let settingsWindow = window
-        guard let host = NSApp.windows.first({
+        guard let host = NSApp.windows.first(where: {
             $0 !== settingsWindow && $0.isVisible && !$0.isSheet && !$0.isModalPanel
         }) ?? settingsWindow else {
             // No window at all to host the panel.
