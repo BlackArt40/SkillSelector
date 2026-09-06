@@ -14,6 +14,7 @@ final class SymbolAvailabilityTests: XCTestCase {
         "arrow.up.arrow.down",
         "arrow.up.forward.app",
         "arrow.up.right",
+        "arrow.up.circle",
         "checkmark",
         "checkmark.circle",
         "checkmark.circle.fill",
