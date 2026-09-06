@@ -50,8 +50,8 @@ final class MainWindowFrameCoordinator {
                 object: nil,
                 queue: .main
             ) { [weak self] notification in
+                guard let window = notification.object as? NSWindow else { return }
                 MainActor.assumeIsolated {
-                    guard let window = notification.object as? NSWindow else { return }
                     if name == NSWindow.didBecomeMainNotification {
                         self?.restoreIfNeeded(on: window)
                     } else {
