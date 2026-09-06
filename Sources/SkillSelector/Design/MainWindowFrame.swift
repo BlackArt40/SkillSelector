@@ -4,62 +4,68 @@ import SwiftUI
 /// Restores (or seeds) the main window's frame across launches.
 ///
 /// NSWindow's built-in frame autosave is unusable under SwiftUI's WindowGroup:
-/// the AppKit bridge assigns the window its own autosave name, never persists
-/// resizes under ours, and `setFrameUsingName("MainWindow")` therefore always
-/// finds nothing and resets to the seed size (found by the macOS 12 real-device
-/// smoke). This representable owns the whole cycle explicitly instead: restore
-/// once when the view attaches, save on live-resize end, window move, and
-/// window close — all under one fixed key with a self-consistent format.
-struct MainWindowFrame: NSViewRepresentable {
-    static let autosaveKey = "SkillSelector.mainWindowFrame"
-
-    func makeNSView(context: Context) -> NSView {
-        MainFrameView()
+/// the AppKit bridge assigns the window its own autosave name and never
+/// persists resizes under ours. Hosting the persistence through an NSView in
+/// `.background` also proved unreliable — the representable's view never
+/// reliably joined the window's responder chain on macOS 12 (the macOS 12
+/// real-device smoke caught both failures). So this helper owns the cycle
+/// globally instead: one `MainWindowFrameCoordinator` observes every window
+/// the app opens, restores the saved frame onto the first main window, and
+/// saves on resize/move/close. `MainWindowFrame` is just the mount point that
+/// activates the coordinator from the view tree.
+struct MainWindowFrame: ViewModifier {
+    func body(content: Content) -> some View {
+        content.onAppear {
+            MainWindowFrameCoordinator.shared.activate()
+        }
     }
-
-    func updateNSView(_ nsView: NSView, context: Context) {}
 }
 
-/// Self-contained frame persistence: attaches observers exactly once per
-/// window and cleans them up when the view leaves the hierarchy.
-private final class MainFrameView: NSView {
-    private var observers: [NSObjectProtocol] = []
+extension View {
+    /// Activates main-window frame persistence (see `MainWindowFrame`).
+    func mainWindowFramePersistence() -> some View {
+        modifier(MainWindowFrame())
+    }
+}
 
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        guard window != nil else {
-            removeObservers()
-            return
-        }
+/// Owns frame save/restore for the app's main window. Activated once.
+@MainActor
+final class MainWindowFrameCoordinator {
+    static let autosaveKey = "SkillSelector.mainWindowFrame"
+    static let shared = MainWindowFrameCoordinator()
+
+    private var observers: [NSObjectProtocol] = []
+    private var restoredWindowID: CGWindowID?
+
+    private init() {}
+
+    func activate() {
         guard observers.isEmpty else { return }
         let center = NotificationCenter.default
-        for name in [NSWindow.didEndLiveResizeNotification, NSWindow.didMoveNotification, NSWindow.willCloseNotification, NSWindow.didResizeNotification] {
+        // Observe app-wide (object: nil): the main window is whichever
+        // WindowGroup window exists when the first restore lands.
+        for name in [NSWindow.didEndLiveResizeNotification, NSWindow.didMoveNotification, NSWindow.willCloseNotification, NSWindow.didBecomeMainNotification] {
             observers.append(center.addObserver(
                 forName: name,
-                object: window,
+                object: nil,
                 queue: .main
-            ) { [weak self] _ in
+            ) { [weak self] notification in
                 MainActor.assumeIsolated {
-                    self?.saveFrame()
+                    guard let window = notification.object as? NSWindow else { return }
+                    if name == NSWindow.didBecomeMainNotification {
+                        self?.restoreIfNeeded(on: window)
+                    } else {
+                        self?.saveFrame(of: window)
+                    }
                 }
             })
         }
-        restoreOrSeed()
-        // Probe: write once immediately after attach so a failure here is
-        // distinguishable from "the notifications never fired".
-        saveFrame()
     }
 
-    private func removeObservers() {
-        for observer in observers {
-            NotificationCenter.default.removeObserver(observer)
-        }
-        observers.removeAll()
-    }
-
-    private func restoreOrSeed() {
-        guard let window else { return }
-        let saved = UserDefaults.standard.string(forKey: MainWindowFrame.autosaveKey)
+    private func restoreIfNeeded(on window: NSWindow) {
+        guard restoredWindowID == nil else { return }
+        restoredWindowID = window.windowNumber
+        let saved = UserDefaults.standard.string(forKey: Self.autosaveKey)
             .map { NSRectFromString($0) }
         if let saved, saved.width >= 400, saved.height >= 300 {
             window.setFrame(saved, display: false)
@@ -69,12 +75,14 @@ private final class MainFrameView: NSView {
         }
     }
 
-    private func saveFrame() {
-        guard let window, window.isVisible else { return }
+    private func saveFrame(of window: NSWindow) {
+        // One tracked window: skip the Settings singleton (its own autosave)
+        // by remembering which window we restored onto.
+        guard let id = restoredWindowID, window.windowNumber == id else { return }
         let frame = window.frame
         UserDefaults.standard.set(
             "\(frame.origin.x) \(frame.origin.y) \(frame.size.width) \(frame.size.height)",
-            forKey: MainWindowFrame.autosaveKey
+            forKey: Self.autosaveKey
         )
     }
 }

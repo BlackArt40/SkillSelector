@@ -152,7 +152,7 @@ struct RootView: View {
                 detailPane
             }
         }
-        .background(MainWindowFrame())
+        .mainWindowFramePersistence()
         .frame(minWidth: 960, minHeight: 600)
         .animation(.smooth(duration: 0.22), value: destination)
         .navigationTitle(title)
