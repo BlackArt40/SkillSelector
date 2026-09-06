@@ -33,7 +33,7 @@ private final class MainFrameView: NSView {
         }
         guard observers.isEmpty else { return }
         let center = NotificationCenter.default
-        for name in [NSWindow.didEndLiveResizeNotification, NSWindow.didMoveNotification, NSWindow.willCloseNotification] {
+        for name in [NSWindow.didEndLiveResizeNotification, NSWindow.didMoveNotification, NSWindow.willCloseNotification, NSWindow.didResizeNotification] {
             observers.append(center.addObserver(
                 forName: name,
                 object: window,
@@ -45,6 +45,9 @@ private final class MainFrameView: NSView {
             })
         }
         restoreOrSeed()
+        // Probe: write once immediately after attach so a failure here is
+        // distinguishable from "the notifications never fired".
+        saveFrame()
     }
 
     private func removeObservers() {
