@@ -9,8 +9,8 @@ private let logger = Logger(subsystem: "com.SkillSelector", category: "App")
 
 /// Holds a flock on a lock file for the whole process lifetime. Two
 /// SkillSelector instances would otherwise open the same index database
-/// concurrently — SQLite WAL contention made the second process crash on
-/// launch (the "flash-exit after restarting the terminal app" report).
+/// concurrently — contending for the same SQLite file crashed the second
+/// process on launch (the "flash-exit after restarting the terminal app" report).
 private final class SingleInstanceLock {
     private var fileDescriptor: Int32 = -1
 
