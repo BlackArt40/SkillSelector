@@ -50,7 +50,9 @@ final class SettingsWindowController {
             completion(panel.runModal() == .OK ? panel.url : nil)
             return
         }
-        panel.beginSheetModal(for: window, completionHandler: completion)
+        panel.beginSheetModal(for: window) { response in
+            completion(response == .OK ? panel.url : nil)
+        }
     }
 }
 
