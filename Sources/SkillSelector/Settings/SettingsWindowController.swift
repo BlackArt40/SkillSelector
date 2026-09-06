@@ -1,4 +1,5 @@
 import AppKit
+import OSLog
 import SwiftUI
 
 /// The Settings window: a single AppKit window hosting the SwiftUI pane.
@@ -7,6 +8,8 @@ import SwiftUI
 @MainActor
 final class SettingsWindowController {
     static let shared = SettingsWindowController()
+
+    private static let log = Logger(subsystem: "com.SkillSelector", category: "SettingsWindow")
 
     private var window: NSWindow?
     private var hostingModel: AppModel?
@@ -44,14 +47,23 @@ final class SettingsWindowController {
     /// while sheets present reliably. Covers both panel types since
     /// NSOpenPanel inherits NSSavePanel's sheet API.
     func presentAsSheet(_ panel: NSSavePanel, completion: @escaping (URL?) -> Void) {
+        Self.log.info("presentAsSheet: hasWindow=\(self.window != nil, privacy: .public)")
         guard let window else {
             // Settings window not up (nothing hosts the sheet): fall back
             // to the modal loop rather than dropping the request.
+            Self.log.info("presentAsSheet: runModal fallback")
             completion(panel.runModal() == .OK ? panel.url : nil)
             return
         }
-        panel.beginSheetModal(for: window) { response in
-            completion(response == .OK ? panel.url : nil)
+        // Defer out of SwiftUI's button-action call frame: presenting a
+        // file panel synchronously inside the action never surfaces it on
+        // macOS 12 (the D1 defect), while a deferred sheet presents.
+        DispatchQueue.main.async {
+            Self.log.info("presentAsSheet: beginSheetModal (deferred)")
+            panel.beginSheetModal(for: window) { response in
+                Self.log.info("presentAsSheet: completed \(response.rawValue, privacy: .public)")
+                completion(response == .OK ? panel.url : nil)
+            }
         }
     }
 }
