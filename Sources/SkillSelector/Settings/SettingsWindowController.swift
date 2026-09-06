@@ -47,21 +47,23 @@ final class SettingsWindowController {
     /// while sheets present reliably. Covers both panel types since
     /// NSOpenPanel inherits NSSavePanel's sheet API.
     func presentAsSheet(_ panel: NSSavePanel, completion: @escaping (URL?) -> Void) {
-        Self.log.info("presentAsSheet: hasWindow=\(self.window != nil, privacy: .public)")
-        guard let window else {
-            // Settings window not up (nothing hosts the sheet): fall back
-            // to the modal loop rather than dropping the request.
-            Self.log.info("presentAsSheet: runModal fallback")
-            completion(panel.runModal() == .OK ? panel.url : nil)
-            return
-        }
-        // Defer out of SwiftUI's button-action call frame: presenting a
-        // file panel synchronously inside the action never surfaces it on
-        // macOS 12 (the D1 defect), while a deferred sheet presents.
+        // File panels never present from this controller-hosted settings
+        // window on macOS 12 — runModal, beginSheetModal, deferred: all
+        // silent no-ops (the D1 defect, reproduced by hand) — while the
+        // WindowGroup main window presents them reliably. Attach the panel
+        // to that window instead and bring it forward.
+        let settingsWindow = window
+        let host = NSApp.windows.first {
+            $0 !== settingsWindow && $0.isVisible && !$0.isSheet && !$0.isModalPanel
+        } ?? settingsWindow
+        Self.log.info(
+            "presentAsSheet: host is settingsWindow=\(host === settingsWindow, privacy: .public)"
+        )
+        host.makeKeyAndOrderFront(nil)
+        // Deferred one runloop turn out of SwiftUI's button-action call
+        // frame for the same reason.
         DispatchQueue.main.async {
-            Self.log.info("presentAsSheet: beginSheetModal (deferred)")
-            panel.beginSheetModal(for: window) { response in
-                Self.log.info("presentAsSheet: completed \(response.rawValue, privacy: .public)")
+            panel.beginSheetModal(for: host) { response in
                 completion(response == .OK ? panel.url : nil)
             }
         }
