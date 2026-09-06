@@ -469,6 +469,33 @@ final class AppModel: ObservableObject {
         NearDuplicateSkillGrouper.groups(snapshots)
     }
 
+    /// Groups the user ignored, bucketed by their persisted ignore key —
+    /// the duplicates view lists these with a restore action, so ignoring
+    /// stays reversible.
+    var ignoredDuplicateGroups: [IgnoredDuplicateGroup] {
+        ignoredGroups(keyPath: \.ignoredDuplicateGroup)
+    }
+
+    /// Ignored near-duplicate clusters, keyed the same way as the exact
+    /// ones above (the cluster key persists on each member record).
+    var ignoredNearDuplicateGroups: [IgnoredDuplicateGroup] {
+        ignoredGroups(keyPath: \.ignoredNearDuplicateGroup)
+    }
+
+    private func ignoredGroups(
+        keyPath: KeyPath<SkillSnapshot, String?>
+    ) -> [IgnoredDuplicateGroup] {
+        let ignored = snapshots.filter { $0[keyPath: keyPath] != nil }
+        return Dictionary(grouping: ignored, by: { $0[keyPath: keyPath] ?? "" })
+            .map { key, members in
+                IgnoredDuplicateGroup(
+                    fingerprint: key,
+                    members: members.sorted { $0.path < $1.path }
+                )
+            }
+            .sorted { ($0.members.map(\.name).min() ?? "") < ($1.members.map(\.name).min() ?? "") }
+    }
+
     /// Roots whose security-scoped bookmark can no longer be resolved (moved
     /// directory, restored backup, reinstalled system). They need explicit
     /// re-authorization — a sandboxed app cannot heal these silently.
@@ -1010,6 +1037,18 @@ extension AppModel {
 
 // MARK: - Duplicate group ignore
 
+/// One ignored group: the persisted ignore key plus its current members.
+/// The members re-derive from live snapshots, so a stale key (membership
+/// changed since the ignore) simply yields no row.
+struct IgnoredDuplicateGroup: Identifiable {
+    let fingerprint: String
+    let members: [SkillSnapshot]
+
+    var id: String { fingerprint }
+    /// First member name alphabetically — the group's display name.
+    var displayName: String { members.map(\.name).min() ?? "" }
+}
+
 extension AppModel {
     /// Marks (or unmarks) every Skill in the duplicate group identified by
     /// `fingerprint` as ignored, removing the group from the duplicates
@@ -1034,9 +1073,25 @@ extension AppModel {
         _ group: NearDuplicateSkillGroup,
         ignored: Bool
     ) throws -> Int {
+        try setNearDuplicateGroupIgnored(
+            fingerprint: group.fingerprint,
+            memberPaths: group.members.map(\.snapshot.path),
+            ignored: ignored
+        )
+    }
+
+    /// Key-based variant — the restore path from the duplicates view, where
+    /// the ignored cluster's members re-derive from snapshots rather than
+    /// arriving as a live group.
+    @discardableResult
+    func setNearDuplicateGroupIgnored(
+        fingerprint: String,
+        memberPaths: [String],
+        ignored: Bool
+    ) throws -> Int {
         let updated = try index.setIgnoredNearDuplicateGroup(
-            paths: group.members.map(\.snapshot.path),
-            key: group.fingerprint,
+            paths: memberPaths,
+            key: fingerprint,
             ignored: ignored
         )
         if updated > 0 {

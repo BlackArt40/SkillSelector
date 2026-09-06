@@ -37,6 +37,21 @@ final class SettingsWindowController {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
+
+    /// Presents a file panel as a sheet on the settings window. Panels must
+    /// not `runModal()` from this window: on macOS 12 the modal panel never
+    /// surfaces (no window, no error — the acceptance run's export defect),
+    /// while sheets present reliably. Covers both panel types since
+    /// NSOpenPanel inherits NSSavePanel's sheet API.
+    func presentAsSheet(_ panel: NSSavePanel, completion: @escaping (URL?) -> Void) {
+        guard let window else {
+            // Settings window not up (nothing hosts the sheet): fall back
+            // to the modal loop rather than dropping the request.
+            completion(panel.runModal() == .OK ? panel.url : nil)
+            return
+        }
+        panel.beginSheetModal(for: window, completionHandler: completion)
+    }
 }
 
 extension Notification.Name {

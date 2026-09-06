@@ -23,6 +23,12 @@ struct DuplicateGroupsView: View {
     var onIgnoreGroup: ((String) -> Void)?
     /// Marks the whole near-duplicate cluster as ignored, hiding it.
     var onIgnoreNearGroup: ((NearDuplicateSkillGroup) -> Void)?
+    /// Groups the user previously ignored, offered back with a restore
+    /// action so ignoring stays reversible.
+    var ignoredExactGroups: [IgnoredDuplicateGroup] = []
+    var ignoredNearGroups: [IgnoredDuplicateGroup] = []
+    var onRestoreGroup: ((String) -> Void)?
+    var onRestoreNearGroup: ((String) -> Void)?
     /// Loads the read-only comparison between two members (documents +
     /// stat trees), for the compare sheet.
     var onLoadComparison: ((SkillSnapshot, SkillSnapshot) async throws -> SkillComparison)? = nil
@@ -136,17 +142,23 @@ struct DuplicateGroupsView: View {
         switch mode {
         case .exact:
             if groups.isEmpty {
-                emptyState(
-                    title: L10n.string("No Duplicates"),
-                    message: L10n.string(hasAuthorization
-                        ? "No Duplicates Description"
-                        : "No Skills in Scope Description")
-                )
+                VStack(alignment: .leading, spacing: 0) {
+                    emptyState(
+                        title: L10n.string("No Duplicates"),
+                        message: L10n.string(hasAuthorization
+                            ? "No Duplicates Description"
+                            : "No Skills in Scope Description")
+                    )
+                    ignoredGroupsSection(ignoredExactGroups, restore: onRestoreGroup)
+                }
             } else if displayedExactGroups.isEmpty {
-                emptyState(
-                    title: L10n.string("No Matching Skills"),
-                    message: L10n.string("No Matching Skills Description")
-                )
+                VStack(alignment: .leading, spacing: 0) {
+                    emptyState(
+                        title: L10n.string("No Matching Skills"),
+                        message: L10n.string("No Matching Skills Description")
+                    )
+                    ignoredGroupsSection(ignoredExactGroups, restore: onRestoreGroup)
+                }
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 14) {
@@ -163,6 +175,7 @@ struct DuplicateGroupsView: View {
                                 onSelect: onSelect
                             )
                         }
+                        ignoredGroupsSection(ignoredExactGroups, restore: onRestoreGroup)
                     }
                     .padding(.vertical, 8)
                     .padding(.horizontal, 8)
@@ -170,17 +183,23 @@ struct DuplicateGroupsView: View {
             }
         case .near:
             if nearGroups.isEmpty {
-                emptyState(
-                    title: L10n.string("No Near Duplicates"),
-                    message: L10n.string(hasAuthorization
-                        ? "No Near Duplicates Description"
-                        : "No Skills in Scope Description")
-                )
+                VStack(alignment: .leading, spacing: 0) {
+                    emptyState(
+                        title: L10n.string("No Near Duplicates"),
+                        message: L10n.string(hasAuthorization
+                            ? "No Near Duplicates Description"
+                            : "No Skills in Scope Description")
+                    )
+                    ignoredGroupsSection(ignoredNearGroups, restore: onRestoreNearGroup)
+                }
             } else if displayedNearGroups.isEmpty {
-                emptyState(
-                    title: L10n.string("No Matching Skills"),
-                    message: L10n.string("No Matching Skills Description")
-                )
+                VStack(alignment: .leading, spacing: 0) {
+                    emptyState(
+                        title: L10n.string("No Matching Skills"),
+                        message: L10n.string("No Matching Skills Description")
+                    )
+                    ignoredGroupsSection(ignoredNearGroups, restore: onRestoreNearGroup)
+                }
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 14) {
@@ -200,11 +219,72 @@ struct DuplicateGroupsView: View {
                                 onSelect: onSelect
                             )
                         }
+                        ignoredGroupsSection(ignoredNearGroups, restore: onRestoreNearGroup)
                     }
                     .padding(.vertical, 8)
                     .padding(.horizontal, 8)
                 }
             }
+        }
+    }
+
+    /// Rows for ignored groups, each with a restore action. Hidden entirely
+    /// when nothing is ignored.
+    @ViewBuilder
+    private func ignoredGroupsSection(
+        _ groups: [IgnoredDuplicateGroup],
+        restore: ((String) -> Void)?
+    ) -> some View {
+        if !groups.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(verbatim: L10n.string("Ignored Groups"))
+                    .font(AppTheme.body(11, weight: .semibold))
+                    .kerning(0.2)
+                    .foregroundStyle(AppTheme.muted)
+                    .padding(.horizontal, 10)
+                    .padding(.top, 10)
+                ForEach(groups) { group in
+                    HStack(spacing: 8) {
+                        Image(systemName: "eye.slash")
+                            .font(.system(size: 12))
+                            .foregroundStyle(AppTheme.muted)
+                            .frame(width: 18)
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(verbatim: group.displayName)
+                                .font(AppTheme.body(13))
+                                .foregroundStyle(AppTheme.foreground)
+                                .lineLimit(1)
+                            Text(verbatim: String.localizedStringWithFormat(
+                                L10n.string("Duplicate Members Count"),
+                                group.members.count
+                            ))
+                            .font(AppTheme.body(11))
+                            .foregroundStyle(AppTheme.muted)
+                        }
+                        Spacer(minLength: 8)
+                        if let restore {
+                            Button {
+                                restore(group.fingerprint)
+                            } label: {
+                                Label(L10n.string("Restore"), systemImage: "arrow.up.circle")
+                                    .font(AppTheme.body(11, weight: .medium))
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(AppTheme.muted)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(AppTheme.surface, in: Capsule())
+                            .overlay(Capsule().stroke(AppTheme.borderSoft, lineWidth: 1))
+                            .help(L10n.string("Restore Ignored Group"))
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 7))
+                }
+            }
+            .padding(.top, 6)
         }
     }
 

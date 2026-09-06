@@ -138,6 +138,7 @@
 "Duplicate Skills" = "重复 Skill";
 "Duplicate Groups Count" = "%d 组";
 "No Duplicates" = "没有重复";
+"No Duplicates Description" = "没有找到内容完全相同的 Skill 副本。";
 "Duplicate Members Count" = "%d 份副本";
 
 /* Duplicate modes (exact / near) */
@@ -145,6 +146,8 @@
 "Exact Duplicates" = "完全相同";
 "Near Duplicates" = "近似重复";
 "No Near Duplicates" = "没有近似重复";
+"Ignored Groups" = "已忽略的分组";
+"Restore Ignored Group" = "把该忽略的分组放回列表";
 "No Near Duplicates Description" = "没有找到正文经小幅修改后彼此相似的 Skill 副本。";
 "Near Members Count" = "%d 份近似副本";
 "Similarity Range" = "相似度约 %d%%–%d%%";
@@ -350,3 +353,11 @@
 "Refresh Complete Banner" = "刷新完成 · 新增 %lld · 变更 %lld · 移除 %lld";
 "View Changes" = "查看变更";
 "Scanning" = "正在扫描…";
+
+/* 代码引用但此前未定义的键（此前回退为键面文本） */
+"Add Custom Agent" = "添加自定义 Agent";
+"Indexing" = "正在建立索引";
+"Source Badge" = "来源 · %@";
+"SkillSelector could not initialize its storage." = "SkillSelector 无法初始化其存储。";
+"Quit and try again. If the problem persists, the app data may need to be rebuilt." = "退出后重试；若反复出现，可能需要重建应用数据。";
+"Choose a home directory containing Agent Skills (e.g. ~/.claude, ~/.codex)." = "选择包含 Agent Skill 的主目录（如 ~/.claude、~/.codex）。";

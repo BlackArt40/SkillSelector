@@ -318,6 +318,21 @@ struct RootView: View {
                 onIgnoreNearGroup: { group in
                     _ = try? model.setNearDuplicateGroupIgnored(group, ignored: true)
                 },
+                ignoredExactGroups: model.ignoredDuplicateGroups,
+                ignoredNearGroups: model.ignoredNearDuplicateGroups,
+                onRestoreGroup: { fingerprint in
+                    _ = try? model.setDuplicateGroupIgnored(fingerprint: fingerprint, ignored: false)
+                },
+                onRestoreNearGroup: { fingerprint in
+                    guard let ignored = model.ignoredNearDuplicateGroups.first(
+                        where: { $0.fingerprint == fingerprint }
+                    ) else { return }
+                    _ = try? model.setNearDuplicateGroupIgnored(
+                        fingerprint: fingerprint,
+                        memberPaths: ignored.members.map(\.path),
+                        ignored: false
+                    )
+                },
                 onLoadComparison: { left, right in
                     try await model.compareSnapshots(left, right)
                 },

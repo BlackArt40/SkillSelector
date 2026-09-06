@@ -113,6 +113,64 @@ final class DepthFeaturesTests: XCTestCase {
         XCTAssertTrue(harness.model.nearDuplicateGroups.isEmpty)
     }
 
+    /// Ignoring must stay reversible: the ignored exact group is listed by
+    /// its persisted key with its members, and restoring brings the group
+    /// back (the acceptance run found ignore to be a one-way operation).
+    func testIgnoredExactGroupIsListedAndRestorable() async throws {
+        let harness = try makeHarness(
+            skills: [("original", longBody), ("copy", longBody)]
+        )
+        await harness.model.refresh()
+        await harness.model.waitForFingerprintBackfill()
+        guard let group = harness.model.duplicateGroups.first else {
+            return XCTFail("expected an exact-duplicate group after backfill")
+        }
+        let fingerprint = group.fingerprint
+
+        _ = try harness.model.setDuplicateGroupIgnored(fingerprint: fingerprint, ignored: true)
+        XCTAssertTrue(harness.model.duplicateGroups.isEmpty)
+
+        let ignored = harness.model.ignoredDuplicateGroups
+        XCTAssertEqual(ignored.count, 1)
+        XCTAssertEqual(ignored[0].fingerprint, fingerprint)
+        XCTAssertEqual(ignored[0].members.count, 2)
+
+        _ = try harness.model.setDuplicateGroupIgnored(fingerprint: fingerprint, ignored: false)
+        XCTAssertEqual(harness.model.duplicateGroups.count, 1)
+        XCTAssertTrue(harness.model.ignoredDuplicateGroups.isEmpty)
+    }
+
+    /// Same reversibility contract for near-duplicate clusters, restored
+    /// through the key+paths path the duplicates view uses.
+    func testIgnoredNearClusterIsListedAndRestorable() async throws {
+        let harness = try makeHarness(
+            skills: [
+                ("original", longBody),
+                ("drifted", longBody.replacingOccurrences(of: "pull requests", with: "merge requests")),
+            ]
+        )
+        await harness.model.refresh()
+        await harness.model.waitForFingerprintBackfill()
+        guard let group = harness.model.nearDuplicateGroups.first else {
+            return XCTFail("expected a near-duplicate cluster after backfill")
+        }
+
+        _ = try harness.model.setNearDuplicateGroupIgnored(group, ignored: true)
+        XCTAssertTrue(harness.model.nearDuplicateGroups.isEmpty)
+
+        let ignored = harness.model.ignoredNearDuplicateGroups
+        XCTAssertEqual(ignored.count, 1)
+        XCTAssertEqual(ignored[0].members.count, 2)
+
+        _ = try harness.model.setNearDuplicateGroupIgnored(
+            fingerprint: ignored[0].fingerprint,
+            memberPaths: ignored[0].members.map(\.path),
+            ignored: false
+        )
+        XCTAssertEqual(harness.model.nearDuplicateGroups.count, 1)
+        XCTAssertTrue(harness.model.ignoredNearDuplicateGroups.isEmpty)
+    }
+
     func testCompareSnapshotsReportsFrontmatterBodyAndFiles() async throws {
         let harness = try makeHarness(
             skills: [

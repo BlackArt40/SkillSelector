@@ -138,6 +138,7 @@
 "Duplicate Skills" = "Duplicate Skills";
 "Duplicate Groups Count" = "%d groups";
 "No Duplicates" = "No Duplicates";
+"No Duplicates Description" = "No content-identical copies were found.";
 "Duplicate Members Count" = "%d copies";
 
 /* Duplicate modes (exact / near) */
@@ -145,6 +146,8 @@
 "Exact Duplicates" = "Exact";
 "Near Duplicates" = "Near";
 "No Near Duplicates" = "No Near Duplicates";
+"Ignored Groups" = "Ignored Groups";
+"Restore Ignored Group" = "Put this ignored group back in the list";
 "No Near Duplicates Description" = "No copies that drifted apart by small edits were found.";
 "Near Members Count" = "%d near copies";
 "Similarity Range" = "≈%d%%–%d%% similar";
@@ -348,3 +351,11 @@
 "Refresh Complete Banner" = "Refresh complete · %lld added · %lld changed · %lld removed";
 "View Changes" = "View Changes";
 "Scanning" = "Scanning…";
+
+/* Keys referenced by code but previously undefined (fell back to the key) */
+"Add Custom Agent" = "Add Custom Agent";
+"Indexing" = "Indexing";
+"Source Badge" = "Source · %@";
+"SkillSelector could not initialize its storage." = "SkillSelector could not initialize its storage.";
+"Quit and try again. If the problem persists, the app data may need to be rebuilt." = "Quit and try again. If the problem persists, the app data may need to be rebuilt.";
+"Choose a home directory containing Agent Skills (e.g. ~/.claude, ~/.codex)." = "Choose a home directory containing Agent Skills (e.g. ~/.claude, ~/.codex).";

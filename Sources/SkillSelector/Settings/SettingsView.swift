@@ -563,8 +563,10 @@ struct SettingsView: View {
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.directoryURL = root.url
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        Task { await model.authorize(url, as: root.kind) }
+        presentAsSheet(panel) { url in
+            guard let url else { return }
+            Task { await model.authorize(url.standardizedFileURL, as: root.kind) }
+        }
     }
 
     private func importProject() {
@@ -576,8 +578,16 @@ struct SettingsView: View {
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.canCreateDirectories = false
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        Task { await model.authorize(url, as: .project) }
+        presentAsSheet(panel) { url in
+            guard let url else { return }
+            Task { await model.authorize(url.standardizedFileURL, as: .project) }
+        }
+    }
+
+    /// File panels in this window must present as sheets — `runModal`
+    /// never surfaces them here on macOS 12 (see SettingsWindowController).
+    private func presentAsSheet(_ panel: NSSavePanel, completion: @escaping (URL?) -> Void) {
+        SettingsWindowController.shared.presentAsSheet(panel, completion: completion)
     }
 
     private func exportDiagnostics() {
@@ -586,13 +596,15 @@ struct SettingsView: View {
         panel.prompt = L10n.string("Export")
         panel.nameFieldStringValue = "SkillSelector-Diagnostics.json"
         panel.allowedContentTypes = [.json]
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        Task {
-            do {
-                try await model.exportDiagnostics(to: url)
-                exportStatus = L10n.string("Diagnostics Exported")
-            } catch {
-                settingsError = String(describing: error)
+        presentAsSheet(panel) { url in
+            guard let url else { return }
+            Task {
+                do {
+                    try await model.exportDiagnostics(to: url)
+                    exportStatus = L10n.string("Diagnostics Exported")
+                } catch {
+                    settingsError = String(describing: error)
+                }
             }
         }
     }
