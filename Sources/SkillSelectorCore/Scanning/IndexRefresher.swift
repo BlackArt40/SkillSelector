@@ -467,7 +467,13 @@ public final class IndexRefresher {
             guard let old = oldByPath[path], let snapshot = newByPath[path] else {
                 return false
             }
-            return old != snapshot
+            // Fingerprint-only differences are the deferred backfill
+            // enriching the index mid-refresh, not a user-visible file
+            // change; the refresh history records file changes.
+            var normalized = snapshot
+            normalized.contentFingerprint = old.contentFingerprint
+            normalized.similarityFingerprint = old.similarityFingerprint
+            return old != normalized
         }.sorted()
         return RefreshSummary(
             added: addedPaths.count,
