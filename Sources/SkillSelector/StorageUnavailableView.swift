@@ -5,7 +5,7 @@ import SwiftUI
 struct StorageUnavailableView: View {
     var body: some View {
         VStack(spacing: 12) {
-            Image(systemName: "externaldrive.badge.exclamationmark")
+            Image(systemName: "externaldrive.badge.xmark")
                 .font(.system(size: 40))
                 .foregroundStyle(.secondary)
             Text(L10n.string("SkillSelector could not initialize its storage."))

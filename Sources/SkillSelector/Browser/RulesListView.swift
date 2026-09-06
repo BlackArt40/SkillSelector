@@ -91,7 +91,7 @@ struct RulesListView: View {
 
     private var emptyState: some View {
         EmptyState(
-            icon: "text.document",
+            icon: "doc.text",
             title: L10n.string("No Rules Files"),
             message: L10n.string("No Rules Files Description")
         )

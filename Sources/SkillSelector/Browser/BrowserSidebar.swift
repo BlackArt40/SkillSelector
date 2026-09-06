@@ -227,7 +227,7 @@ struct BrowserSidebar: View {
             }
             SidebarItem(
                 title: L10n.string("Rules"),
-                glyph: Image(systemName: "text.document"),
+                glyph: Image(systemName: "doc.text"),
                 count: counts[.rules],
                 isActive: destination == .rules
             ) {
