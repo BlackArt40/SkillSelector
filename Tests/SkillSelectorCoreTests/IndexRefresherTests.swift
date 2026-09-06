@@ -33,8 +33,17 @@ final class IndexRefresherTests: XCTestCase {
         )
 
         // A user-visible metadata change still counts.
-        var renamed = old
-        renamed.name = "alpha2"
+        let renamed = SkillSnapshot(
+            path: old.path,
+            resolvedTarget: old.resolvedTarget,
+            name: "alpha2",
+            localDescription: old.localDescription,
+            modificationDate: old.modificationDate,
+            agentIDs: old.agentIDs,
+            rootIDs: old.rootIDs,
+            entryFilename: old.entryFilename,
+            parseDiagnostics: old.parseDiagnostics
+        )
         XCTAssertEqual(IndexRefresher.summary(before: [old], after: [renamed]).changed, 1)
     }
 
