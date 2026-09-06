@@ -35,7 +35,7 @@ final class MainWindowFrameCoordinator {
     static let shared = MainWindowFrameCoordinator()
 
     private var observers: [NSObjectProtocol] = []
-    private var restoredWindowID: CGWindowID?
+    private var restoredWindowID: Int?
 
     private init() {}
 
