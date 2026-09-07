@@ -111,8 +111,9 @@ jobs:
         run: |
           # DEBUG-only ScreenshotMode (audit F-06 / R11): renders every README
           # page against fixture skills and exits; the release binary has no
-          # --screenshots entry point at all.
-          out="$PWD/.screenshots"
+          # --screenshots entry point at all. The output directory must not
+          # start with a dot — upload-artifact excludes hidden files.
+          out="$PWD/screenshots-out"
           rm -rf "$out" && mkdir -p "$out"
           .build/debug/SkillSelector --screenshots "$out" --screenshot-language en
           .build/debug/SkillSelector --screenshots "$out" --screenshot-language zh-Hans
@@ -121,6 +122,6 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2 (audit F-05: pin to SHA)
         with:
           name: SkillSelector-screenshots-${{ github.sha }}
-          path: .screenshots
+          path: screenshots-out
           if-no-files-found: error
           retention-days: 7
