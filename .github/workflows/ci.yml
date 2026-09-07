@@ -120,7 +120,11 @@ jobs:
           out="$PWD/screenshots-out"
           rm -rf "$out" && mkdir -p "$out"
           .build/debug/SkillSelector --screenshots "$out" --screenshot-language en
+          # Match the system locale to the app language so dates format
+          # natively in the zh captures; restore the runner default after.
+          defaults write -g AppleLocale -string "zh_CN"
           .build/debug/SkillSelector --screenshots "$out" --screenshot-language zh-Hans
+          defaults delete -g AppleLocale || true
           test "$(ls "$out" | wc -l | tr -d ' ')" = 16
       - name: Upload screenshots artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2 (audit F-05: pin to SHA)
