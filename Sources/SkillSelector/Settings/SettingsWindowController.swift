@@ -1,5 +1,4 @@
 import AppKit
-import OSLog
 import SwiftUI
 
 /// The Settings window: a single AppKit window hosting the SwiftUI pane.
@@ -8,8 +7,6 @@ import SwiftUI
 @MainActor
 final class SettingsWindowController {
     static let shared = SettingsWindowController()
-
-    private static let log = Logger(subsystem: "com.SkillSelector", category: "SettingsWindow")
 
     private var window: NSWindow?
     private var hostingModel: AppModel?
@@ -41,34 +38,20 @@ final class SettingsWindowController {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    /// Presents a file panel as a sheet on the settings window. Panels must
-    /// not `runModal()` from this window: on macOS 12 the modal panel never
-    /// surfaces (no window, no error — the acceptance run's export defect),
-    /// while sheets present reliably. Covers both panel types since
-    /// NSOpenPanel inherits NSSavePanel's sheet API.
+    /// Presents a file panel as a sheet on the settings window. Covers both
+    /// panel types since NSOpenPanel inherits NSSavePanel's sheet API. (The
+    /// old "panels never present from this window" defect was the sandbox
+    /// missing user-selected.read-write, not the window.)
     func presentAsSheet(_ panel: NSSavePanel, completion: @escaping (URL?) -> Void) {
-        // File panels never present from this controller-hosted settings
-        // window on macOS 12 — runModal, beginSheetModal, deferred: all
-        // silent no-ops (the D1 defect, reproduced by hand) — while the
-        // WindowGroup main window presents them reliably. Attach the panel
-        // to that window instead and bring it forward.
-        let settingsWindow = window
-        guard let host = NSApp.windows.first(where: {
-            $0 !== settingsWindow && $0.isVisible && !$0.isSheet && !$0.isModalPanel
-        }) ?? settingsWindow else {
-            // No window at all to host the panel.
-            Self.log.info("presentAsSheet: no host window — runModal fallback")
+        guard let window else {
             completion(panel.runModal() == .OK ? panel.url : nil)
             return
         }
-        Self.log.info(
-            "presentAsSheet: host is settingsWindow=\(host === settingsWindow, privacy: .public)"
-        )
-        host.makeKeyAndOrderFront(nil)
-        // Deferred one runloop turn out of SwiftUI's button-action call
-        // frame for the same reason.
+        // One runloop turn: export-after-view fires while the diagnostics
+        // viewer sheet is still detaching from this window, and attaching
+        // the panel in the same turn can drop it.
         DispatchQueue.main.async {
-            panel.beginSheetModal(for: host) { response in
+            panel.beginSheetModal(for: window) { response in
                 completion(response == .OK ? panel.url : nil)
             }
         }

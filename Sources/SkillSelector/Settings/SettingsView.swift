@@ -584,8 +584,6 @@ struct SettingsView: View {
         }
     }
 
-    /// File panels in this window must present as sheets — `runModal`
-    /// never surfaces them here on macOS 12 (see SettingsWindowController).
     private func presentAsSheet(_ panel: NSSavePanel, completion: @escaping (URL?) -> Void) {
         SettingsWindowController.shared.presentAsSheet(panel, completion: completion)
     }
