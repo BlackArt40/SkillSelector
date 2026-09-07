@@ -157,10 +157,11 @@ final class BrowserSidebarTests: XCTestCase {
             url: URL(fileURLWithPath: "/etc/empty"),
             kind: .system
         )
-        // Rows sort by last path component ("empty" < "me").
+        // Ordering happens upstream (the sidebar's systemRoots sort); this
+        // helper only decides rows-vs-placeholder.
         XCTAssertEqual(
             BrowserSidebar.systemSectionRows([home, emptySystem])?.map(\.id),
-            ["sys-1", "home-1"]
+            ["home-1", "sys-1"]
         )
         XCTAssertNil(BrowserSidebar.systemSectionRows([]))
     }
