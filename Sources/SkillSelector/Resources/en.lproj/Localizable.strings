@@ -355,3 +355,6 @@
 "SkillSelector could not initialize its storage." = "SkillSelector could not initialize its storage.";
 "Quit and try again. If the problem persists, the app data may need to be rebuilt." = "Quit and try again. If the problem persists, the app data may need to be rebuilt.";
 "Choose a home directory containing Agent Skills (e.g. ~/.claude, ~/.codex)." = "Choose a home directory containing Agent Skills (e.g. ~/.claude, ~/.codex).";
+"Revoked" = "Revoked";
+"Refresh completed" = "Refresh completed";
+"Backfilled Fingerprints" = "Backfilled %d content fingerprints";

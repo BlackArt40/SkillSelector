@@ -309,7 +309,7 @@ final class AppModel: ObservableObject {
             recordPathDiagnostic(
                 category: .persistence,
                 code: "ROOT_AUTHORIZED",
-                action: "Authorized",
+                action: L10n.string("Authorized"),
                 path: url.path
             )
         } catch {
@@ -334,7 +334,7 @@ final class AppModel: ObservableObject {
             recordPathDiagnostic(
                 category: .persistence,
                 code: "ROOT_REVOKED",
-                action: "Revoked",
+                action: L10n.string("Revoked"),
                 path: root.url.path,
                 additionalRoots: [root]
             )
@@ -549,7 +549,7 @@ final class AppModel: ObservableObject {
             diagnosticStore.record(
                 category: .scanning,
                 code: "REFRESH_COMPLETED",
-                message: "Refresh completed",
+                message: L10n.string("Refresh completed"),
                 redactor: currentRedactor()
             )
         } catch {
@@ -663,7 +663,7 @@ final class AppModel: ObservableObject {
                 diagnosticStore.record(
                     category: .scanning,
                     code: "FINGERPRINTS_BACKFILLED",
-                    message: "Backfilled \(updated) content fingerprints",
+                    message: L10n.string("Backfilled Fingerprints", updated),
                     redactor: currentRedactor()
                 )
             }

@@ -357,3 +357,6 @@
 "SkillSelector could not initialize its storage." = "SkillSelector 无法初始化其存储。";
 "Quit and try again. If the problem persists, the app data may need to be rebuilt." = "退出后重试；若反复出现，可能需要重建应用数据。";
 "Choose a home directory containing Agent Skills (e.g. ~/.claude, ~/.codex)." = "选择包含 Agent Skill 的主目录（如 ~/.claude、~/.codex）。";
+"Revoked" = "已撤销授权";
+"Refresh completed" = "刷新完成";
+"Backfilled Fingerprints" = "已补录 %d 个内容指纹";
