@@ -3,13 +3,13 @@
 
 # SkillSelector
 
-A native macOS app for managing Agent Skills on your machine: browse, search, review duplicates and symbolic links. It is a read-only dashboard — not a marketplace, not an installer, and there is no AI in it; file operations belong to Finder.
+A native macOS app for managing Agent Skills on your machine: browse, search, review duplicates and symbolic links, and browse the Skill Marketplace read-only. It is a read-only dashboard — not an installer, and there is no AI in it; file operations belong to Finder.
 
 ![Main window (English)](screenshots/main-en.png)
 
 ## What it does
 
-The main window is a three-column browser: a sidebar grouped by scope and Agent, a searchable, sortable list of Skills, and a detail pane showing the selected Skill's description, frontmatter, rendered Markdown document, associated Agents, and install locations. In search, a plain term matches the Skill name, description, or indexed body; prefix it with `name:`, `desc:`, `path:`, or `agent:` to search one field only — for example `agent:cursor path:.agents`. Back/forward (⌘[ / ⌘]) sit in the title bar and in the menu bar's Go menu; ⌘F focuses the search field; sidebar switches, detail openings and each search session record one history step. The middle column's right edge is draggable to resize it, and the app is single-window (no "New Window" menu item).
+The main window is a three-column browser: a sidebar grouped by scope and Agent, a searchable, sortable list of Skills, and a detail pane showing the selected Skill's description, frontmatter, rendered Markdown document, associated Agents, and install locations. In search, a plain term matches the Skill name, description, or indexed body; prefix it with `name:`, `desc:`, `path:`, `agent:`, or `body:` to search one field only — for example `agent:cursor path:.agents`. Back/forward (⌘[ / ⌘]) sit in the title bar and in the menu bar's Go menu; ⌘F focuses the search field; sidebar switches, detail openings and each search session record one history step. The middle column's right edge is draggable to resize it, and the app is single-window (no "New Window" menu item).
 
 Also:
 
