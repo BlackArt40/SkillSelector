@@ -56,7 +56,6 @@
 "Authorize" = "Authorize";
 "Legacy Agents" = "Legacy Agents";
 "Legacy Agent Hint" = "Hidden until their Skills are detected or enabled here.";
-"Search Help" = "Plain terms fuzzy-match the Skill name or body; prefix a term with name:, desc:, path:, agent:, or body: to search one field only.";
 "SkillSelector" = "SkillSelector";
 "Edit Custom Agent" = "Edit Custom Agent";
 "Agent Name" = "Agent Name";
@@ -304,7 +303,6 @@
 "Marketplace Version Diff Help" = "SKILL.md body line differences vs. the marketplace version (+added −removed from the local side).";
 "Open in GitHub" = "Open on GitHub";
 "Copy Link" = "Copy Link";
-"Copied" = "Copied";
 "Copy Install Command" = "Copy Install Command";
 "Source" = "Source";
 "Repository" = "Repository";
@@ -334,11 +332,9 @@
 "Branch" = "Branch";
 "Marketplace Partial Failure" = "Some sources failed to load — the rest of the listing is shown. Remove a failing imported source with − next to its name.";
 "Import" = "Import";
-"Search Marketplace" = "Search Marketplace";
 "Clear Search" = "Clear Search";
 "No Marketplace Matches" = "No Matching Skills";
 "No Marketplace Matches Description" = "Try a different term, or set the source filter back to All Sources.";
-"Marketplace Search Placeholder" = "Search names & descriptions";
 "No Matching Skills" = "No Matching Skills";
 "No Matching Skills Description" = "Try a different term.";
 "Search Names Or Descriptions" = "Search names & descriptions";
