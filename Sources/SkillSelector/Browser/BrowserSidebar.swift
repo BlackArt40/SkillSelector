@@ -59,6 +59,7 @@ struct BrowserSidebar: View {
     /// "Scanning…" progress (spec §06 loading), no blocking overlay.
     var isScanning: Bool = false
     var onAddProject: () -> Void
+    var onImportSystem: () -> Void
     var onReauthorize: ((AuthorizedRootSnapshot) -> Void)?
     var onRemoveRoot: ((AuthorizedRootSnapshot) -> Void)?
 
@@ -277,14 +278,15 @@ struct BrowserSidebar: View {
         }
     }
 
-    /// System directories (the home root and declared system roots) appear
-    /// only when their scan actually found Skills — the sidebar shows
-    /// nothing for empty directories.
-    static func visibleSystemRoots(
-        _ roots: [AuthorizedRootSnapshot],
-        counts: [BrowserDestination: Int]
-    ) -> [AuthorizedRootSnapshot] {
-        roots.filter { (counts[.system(rootID: $0.id)] ?? 0) > 0 }
+    /// What the System Directories section renders. Authorized roots always
+    /// show once imported — an empty scan keeps the row at count 0 so the
+    /// entry point into the app's own directories never disappears. `nil`
+    /// means nothing is imported yet: the section renders the import
+    /// placeholder row with its trailing + button instead.
+    static func systemSectionRows(
+        _ roots: [AuthorizedRootSnapshot]
+    ) -> [AuthorizedRootSnapshot]? {
+        roots.isEmpty ? nil : roots
     }
 
     /// Project directories likewise appear only when they hold Skills.
@@ -297,15 +299,47 @@ struct BrowserSidebar: View {
 
     @ViewBuilder
     private var systemSection: some View {
-        let visible = Self.visibleSystemRoots(systemRoots, counts: counts)
-        if !visible.isEmpty {
-            VStack(alignment: .leading, spacing: 0) {
-                sideHeading(L10n.string("System Directories"))
-                ForEach(visible) { root in
+        let rows = Self.systemSectionRows(systemRoots)
+        VStack(alignment: .leading, spacing: 0) {
+            sideHeading(L10n.string("System Directories"))
+            if let rows {
+                ForEach(rows) { root in
                     systemRow(root)
                 }
+            } else {
+                systemImportRow
             }
         }
+    }
+
+    /// The unauthorized placeholder row: the home entry persists even before
+    /// anything is imported, with a trailing + that runs the import panel.
+    /// The + disappears once a system root exists (the rows above render).
+    private var systemImportRow: some View {
+        HStack(spacing: 8) {
+            Image(systemName: AuthorizedRootKind.home.systemImage)
+                .font(.system(size: 13))
+                .foregroundStyle(AppTheme.muted)
+                .frame(width: 18)
+            Text(L10n.string(AuthorizedRootKind.home.localizedName))
+                .font(AppTheme.body(13))
+                .foregroundStyle(AppTheme.muted)
+                .lineLimit(1)
+            Spacer(minLength: 4)
+            Button(action: onImportSystem) {
+                Image(systemName: "plus")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(AppTheme.muted)
+                    .frame(width: 20, height: 20)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(L10n.string("Import System Directory"))
+            .accessibilityLabel(L10n.string("Import System Directory"))
+        }
+        .frame(height: 32)
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// Project directories appear only when they hold Skills; the section

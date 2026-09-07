@@ -142,9 +142,11 @@ final class BrowserSidebarTests: XCTestCase {
         )
     }
 
-    // AC-33/AC-35: system-directory entries appear only when their scan
-    // found Skills; empty authorized directories show nothing.
-    func testSystemDirectoryEntriesAppearOnlyWithSkills() {
+    // AC-33 revision: system-directory rows persist once imported — an
+    // empty authorized directory stays visible at count 0. Nothing imported
+    // renders the import placeholder row (nil rows) with its trailing +
+    // instead.
+    func testSystemDirectoryRowsPersistOnceImported() {
         let home = AuthorizedRootSnapshot(
             id: "home-1",
             url: URL(fileURLWithPath: "/Users/me"),
@@ -155,15 +157,12 @@ final class BrowserSidebarTests: XCTestCase {
             url: URL(fileURLWithPath: "/etc/empty"),
             kind: .system
         )
-        let counts: [BrowserDestination: Int] = [
-            .system(rootID: "home-1"): 3,
-            .system(rootID: "sys-1"): 0,
-        ]
+        // Rows sort by last path component ("empty" < "me").
         XCTAssertEqual(
-            BrowserSidebar.visibleSystemRoots([home, emptySystem], counts: counts).map(\.id),
-            ["home-1"]
+            BrowserSidebar.systemSectionRows([home, emptySystem])?.map(\.id),
+            ["sys-1", "home-1"]
         )
-        XCTAssertTrue(BrowserSidebar.visibleSystemRoots([emptySystem], counts: counts).isEmpty)
+        XCTAssertNil(BrowserSidebar.systemSectionRows([]))
     }
 
     // AC-34: project entries appear only when the project holds Skills.

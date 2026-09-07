@@ -134,6 +134,7 @@ struct RootView: View {
                     counts: sidebarCounts,
                     isScanning: model.refreshState == .running,
                     onAddProject: { chooseDestinationRoot() },
+                    onImportSystem: { chooseSystemRoot() },
                     onReauthorize: { root in reauthorize(root) },
                     onRemoveRoot: { root in removeRoot(root) }
                 )

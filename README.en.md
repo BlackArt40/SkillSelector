@@ -21,7 +21,7 @@ Also:
 - Beyond exact duplicates there's **near-duplicate** grouping (MinHash similarity fingerprints) and a **compare sheet**: view two copies' frontmatter, body and child files side by side
 - Refresh history (what was added / changed / removed) is kept locally and always reviewable
 - The sidebar's "Marketplace" fetches 7 verified GitHub repos on demand (Anthropic official plus community collections like Superpowers and Vercel — about 680 skills), browses them grouped by repository with a source filter, and shows each skill's description and document; "Import Source" adds your own repo (owner/repo or link). Browsing only: open on GitHub, copy the link, or copy the `npx skills add …` install command — installation stays with the ecosystem's tooling
-- Project / system-directory entries appear only when they hold Skills; "All Skills", "Global Skills", "Duplicates", "Symbolic Links" and "Agents" are always visible
+- The "System Directories" section always shows: an imported root stays visible even while it holds no Skills, and before anything is imported the home row carries a trailing + that imports it. Project-directory entries appear when they hold Skills, with a + on the section heading; "All Skills", "Global Skills", "Duplicates", "Symbolic Links" and "Agents" are always visible
 - Agent rows in the sidebar show the matching brand mark (Claude Code, Codex, Cursor, …) or a letter monogram when no mark ships
 - Importing a folder scans that folder only — the Skill list appears right away instead of after a wait; the Duplicates, MCP, Rules and Symbolic Links pages each have their own in-column search bar
 - The diagnostics report can be viewed in-app (redacted exactly like the export) or exported as JSON
