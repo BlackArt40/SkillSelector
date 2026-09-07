@@ -37,25 +37,6 @@ final class SettingsWindowController {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
-
-    /// Presents a file panel as a sheet on the settings window. Covers both
-    /// panel types since NSOpenPanel inherits NSSavePanel's sheet API. (The
-    /// old "panels never present from this window" defect was the sandbox
-    /// missing user-selected.read-write, not the window.)
-    func presentAsSheet(_ panel: NSSavePanel, completion: @escaping (URL?) -> Void) {
-        guard let window else {
-            completion(panel.runModal() == .OK ? panel.url : nil)
-            return
-        }
-        // One runloop turn: export-after-view fires while the diagnostics
-        // viewer sheet is still detaching from this window, and attaching
-        // the panel in the same turn can drop it.
-        DispatchQueue.main.async {
-            panel.beginSheetModal(for: window) { response in
-                completion(response == .OK ? panel.url : nil)
-            }
-        }
-    }
 }
 
 extension Notification.Name {

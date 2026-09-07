@@ -563,10 +563,8 @@ struct SettingsView: View {
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.directoryURL = root.url
-        presentAsSheet(panel) { url in
-            guard let url else { return }
-            Task { await model.authorize(url.standardizedFileURL, as: root.kind) }
-        }
+        guard let url = runPanel(panel) else { return }
+        Task { await model.authorize(url.standardizedFileURL, as: root.kind) }
     }
 
     private func importProject() {
@@ -578,14 +576,14 @@ struct SettingsView: View {
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.canCreateDirectories = false
-        presentAsSheet(panel) { url in
-            guard let url else { return }
-            Task { await model.authorize(url.standardizedFileURL, as: .project) }
-        }
+        guard let url = runPanel(panel) else { return }
+        Task { await model.authorize(url.standardizedFileURL, as: .project) }
     }
 
-    private func presentAsSheet(_ panel: NSSavePanel, completion: @escaping (URL?) -> Void) {
-        SettingsWindowController.shared.presentAsSheet(panel, completion: completion)
+    /// `runModal` needs no host window; with `user-selected.read-write`
+    /// granted it is all these panels ever needed.
+    private func runPanel(_ panel: NSSavePanel) -> URL? {
+        panel.runModal() == .OK ? panel.url : nil
     }
 
     private func exportDiagnostics() {
@@ -594,15 +592,13 @@ struct SettingsView: View {
         panel.prompt = L10n.string("Export")
         panel.nameFieldStringValue = "SkillSelector-Diagnostics.json"
         panel.allowedContentTypes = [.json]
-        presentAsSheet(panel) { url in
-            guard let url else { return }
-            Task {
-                do {
-                    try await model.exportDiagnostics(to: url)
-                    exportStatus = L10n.string("Diagnostics Exported")
-                } catch {
-                    settingsError = String(describing: error)
-                }
+        guard let url = runPanel(panel) else { return }
+        Task {
+            do {
+                try await model.exportDiagnostics(to: url)
+                exportStatus = L10n.string("Diagnostics Exported")
+            } catch {
+                settingsError = String(describing: error)
             }
         }
     }
