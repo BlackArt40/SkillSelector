@@ -108,6 +108,10 @@ jobs:
       - name: Build (debug)
         run: swift build
       - name: Capture en and zh-Hans
+        env:
+          # Raises the catalog fetch above GitHub's anonymous rate limit,
+          # which shared runners routinely exhaust.
+          SKILLSELECTOR_CATALOG_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # DEBUG-only ScreenshotMode (audit F-06 / R11): renders every README
           # page against fixture skills and exits; the release binary has no

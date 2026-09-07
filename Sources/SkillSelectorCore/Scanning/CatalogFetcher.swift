@@ -13,6 +13,19 @@ public struct CatalogFetcher: CatalogFetching, Sendable {
     /// - Parameter session: injected so tests can stub responses without
     ///   touching the network.
     public init(session: URLSession = .shared) {
+        #if DEBUG
+        // Screenshot support: GitHub's anonymous API quota exhausts quickly
+        // on shared CI runners, so a capture run may authenticate its
+        // catalog fetches via the environment. Never compiled into release
+        // builds; unset everywhere else.
+        if let token = ProcessInfo.processInfo.environment["SKILLSELECTOR_CATALOG_TOKEN"],
+           !token.isEmpty {
+            let configuration = URLSessionConfiguration.default
+            configuration.httpAdditionalHeaders = ["Authorization": "Bearer \(token)"]
+            self.session = URLSession(configuration: configuration)
+            return
+        }
+        #endif
         self.session = session
     }
 
