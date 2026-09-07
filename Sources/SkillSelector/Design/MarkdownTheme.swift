@@ -1,13 +1,12 @@
 import MarkdownUI
 import SwiftUI
 
-/// The MarkdownUI `Theme` bound to the app's `AppTheme` tokens — the same
-/// roles the previous Textual style mapped: accent h1 (title scale
-/// 1.55/1.35/1.2/1.1/1.0/1.0, semibold), secondary body text, a violet-tinted
-/// blockquote with a 3pt leading bar, code inline on the surface tint, and the
-/// fenced code panel. Block layout (spacing, list markers, table decoration)
-/// follows MarkdownUI's gitHub-like defaults; the base text size is the macOS
-/// body size (13) so `.em` heading/code scales match the old fontScale values.
+/// The MarkdownUI `Theme` bound to the app's `AppTheme` tokens: accent h1
+/// (title scale 1.55/1.35/1.2/1.1/1.0/1.0, semibold), secondary body text, a
+/// violet-tinted blockquote with a 3pt leading bar, code inline on the
+/// surface tint, and the fenced code panel. Block layout (spacing, list
+/// markers, table decoration) follows MarkdownUI's gitHub-like defaults; the
+/// base text size is the macOS body size (13).
 ///
 /// The theme is MainActor-isolated: `Theme` is not `Sendable`, so a
 /// nonisolated global would be rejected in Swift 6 language mode — and every
