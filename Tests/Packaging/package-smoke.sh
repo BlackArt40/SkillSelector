@@ -57,6 +57,22 @@ hdiutil verify "$RELEASE_DMG"
 test -f "$RELEASE_DMG.sha256"
 ( cd dist && shasum -a 256 -c "SkillSelector-$VERSION.dmg.sha256" )
 
+# Single-arch DMGs: same signing and version, one machine family each.
+for arch in arm64 x86_64; do
+    arch_app="dist/SkillSelector-$arch.app"
+    arch_dmg="dist/SkillSelector-$VERSION-$arch.dmg"
+    test -x "$arch_app/Contents/MacOS/SkillSelector"
+    # Must be a thin single-arch binary, not a fat slice.
+    lipo -info "$arch_app/Contents/MacOS/SkillSelector" | grep -q "is architecture: $arch"
+    codesign --verify --deep --strict "$arch_app"
+    codesign -dvv "$arch_app" 2>&1 | grep '^Signature=adhoc$' >/dev/null
+    test "$(plutil -extract CFBundleShortVersionString raw "$arch_app/Contents/Info.plist")" = "$VERSION"
+    test -f "$arch_dmg"
+    hdiutil verify "$arch_dmg"
+    test -f "$arch_dmg.sha256"
+    ( cd dist && shasum -a 256 -c "SkillSelector-$VERSION-$arch.dmg.sha256" )
+done
+
 typeset -a fallbackBundles
 for bundle in "$ROOT_DIR"/.build/**/SkillSelector_SkillSelector.bundle(N); do
     mv "$bundle" "$bundle.unavailable"

@@ -59,7 +59,7 @@ Requires macOS 12 Monterey or later; Universal 2 (Apple Silicon and Intel).
 
 Since 2.0.0: the description translation feature has been removed; after upgrading, the first launch starts fresh (the index rebuilds automatically — re-authorize your directories; duplicate-ignore marks reset).
 
-1. Download the `.dmg` and its `.sha256` from [GitHub Releases](https://github.com/BlackArt40/SkillSelector/releases)
+1. Download the `.dmg` and its `.sha256` from [GitHub Releases](https://github.com/BlackArt40/SkillSelector/releases). The universal build runs on any Mac; for a smaller download, pick the single-arch build for your machine: `-arm64` on Apple Silicon, `-x86_64` on Intel
 2. Verify integrity (keep both files in the same directory):
 
    ```zsh
@@ -91,7 +91,7 @@ swift build
 zsh Scripts/package-dmg.sh 2.0.0
 ```
 
-Produces `dist/SkillSelector.app`, `dist/SkillSelector.dmg`, `dist/SkillSelector-2.0.0.dmg`, and a matching `.sha256`.
+Produces `dist/SkillSelector.app` (Universal 2) plus `dist/SkillSelector-arm64.app` and `dist/SkillSelector-x86_64.app`, three DMGs (`SkillSelector.dmg`, `SkillSelector-2.0.0.dmg`, and the two single-arch ones), and matching `.sha256` files.
 
 The only third-party dependencies are Yams (frontmatter parsing), GRDB (local index), and MarkdownUI (Markdown rendering). Run the tests with `swift test`; CI runs them on every PR and push.
 

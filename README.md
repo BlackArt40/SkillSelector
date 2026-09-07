@@ -59,7 +59,7 @@ Roo Code 属于旧版兼容，只在检测到已有 Skill 或在设置里手动�
 
 从 2.0.0 起：简介翻译功能已移除；升级后首次启动为全新状态（索引自动重建，需重新授权各目录，重复忽略标记清零）。
 
-1. 从 [GitHub Releases](https://github.com/BlackArt40/SkillSelector/releases) 下载 `.dmg` 和同名的 `.sha256`
+1. 从 [GitHub Releases](https://github.com/BlackArt40/SkillSelector/releases) 下载 `.dmg` 和同名的 `.sha256`。通用版适合所有 Mac；也可以按机型选更小的单架构包：Apple Silicon 选 `-arm64`，Intel 选 `-x86_64`
 2. 校验完整性（两个文件放同一目录）：
 
    ```zsh
@@ -91,7 +91,7 @@ swift build
 zsh Scripts/package-dmg.sh 2.0.0
 ```
 
-产物：`dist/SkillSelector.app`、`dist/SkillSelector.dmg`、`dist/SkillSelector-2.0.0.dmg` 和对应的 `.sha256`。
+产物：`dist/SkillSelector.app`（通用 2）与 `dist/SkillSelector-arm64.app`、`dist/SkillSelector-x86_64.app`，三个 DMG（`SkillSelector.dmg`、`SkillSelector-2.0.0.dmg` 及两份单架构）和对应的 `.sha256`。
 
 第三方依赖只有 Yams（frontmatter 解析）、GRDB（本地索引）和 MarkdownUI（Markdown 渲染）。测试用 `swift test`，CI 在每个 PR 和 push 上都会跑。
 
