@@ -104,8 +104,8 @@ enum ScreenshotMode {
         mcp.orderOut(nil)
 
         // 2c. Rules page, hosted full-size — pre-select a CLAUDE.md so the
-        // capture shows the rendered rule body (Textual) and the
-        // same-name comparison against its global/project counterpart.
+        // capture shows the rendered rule body and the same-name comparison
+        // against its global/project counterpart.
         let rulesFileID = model.rules.files.first { $0.filename == "CLAUDE.md" }?.id
             ?? model.rules.files.first?.id
         let rules = hostedWindow(

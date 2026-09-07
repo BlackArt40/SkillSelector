@@ -44,7 +44,7 @@ public protocol RefreshHistoryStoring: Sendable {
 
 /// UserDefaults-backed history: the refresh log is small (capped), derived
 /// diagnostic-style data rather than index state, so it deliberately stays
-/// out of the SwiftData schema.
+/// out of the index database.
 public final class UserDefaultsRefreshHistoryStore: RefreshHistoryStoring, @unchecked Sendable {
     public static let maximumEntries = 20
     private static let key = "SkillSelector.refreshHistory"

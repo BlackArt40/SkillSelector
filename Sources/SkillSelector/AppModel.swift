@@ -1052,7 +1052,7 @@ struct IgnoredDuplicateGroup: Identifiable {
 extension AppModel {
     /// Marks (or unmarks) every Skill in the duplicate group identified by
     /// `fingerprint` as ignored, removing the group from the duplicates
-    /// view. Persisted with SwiftData. Returns the number of records
+    /// view. Persisted in the index database. Returns the number of records
     /// updated.
     @discardableResult
     func setDuplicateGroupIgnored(fingerprint: String, ignored: Bool) throws -> Int {

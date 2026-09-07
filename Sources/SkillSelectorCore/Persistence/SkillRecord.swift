@@ -1,10 +1,8 @@
 import Foundation
 import GRDB
 
-/// Optional fields preserve compatibility notes from the SwiftData era:
-/// fields added later stay optional so older on-disk rows (had any future
-/// migration run) could decode — the fresh-state policy makes this moot for
-/// users, but the decoders stay total.
+/// Optional fields mirror nullable columns; the decoders stay total so a
+/// missing field decodes as nil rather than failing the scan.
 public struct SkillRecord: Codable, FetchableRecord, PersistableRecord {
     public static let databaseTableName = "skillRecords"
 

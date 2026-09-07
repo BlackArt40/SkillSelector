@@ -56,9 +56,8 @@ extension View {
     /// reaches the system opener; everything else is discarded.
     ///
     /// The URL is opened explicitly via `NSWorkspace` instead of returning
-    /// `.systemAction` — Textual invokes this action from its own AppKit
-    /// gesture host, and an explicit open is not subject to how the default
-    /// action is propagated from that context.
+    /// `.systemAction`, so link handling does not depend on how the
+    /// renderer propagates the default action.
     func markdownLinkPolicy() -> some View {
         environment(
             \.openURL,
