@@ -6,6 +6,11 @@
 	<true/>
 	<key>com.apple.security.files.user-selected.read-only</key>
 	<true/>
+	<!-- Save panels are gated on read-write: without it the diagnostics
+	     export panel silently never appears (sandbox denies the panel,
+	     the modal call just returns .cancel). -->
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
 	<key>com.apple.security.files.bookmarks.app-scope</key>
 	<true/>
 	<key>com.apple.security.network.client</key>

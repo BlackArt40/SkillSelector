@@ -26,13 +26,21 @@ lipo "$APP/Contents/MacOS/SkillSelector" -verify_arch arm64 x86_64
 # it walks nested code, which package-dmg.sh now signs explicitly.
 codesign --verify --deep --strict "$APP"
 # grep without -q: consume the entire stream so codesign never hits SIGPIPE
-# from a pipe closed early under `set -euo pipefail`.
-codesign -d --entitlements :- "$APP" 2>&1 | grep 'com.apple.security.app-sandbox' >/dev/null
+# from a pipe closed early under `set -euo pipefail`. -a because the `:-`
+# blob can carry a trailing NUL, which BSD grep treats as binary input and
+# answers "no match" even when the key is present.
+codesign -d --entitlements :- "$APP" 2>&1 | grep -a 'com.apple.security.app-sandbox' >/dev/null
 
 # The read-only catalog fetches GitHub on demand — the sandbox must grant
 # outbound network client access, and nothing beyond it (no server, no
 # arbitrary file writes).
-codesign -d --entitlements :- "$APP" 2>&1 | grep 'com.apple.security.network.client' >/dev/null
+codesign -d --entitlements :- "$APP" 2>&1 | grep -a 'com.apple.security.network.client' >/dev/null
+
+# Diagnostics export presents an NSSavePanel. A sandboxed app can only
+# present save panels with user-selected.read-write: read-only covers
+# open panels, and without the write grant the save panel never surfaces
+# (no window, no error — the modal call just returns .cancel).
+codesign -d --entitlements :- "$APP" 2>&1 | grep -a 'com.apple.security.files.user-selected.read-write' >/dev/null
 
 # The README tells users this build is ad-hoc signed. Assert that stays true so
 # the disclosure never silently drifts from the artifact.
