@@ -7,6 +7,7 @@ on:
     tags:
       - "v*"
   pull_request:
+  workflow_dispatch:
   schedule:
     # 03:00 Asia/Shanghai — nightly flake watch (five rounds below).
     - cron: "0 19 * * *"
@@ -97,3 +98,29 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0 (audit F-05: pin to SHA, Node 24)
       - name: Test
         run: swift test
+
+  screenshots:
+    name: Regenerate README screenshots
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0 (audit F-05: pin to SHA, Node 24)
+      - name: Build (debug)
+        run: swift build
+      - name: Capture en and zh-Hans
+        run: |
+          # DEBUG-only ScreenshotMode (audit F-06 / R11): renders every README
+          # page against fixture skills and exits; the release binary has no
+          # --screenshots entry point at all.
+          out="$PWD/.screenshots"
+          rm -rf "$out" && mkdir -p "$out"
+          .build/debug/SkillSelector --screenshots "$out" --screenshot-language en
+          .build/debug/SkillSelector --screenshots "$out" --screenshot-language zh-Hans
+          test "$(ls "$out" | wc -l | tr -d ' ')" = 16
+      - name: Upload screenshots artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2 (audit F-05: pin to SHA)
+        with:
+          name: SkillSelector-screenshots-${{ github.sha }}
+          path: .screenshots
+          if-no-files-found: error
+          retention-days: 7
