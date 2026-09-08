@@ -71,9 +71,9 @@ public struct AgentRegistry: Sendable {
     }
 
     /// IDs of the bundled (built-in) definitions. Custom imports must not
-    /// overwrite these: merge() replaces definitions by id, so a hand-edited
-    /// transfer file with `id: "claude"` would silently mutate a built-in
-    /// Agent (audit R5).
+    /// overwrite these — `merge(customDefinitions:)` enforces this by
+    /// ignoring colliding custom definitions, and callers pre-validate
+    /// against this set for user-facing error messages (audit R5).
     public var bundledDefinitionIDs: Set<String> {
         Set(bundledDefinitions.map(\.id))
     }
@@ -85,6 +85,13 @@ public struct AgentRegistry: Sendable {
 
     public mutating func merge(customDefinitions newDefinitions: [AgentDefinition]) {
         for definition in newDefinitions {
+            // Audit R5, now enforced here: a custom import whose id collides
+            // with a bundled Agent is ignored instead of overwriting it.
+            // Previously a hand-edited transfer file with `id: "claude"`
+            // silently mutated a built-in Agent while this type's docs
+            // claimed the opposite; callers still pre-validate via
+            // `bundledDefinitionIDs` for user-facing error messages.
+            guard !bundledDefinitionIDs.contains(definition.id) else { continue }
             if let index = customDefinitions.firstIndex(where: { $0.id == definition.id }) {
                 customDefinitions[index] = definition
             } else {
@@ -92,12 +99,11 @@ public struct AgentRegistry: Sendable {
             }
         }
         definitions = bundledDefinitions
-        for definition in customDefinitions {
-            if let index = definitions.firstIndex(where: { $0.id == definition.id }) {
-                definitions[index] = definition
-            } else {
-                definitions.append(definition)
-            }
+        // Defensive re-check: even if `customDefinitions` were polluted
+        // through some future path, bundled definitions are never replaced.
+        for definition in customDefinitions
+        where !bundledDefinitionIDs.contains(definition.id) {
+            definitions.append(definition)
         }
     }
 

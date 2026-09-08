@@ -209,3 +209,30 @@ final class AgentRegistryTests: XCTestCase {
     }
 
 }
+
+    func testMergeIgnoresCustomDefinitionsCollidingWithBundledIDs() {
+        var registry = BuiltInAgentRegistry.make()
+        let bundledCount = registry.definitions.count
+        let bundledClaude = registry.definition(id: "claude-code")
+        let impostor = AgentDefinition(
+            id: "claude-code",
+            displayName: "Impostor",
+            globalRoots: ["~/.impostor/skills"],
+            projectPatterns: []
+        )
+        let legit = AgentDefinition(
+            id: "totally-custom",
+            displayName: "Totally Custom",
+            globalRoots: ["~/.totally-custom/skills"],
+            projectPatterns: []
+        )
+
+        registry.merge(customDefinitions: [impostor, legit])
+
+        // Audit R5, enforced in merge(): the bundled Claude entry stays
+        // byte-identical, the impostor is not appended, and the legitimate
+        // custom agent joins normally.
+        XCTAssertEqual(registry.definition(id: "claude-code"), bundledClaude)
+        XCTAssertEqual(registry.definitions.count, bundledCount + 1)
+        XCTAssertEqual(registry.definition(id: "totally-custom")?.displayName, "Totally Custom")
+    }

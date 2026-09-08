@@ -1,4 +1,5 @@
 import XCTest
+@testable import SkillSelector
 @testable import SkillSelectorCore
 
 final class LegacyAgentVisibilityTests: XCTestCase {
@@ -17,46 +18,80 @@ final class LegacyAgentVisibilityTests: XCTestCase {
         XCTAssertTrue(legacy.contains("roo-code"), "roo-code should be marked as legacy")
     }
 
-    func testNonLegacyAgentIDsAreNotInLegacySet() {
+    func testLegacyAndNonLegacySetsPartitionTheBuiltInRegistry() {
+        // Both sets derive from the same definitions, so this guards the
+        // partition property: every built-in id is exactly one of the two.
         let legacy = legacyAgentIDs()
         let all = builtInAgentIDs()
-        let nonLegacy = all.subtracting(legacy)
-        XCTAssertTrue(nonLegacy.isDisjoint(with: legacy),
-                      "Legacy and non-legacy agent sets should be disjoint")
+        XCTAssertTrue(all.isSuperset(of: legacy))
+        XCTAssertTrue(all.subtracting(legacy).isDisjoint(with: legacy))
     }
 
-    func testVisibleAgentIDsMergeDetectedAndManuallyEnabled() {
-        let detected: Set<String> = ["claude-code", "codex"]
-        let manuallyEnabled: Set<String> = ["roo-code"]
-        let visible = detected.union(manuallyEnabled)
+    // MARK: - End-to-end visibility (BrowserSidebar.visibleAgentDefinitions)
+    // The pre-review versions of these scenarios asserted `Set.union` on
+    // locally built literals and never touched production code; they are
+    // now exercised through the real visibility pipeline.
 
-        XCTAssertTrue(visible.contains("claude-code"))
-        XCTAssertTrue(visible.contains("codex"))
-        XCTAssertTrue(visible.contains("roo-code"))
-        XCTAssertEqual(visible.count, 3)
+    private func definition(id: String, isLegacy: Bool) -> AgentDefinition {
+        AgentDefinition(
+            id: id,
+            displayName: id,
+            globalRoots: [],
+            projectPatterns: []
+        )
     }
 
-    func testManuallyEnabledDoesNotAddNonLegacyAgents() {
-        let detected: Set<String> = ["claude-code"]
-        let manuallyEnabled: Set<String> = ["claude-code"]
-        let visible = detected.union(manuallyEnabled)
+    func testDetectedAgentsAreVisibleWhileUndetectedLegacyStaysHidden() {
+        let definitions = [
+            definition(id: "claude-code", isLegacy: false),
+            definition(id: "codex", isLegacy: false),
+            definition(id: "roo-code", isLegacy: true),
+        ]
 
-        XCTAssertEqual(visible.count, 1, "Union should not duplicate already-detected agents")
+        let visible = BrowserSidebar.visibleAgentDefinitions(
+            definitions: definitions,
+            detectedAgentIDs: ["claude-code", "codex"]
+        )
+
+        XCTAssertEqual(visible.map(\.id), ["claude-code", "codex"])
     }
 
-    func testEmptyDetectedStillShowsManuallyEnabled() {
-        let detected: Set<String> = []
-        let manuallyEnabled: Set<String> = ["roo-code"]
-        let visible = detected.union(manuallyEnabled)
+    func testManuallyEnabledLegacyAgentBecomesVisibleWithoutDetection() {
+        let definitions = [
+            definition(id: "claude-code", isLegacy: false),
+            definition(id: "roo-code", isLegacy: true),
+        ]
 
-        XCTAssertEqual(visible, ["roo-code"])
+        let visible = BrowserSidebar.visibleAgentDefinitions(
+            definitions: definitions,
+            detectedAgentIDs: [],
+            manuallyEnabledAgentIDs: ["roo-code"]
+        )
+
+        XCTAssertEqual(visible.map(\.id), ["roo-code"])
     }
 
-    func testEmptyManuallyEnabledFallsBackToDetectedOnly() {
-        let detected: Set<String> = ["claude-code", "codex"]
-        let manuallyEnabled: Set<String> = []
-        let visible = detected.union(manuallyEnabled)
+    func testManualEnableNeverSurfacesNonLegacyAgents() {
+        let definitions = [definition(id: "claude-code", isLegacy: false)]
 
-        XCTAssertEqual(visible, detected)
+        let visible = BrowserSidebar.visibleAgentDefinitions(
+            definitions: definitions,
+            detectedAgentIDs: [],
+            manuallyEnabledAgentIDs: ["claude-code"]
+        )
+
+        XCTAssertTrue(visible.isEmpty, "Only legacy agents can be surfaced manually")
+    }
+
+    func testSyntheticOwnersNeverAppearAsSidebarAgents() throws {
+        let syntheticID = try XCTUnwrap(SyntheticAgentID.all.first)
+        let definitions = [definition(id: syntheticID, isLegacy: false)]
+
+        let visible = BrowserSidebar.visibleAgentDefinitions(
+            definitions: definitions,
+            detectedAgentIDs: [syntheticID]
+        )
+
+        XCTAssertTrue(visible.isEmpty)
     }
 }
