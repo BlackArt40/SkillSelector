@@ -29,6 +29,7 @@ struct SettingsView: View {
     @State private var editingRootName: String = ""
     @State private var customAgentSheetRequest: CustomAgentSheetRequest?
     @State private var showDiagnosticsViewer = false
+    @State private var translationAPIKeyInput = ""
     /// Imported marketplace source being edited (改分支重导).
     @State private var editingCatalogSource: CustomCatalogSource?
     @State private var showingAddCatalogSource = false
@@ -181,6 +182,50 @@ struct SettingsView: View {
                 .padding(.top, 4)
             SettingsGroup {
                 languageSegment
+            }
+
+            Group {
+            groupTitle(L10n.string("Translation"))
+                .padding(.top, 4)
+            SettingsGroup {
+                SettingsRow(
+                    label: L10n.string("DeepL API Key"),
+                    sub: L10n.string("DeepL API Key Sub")
+                ) {
+                    HStack(spacing: 8) {
+                        SecureField(
+                            L10n.string("API Key Placeholder"),
+                            text: $translationAPIKeyInput
+                        )
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 200)
+                        Button(L10n.string("Save")) {
+                            try? model.saveTranslationAPIKey(translationAPIKeyInput)
+                            translationAPIKeyInput = ""
+                        }
+                        .buttonStyle(SettingsButtonStyle())
+                        .disabled(translationAPIKeyInput.trimmingCharacters(in: .whitespaces).isEmpty)
+                        if model.isTranslationConfigured {
+                            Button(L10n.string("Remove")) {
+                                model.removeTranslationAPIKey()
+                            }
+                            .buttonStyle(SettingsButtonStyle())
+                        }
+                    }
+                }
+                SettingsRow(
+                    label: L10n.string("Get a Free Key"),
+                    sub: L10n.string("Get a Free Key Sub")
+                ) {
+                    Button(L10n.string("Open DeepL Signup")) {
+                        if let url = URL(string: "https://www.deepl.com/pro-api") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                    .buttonStyle(SettingsButtonStyle())
+                    .help(L10n.string("Open DeepL Signup"))
+                }
+            }
             }
 
             groupTitle(L10n.string("Legacy Agents"))

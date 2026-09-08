@@ -369,3 +369,20 @@
 /* 自定义 Agent 校验错误 */
 "Invalid Entry Filename" = "无效的入口文件名";
 "Invalid Path Template" = "无效的路径模板";
+
+// MARK: Description translation (opt-in cloud provider)
+"Translation" = "翻译";
+"DeepL API Key" = "DeepL API 密钥";
+"DeepL API Key Sub" = "保存在钥匙串中，仅随翻译请求发送。";
+"API Key Placeholder" = "粘贴你的 API 密钥";
+"Get a Free Key" = "获取免费密钥";
+"Get a Free Key Sub" = "DeepL 免费档每月提供 50 万字符额度。";
+"Open DeepL Signup" = "打开 DeepL 注册页";
+"Translate Description" = "翻译描述";
+"Show Original" = "显示原文";
+"Translation Error Missing Key" = "未配置 API 密钥——请在设置中添加。";
+"Translation Error Invalid Key" = "API 密钥被拒绝——请在设置中检查。";
+"Translation Error Quota" = "本月翻译配额已用尽。";
+"Translation Error Rate Limited" = "请求过于频繁——请稍后重试。";
+"Translation Error Network" = "网络错误：";
+"Translation Error Unexpected" = "翻译服务返回了无法解析的响应。";

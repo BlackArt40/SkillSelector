@@ -53,6 +53,7 @@ struct AgentDetailView: View {
         }
     }
 
+    @MainActor
     private var skillDetail: some View {
         SkillDetailView(
             skill: skill,

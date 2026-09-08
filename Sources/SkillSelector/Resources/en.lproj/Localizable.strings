@@ -367,3 +367,20 @@
 /* Custom agent validation errors */
 "Invalid Entry Filename" = "Invalid entry filename";
 "Invalid Path Template" = "Invalid path template";
+
+// MARK: Description translation (opt-in cloud provider)
+"Translation" = "Translation";
+"DeepL API Key" = "DeepL API Key";
+"DeepL API Key Sub" = "Stored in your Keychain, sent only with translation requests.";
+"API Key Placeholder" = "Paste your API key";
+"Get a Free Key" = "Get a Free Key";
+"Get a Free Key Sub" = "DeepL's free tier covers 500,000 characters per month.";
+"Open DeepL Signup" = "Open DeepL Signup";
+"Translate Description" = "Translate Description";
+"Show Original" = "Show Original";
+"Translation Error Missing Key" = "No API key configured — add one in Settings.";
+"Translation Error Invalid Key" = "The API key was rejected — check it in Settings.";
+"Translation Error Quota" = "Translation quota used up for this month.";
+"Translation Error Rate Limited" = "Too many requests — try again in a moment.";
+"Translation Error Network" = "Network error:";
+"Translation Error Unexpected" = "The translation service returned an unreadable response.";

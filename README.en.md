@@ -51,7 +51,7 @@ Roo Code is legacy compatibility and only appears once detected or enabled in Se
 
 ## Privacy
 
-The local features run offline. No telemetry, no crash reporter, no file watcher, no bundled model. The only outbound traffic is the Marketplace fetching its declared GitHub sources on demand (a request happens only when you open that section or hit refresh — never polled, never persisted). The index stores metadata only (paths, owning Agents, descriptions) and never copies Skill content; folder access goes through security-scoped bookmarks, and scans stick to the fixed paths declared in the registry.
+The local features run offline. No telemetry, no crash reporter, no file watcher, no bundled model. The only outbound traffic is the Marketplace fetching its declared GitHub sources on demand (a request happens only when you open that section or hit refresh — never polled, never persisted). Separately, description translation is available once you configure your own translation API key in Settings (stored in the Keychain); those requests go only to the provider you chose, never happen without that key, and the app ships with none. The index stores metadata only (paths, owning Agents, descriptions) and never copies Skill content; folder access goes through security-scoped bookmarks, and scans stick to the fixed paths declared in the registry.
 
 ## Install
 

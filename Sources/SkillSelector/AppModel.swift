@@ -65,6 +65,16 @@ final class AppModel: ObservableObject {
     /// Stateless read-only comparison passes between Skill installations
     /// (review M10).
     let comparisons: ComparisonService
+    /// Cross-skill cache of description translations (key: the original
+    /// description text, value: the zh-Hans translation). Kept across
+    /// selection changes so revisiting a skill shows its translation
+    /// instantly instead of re-issuing the request. Memory-only: never
+    /// persisted, dies with the process.
+    @Published private(set) var descriptionTranslations: [String: String] = [:]
+    /// True when a translation API key is stored in the Keychain — the
+    /// detail view offers the translate button only then. The cloud
+    /// translation path is strictly opt-in: no key, no request.
+    @Published private(set) var isTranslationConfigured = false
 
     @Published var refreshState: RefreshState = .idle
     @Published var selection: SkillSelection?
@@ -165,6 +175,7 @@ final class AppModel: ObservableObject {
         backgroundWork.onFingerprintsBackfilled = { [weak self] updated, changedPaths in
             self?.handleFingerprintsBackfilled(updated: updated, changedPaths: changedPaths)
         }
+        isTranslationConfigured = APIKeychain.load() != nil
     }
 
     func checkEnvironment() async {
@@ -613,6 +624,30 @@ final class AppModel: ObservableObject {
         }
         guard changed else { return }
         snapshots = updated
+    }
+
+    // MARK: Description translation cache & API key
+
+    func cachedDescriptionTranslation(for text: String) -> String? {
+        descriptionTranslations[text]
+    }
+
+    func storeDescriptionTranslation(_ translation: String, for text: String) {
+        descriptionTranslations[text] = translation
+    }
+
+    /// Persists the key to the Keychain (never UserDefaults, logs or
+    /// diagnostics) and flips the configured flag.
+    func saveTranslationAPIKey(_ key: String) throws {
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        try APIKeychain.save(trimmed)
+        isTranslationConfigured = true
+    }
+
+    func removeTranslationAPIKey() {
+        APIKeychain.delete()
+        isTranslationConfigured = false
     }
 
     private func recordRefreshHistory(_ summary: RefreshSummary) {
