@@ -30,7 +30,12 @@ public struct CatalogFetcher: CatalogFetching, Sendable {
     }
 
     public func fetchSkills(source: CatalogSource) async throws -> CatalogPage {
-        var request = URLRequest(url: Self.treesURL(source: source))
+        guard let url = Self.treesURL(source: source) else {
+            // Unreachable for whitelisted sources; a hand-edited defaults
+            // payload must fail as a bad response, not crash the fetch.
+            throw CatalogError.invalidResponse
+        }
+        var request = URLRequest(url: url)
         request.timeoutInterval = 30
         let (data, _) = try await Self.validatedData(for: request, session: session)
         return try Self.parseTree(data, source: source)
@@ -52,7 +57,10 @@ public struct CatalogFetcher: CatalogFetching, Sendable {
     /// Fetches repository-level metadata (stars, forks, last push, license)
     /// for a source — shared by every skill it publishes.
     public func fetchRepoInfo(source: CatalogSource) async throws -> CatalogRepoMetadata {
-        var request = URLRequest(url: Self.repoURL(source: source))
+        guard let url = Self.repoURL(source: source) else {
+            throw CatalogError.invalidResponse
+        }
+        var request = URLRequest(url: url)
         request.timeoutInterval = 30
         let (data, _) = try await Self.validatedData(for: request, session: session)
         return try Self.parseRepo(data)
@@ -78,12 +86,12 @@ public struct CatalogFetcher: CatalogFetching, Sendable {
         }
     }
 
-    static func treesURL(source: CatalogSource) -> URL {
-        URL(string: "https://api.github.com/repos/\(source.owner)/\(source.repo)/git/trees/\(source.branch)?recursive=1")!
+    static func treesURL(source: CatalogSource) -> URL? {
+        URL(string: "https://api.github.com/repos/\(source.owner)/\(source.repo)/git/trees/\(source.branch)?recursive=1")
     }
 
-    static func repoURL(source: CatalogSource) -> URL {
-        URL(string: "https://api.github.com/repos/\(source.owner)/\(source.repo)")!
+    static func repoURL(source: CatalogSource) -> URL? {
+        URL(string: "https://api.github.com/repos/\(source.owner)/\(source.repo)")
     }
 
     // MARK: Repo metadata parsing

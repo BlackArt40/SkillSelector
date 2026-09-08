@@ -255,30 +255,36 @@ final class CatalogModel: ObservableObject {
         guard !skills.isEmpty else { return }
         let fetcher = fetcher
         descriptionTask = Task { [weak self] in
-            await withTaskGroup(of: (String, String?).self) { group in
-                for skill in skills {
-                    group.addTask {
-                        guard let document = try? await fetcher.fetchDocument(skill) else {
-                            return (skill.id, nil)
+            // Concurrency window: a large catalog (hundreds of listed
+            // skills) must not open hundreds of simultaneous connections,
+            // so fetch in bounded batches of 8 while still folding results
+            // into groups of 40 for the observable write.
+            let windowSize = 8
+            var pending: [String: String] = [:]
+            for batchStart in stride(from: 0, to: skills.count, by: windowSize) {
+                guard let self, !Task.isCancelled else { return }
+                let batch = Array(skills[batchStart..<min(batchStart + windowSize, skills.count)])
+                await withTaskGroup(of: (String, String?).self) { group in
+                    for skill in batch {
+                        group.addTask {
+                            guard let document = try? await fetcher.fetchDocument(skill) else {
+                                return (skill.id, nil)
+                            }
+                            return (skill.id, FrontmatterParser.parse(document).description)
                         }
-                        return (skill.id, FrontmatterParser.parse(document).description)
+                    }
+                    for await (id, description) in group {
+                        guard let description, !description.isEmpty else { continue }
+                        pending[id] = description
                     }
                 }
-                var pending: [String: String] = [:]
-                for await (id, description) in group {
-                    guard let self, !Task.isCancelled, let description, !description.isEmpty else {
-                        continue
-                    }
-                    pending[id] = description
-                    if pending.count >= 40 {
-                        self.descriptions.merge(pending) { _, new in new }
-                        pending.removeAll()
-                    }
-                }
-                if let self, !Task.isCancelled, !pending.isEmpty {
+                if pending.count >= 40 {
                     self.descriptions.merge(pending) { _, new in new }
+                    pending.removeAll()
                 }
             }
+            guard let self, !Task.isCancelled, !pending.isEmpty else { return }
+            self.descriptions.merge(pending) { _, new in new }
         }
     }
 

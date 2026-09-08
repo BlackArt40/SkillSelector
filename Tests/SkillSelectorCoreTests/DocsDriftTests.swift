@@ -18,20 +18,37 @@ final class DocsDriftTests: XCTestCase {
     private func readme(_ name: String) throws -> String {
         let url = packageRoot.appendingPathComponent(name)
         guard let text = try? String(contentsOf: url, encoding: .utf8) else {
-            throw XCTSkip("\(name) not present in this checkout")
+            // A missing README is itself a drift signal, not a skip: these
+            // guards exist to fail loudly when docs and code diverge. (A
+            // rename would otherwise have silenced the whole suite.)
+            XCTFail("\(name) not present in this checkout")
+            return ""
         }
         return text
     }
 
     func testChineseReadmeAgentCountMatchesRegistry() throws {
         let readme = try readme("README.md")
-        let regex = try NSRegularExpression(pattern: #"内置\s*(\d+)\s*个"#)
-        let matches = regex.matches(in: readme, range: NSRange(readme.startIndex..., in: readme))
-        let counts = matches.compactMap { match -> Int? in
-            guard let range = Range(match.range(at: 1), in: readme) else { return nil }
-            return Int(readme[range])
-        }
+        let counts = Self.agentCountMatches(in: readme, pattern: #"内置\s*(\d+)\s*个"#)
+        // Exactly one count phrase is expected: a second occurrence of the
+        // wording fails the guard on purpose — every count mention must be
+        // updated in lockstep with the registry.
         XCTAssertEqual(counts, [BuiltInAgentRegistry.make().definitions.count])
+    }
+
+    func testEnglishReadmeAgentCountMatchesRegistry() throws {
+        let readme = try readme("README.en.md")
+        let counts = Self.agentCountMatches(in: readme, pattern: #"(?i)\b(\d+)\s+built\s+in\b"#)
+        XCTAssertEqual(counts, [BuiltInAgentRegistry.make().definitions.count])
+    }
+
+    private static func agentCountMatches(in text: String, pattern: String) -> [Int] {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        let matches = regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
+        return matches.compactMap { match -> Int? in
+            guard let range = Range(match.range(at: 1), in: text) else { return nil }
+            return Int(text[range])
+        }
     }
 
     func testReadmesListEveryBuiltInAgent() throws {

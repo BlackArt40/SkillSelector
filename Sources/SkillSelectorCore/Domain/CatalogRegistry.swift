@@ -310,7 +310,15 @@ public final class UserDefaultsCatalogSourceStore: CatalogSourceStoring, @unchec
 
     public func loadCustomSources() -> [CustomCatalogSource] {
         guard let data = defaults.data(forKey: key) else { return [] }
-        return (try? JSONDecoder().decode([CustomCatalogSource].self, from: data)) ?? []
+        let decoded = (try? JSONDecoder().decode([CustomCatalogSource].self, from: data)) ?? []
+        // Re-validate on load: the defaults payload can be hand-edited, and
+        // the fetch URLs are built straight from owner/repo/branch, so every
+        // loaded source must pass the same whitelist check the import path
+        // applies ("owner/repo@branch" round-trips losslessly through
+        // `parsing`).
+        return decoded.compactMap { source in
+            CustomCatalogSource.parsing("\(source.owner)/\(source.repo)@\(source.branch)")
+        }
     }
 
     public func saveCustomSources(_ sources: [CustomCatalogSource]) {

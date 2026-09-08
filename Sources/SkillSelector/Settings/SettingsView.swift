@@ -556,28 +556,21 @@ struct SettingsView: View {
     }
 
     private func reauthorize(_ root: AuthorizedRootSnapshot) {
-        let panel = NSOpenPanel()
-        panel.title = L10n.string("Re-authorize Directory")
-        panel.prompt = L10n.string("Authorize")
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.directoryURL = root.url
-        guard let url = runPanel(panel) else { return }
-        Task { await model.authorize(url.standardizedFileURL, as: root.kind) }
+        guard let url = DirectoryPanel.chooseSingleDirectory(
+            title: L10n.string("Re-authorize Directory"),
+            prompt: L10n.string("Authorize"),
+            initialDirectory: root.url
+        ) else { return }
+        Task { await model.authorize(url, as: root.kind) }
     }
 
     private func importProject() {
-        let panel = NSOpenPanel()
-        panel.title = L10n.string("Import Project Directory")
-        panel.message = L10n.string("Choose a project directory to scan for all Skills.")
-        panel.prompt = L10n.string("Import")
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.canCreateDirectories = false
-        guard let url = runPanel(panel) else { return }
-        Task { await model.authorize(url.standardizedFileURL, as: .project) }
+        guard let url = DirectoryPanel.chooseSingleDirectory(
+            title: L10n.string("Import Project Directory"),
+            message: L10n.string("Choose a project directory to scan for all Skills."),
+            prompt: L10n.string("Import")
+        ) else { return }
+        Task { await model.authorize(url, as: .project) }
     }
 
     /// `runModal` needs no host window; with `user-selected.read-write`

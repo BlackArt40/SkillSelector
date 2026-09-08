@@ -120,6 +120,12 @@ public struct McpProber: Sendable {
         // already exited after writing its response, so "process still
         // running" is not the right gate for success.
         while true {
+            // Upper layer gave up (e.g. the page was torn down): stop
+            // polling and let the caller's terminate() reap the child, so a
+            // cancelled probe no longer runs out its full timeout window.
+            if Task.isCancelled {
+                return .notRunning
+            }
             // The deadline check must run on every iteration regardless of
             // what the server has written: a server that emits one
             // unparseable line and then hangs (snapshot non-nil, process
@@ -143,7 +149,12 @@ public struct McpProber: Sendable {
             } else if !process.isRunning {
                 return .notRunning
             }
-            try? await Task.sleep(nanoseconds: 150_000_000)
+            do {
+                try await Task.sleep(nanoseconds: 150_000_000)
+            } catch {
+                // Cancellation surfaced during the sleep.
+                return .notRunning
+            }
         }
     }
 
@@ -163,13 +174,22 @@ public struct McpProber: Sendable {
                   let object = try? JSONSerialization.jsonObject(with: data),
                   let reply = object as? [String: Any],
                   reply["jsonrpc"] as? String == "2.0",
-                  let id = reply["id"] as? Int, id == 1 else {
+                  isInitializeReplyID(reply["id"]) else {
                 continue
             }
             if reply["result"] != nil { return .result }
             if reply["error"] != nil { return .error }
         }
         return .unknown
+    }
+
+    /// MCP servers may echo the initialize request id as a number or a
+    /// string; accept both spellings of our id (1 / "1") so a compliant
+    /// server is not conservatively misjudged as unknown.
+    private static func isInitializeReplyID(_ value: Any?) -> Bool {
+        if let number = value as? Int { return number == 1 }
+        if let text = value as? String { return text == "1" }
+        return false
     }
 
     private static func initializePayload() -> String {

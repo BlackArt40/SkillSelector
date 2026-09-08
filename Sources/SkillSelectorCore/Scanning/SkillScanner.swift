@@ -476,18 +476,9 @@ public struct SkillScanner: Sendable {
             document = FrontmatterParser.parse(
                 try String(contentsOf: resolvedEntryURL, encoding: .utf8)
             )
-        } catch let error as EntryReadError {
-            let detail = error.localizedDescription
-            document = ParsedSkillDocument(
-                title: installationURL.lastPathComponent,
-                issues: [
-                    ParseIssue(
-                        code: .unableToReadEntry,
-                        arguments: [entryFilename, detail]
-                    ),
-                ]
-            )
         } catch {
+            // EntryReadError and raw filesystem errors produce the same
+            // ParseIssue shape, so one catch covers both.
             let detail = error.localizedDescription
             document = ParsedSkillDocument(
                 title: installationURL.lastPathComponent,

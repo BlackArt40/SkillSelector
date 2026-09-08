@@ -721,14 +721,11 @@ struct RootView: View {
     // MARK: Directories
 
     private func reauthorize(_ root: AuthorizedRootSnapshot) {
-        let panel = NSOpenPanel()
-        panel.title = L10n.string("Re-authorize Directory")
-        panel.prompt = L10n.string("Authorize")
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.directoryURL = root.url
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard let url = DirectoryPanel.chooseSingleDirectory(
+            title: L10n.string("Re-authorize Directory"),
+            prompt: L10n.string("Authorize"),
+            initialDirectory: root.url
+        ) else { return }
         Task { await model.authorize(url, as: root.kind) }
     }
 
@@ -741,31 +738,21 @@ struct RootView: View {
     }
 
     private func chooseDestinationRoot() {
-        guard let url = chooseDirectory(
+        guard let url = DirectoryPanel.chooseSingleDirectory(
             title: L10n.string("Import Project Directory"),
-            message: L10n.string("Choose a project directory to scan for all Skills.")
+            message: L10n.string("Choose a project directory to scan for all Skills."),
+            prompt: L10n.string("Import")
         ) else { return }
         Task { await model.authorize(url, as: .project) }
     }
 
     private func chooseSystemRoot() {
-        guard let url = chooseDirectory(
+        guard let url = DirectoryPanel.chooseSingleDirectory(
             title: L10n.string("Import System Directory"),
-            message: L10n.string("Choose a home directory containing Agent Skills (e.g. ~/.claude, ~/.codex).")
+            message: L10n.string("Choose a home directory containing Agent Skills (e.g. ~/.claude, ~/.codex)."),
+            prompt: L10n.string("Import")
         ) else { return }
         Task { await model.authorize(url, as: .home) }
-    }
-
-    private func chooseDirectory(title: String, message: String) -> URL? {
-        let panel = NSOpenPanel()
-        panel.title = title
-        panel.message = message
-        panel.prompt = L10n.string("Import")
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.canCreateDirectories = false
-        return panel.runModal() == .OK ? panel.url?.standardizedFileURL : nil
     }
 
     /// Opens the Settings window on the directories pane — used by the
