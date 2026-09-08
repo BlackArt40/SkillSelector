@@ -358,3 +358,12 @@
 "Revoked" = "Revoked";
 "Refresh completed" = "Refresh completed";
 "Backfilled Fingerprints" = "Backfilled %d content fingerprints";
+
+/* MCP scan issues (surfaced in diagnostics when a config exists but is skipped) */
+"MCP Config Skipped Too Large" = "MCP config skipped (file too large)";
+"MCP Config Skipped Unreadable" = "MCP config skipped (unreadable)";
+"MCP Config Parse Failed" = "MCP config parse failed";
+
+/* Custom agent validation errors */
+"Invalid Entry Filename" = "Invalid entry filename";
+"Invalid Path Template" = "Invalid path template";

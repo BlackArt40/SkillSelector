@@ -360,3 +360,12 @@
 "Revoked" = "已撤销授权";
 "Refresh completed" = "刷新完成";
 "Backfilled Fingerprints" = "已补录 %d 个内容指纹";
+
+/* MCP 扫描问题（配置存在但被跳过时在诊断中呈现） */
+"MCP Config Skipped Too Large" = "已跳过 MCP 配置（文件过大）";
+"MCP Config Skipped Unreadable" = "已跳过 MCP 配置（无法读取）";
+"MCP Config Parse Failed" = "MCP 配置解析失败";
+
+/* 自定义 Agent 校验错误 */
+"Invalid Entry Filename" = "无效的入口文件名";
+"Invalid Path Template" = "无效的路径模板";

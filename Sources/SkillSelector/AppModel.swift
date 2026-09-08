@@ -17,9 +17,9 @@ enum AppModelValidationError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidEntryFilename(let filename):
-            return "Invalid entry filename: \(filename)"
+            return "\(L10n.string("Invalid Entry Filename")): \(filename)"
         case .invalidPathTemplate(let path):
-            return "Invalid path template: \(path)"
+            return "\(L10n.string("Invalid Path Template")): \(path)"
         }
     }
 }
@@ -959,6 +959,32 @@ final class AppModel: ObservableObject {
         )
     }
 
+    /// Surfaces MCP configs that exist but were skipped (oversized,
+    /// unreadable, or unparseable) so a broken config is distinguishable
+    /// from "agent not installed" in the diagnostics viewer. Paths go
+    /// through the redactor like every other diagnostic record.
+    private func recordMcpScanIssues(_ issues: [McpScanIssue]) {
+        guard !issues.isEmpty else { return }
+        let redactor = currentRedactor()
+        for issue in issues {
+            let reason: String
+            switch issue.kind {
+            case .fileTooLarge(let bytes):
+                reason = "\(L10n.string("MCP Config Skipped Too Large")) (\(bytes))"
+            case .unreadable:
+                reason = L10n.string("MCP Config Skipped Unreadable")
+            case .parseFailed(let description):
+                reason = "\(L10n.string("MCP Config Parse Failed")): \(description)"
+            }
+            diagnosticStore.record(
+                category: .scanning,
+                code: "MCP_CONFIG_SKIPPED",
+                message: "\(reason) \(redactor.redact(issue.configPath))",
+                redactor: redactor
+            )
+        }
+    }
+
     private func diagnosticRootSummaries() -> [DiagnosticRootSummary] {
         authorizedRoots.map { root in
             let isAvailable: Bool
@@ -1001,6 +1027,7 @@ final class AppModel: ObservableObject {
             self.selection = nil
         }
         mcps.reload(authorizedRoots: updatedRoots)
+        recordMcpScanIssues(mcps.lastScanIssues)
         rules.reload(authorizedRoots: updatedRoots)
         scheduleFingerprintBackfillIfNeeded()
         scheduleBodySearchIndexRebuild()

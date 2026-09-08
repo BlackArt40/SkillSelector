@@ -96,7 +96,11 @@ struct CustomAgentSheet: View {
                         try editor.save(using: model)
                         dismiss()
                     } catch {
-                        sheetError = String(describing: error)
+                        // LocalizedError implementations (e.g.
+                        // AppModelValidationError) localize through their
+                        // errorDescription; String(describing:) would leak
+                        // raw English case names.
+                        sheetError = error.localizedDescription
                     }
                 }
                 .buttonStyle(ActionButtonStyle(role: .primary))

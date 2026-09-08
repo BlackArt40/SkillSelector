@@ -27,6 +27,12 @@ final class McpStateModel: ObservableObject {
     /// Re-parses the server list from the current authorized roots. Called
     /// by `AppModel.reloadSnapshot()` — the same point where skills refresh
     /// — so authorize/revoke/refresh all keep the list current.
+    ///
+    /// Configs that exist but were skipped (oversized/unreadable/unparseable)
+    /// land in `lastScanIssues` for the AppModel to surface in diagnostics;
+    /// missing configs stay silent (the common "not configured" case).
+    private(set) var lastScanIssues: [McpScanIssue] = []
+
     func reload(authorizedRoots: [AuthorizedRootSnapshot]) {
         let homeRoot = authorizedRoots.homeRoot
         let projectRoots = authorizedRoots.projectRoots
@@ -37,7 +43,9 @@ final class McpStateModel: ObservableObject {
         defer { accesses.forEach { $0.lease.close() } }
 
         let scanner = McpScanner()
-        servers = scanner.scan(homeRoot: homeRoot, projectRoots: projectRoots)
+        let result = scanner.scanWithDiagnostics(homeRoot: homeRoot, projectRoots: projectRoots)
+        servers = result.servers
+        lastScanIssues = result.issues
         probeStatuses = [:]
     }
 
@@ -73,6 +81,11 @@ final class McpStateModel: ObservableObject {
                     try? await Task.sleep(nanoseconds: 50_000_000)
                     let status = await McpProber().probe(server)
                     await MainActor.run {
+                        // A concurrent reload() may have replaced the server
+                        // list while this probe was in flight; writing the
+                        // verdict back for a removed server would leave a
+                        // stale entry in the dictionary forever.
+                        guard self.servers.contains(where: { $0.id == server.id }) else { return }
                         self.probeStatuses[server.id] = status
                     }
                 }
@@ -86,6 +99,8 @@ final class McpStateModel: ObservableObject {
         probeStatuses[serverID] = .probing
         try? await Task.sleep(nanoseconds: 50_000_000)
         let status = await McpProber().probe(server)
+        // Same stale-verdict guard as the batch path above.
+        guard servers.contains(where: { $0.id == serverID }) else { return }
         probeStatuses[serverID] = status
     }
 

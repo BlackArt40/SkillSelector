@@ -418,7 +418,7 @@ struct SettingsView: View {
                     do {
                         try model.removeCustomAgent(id: agent.id)
                     } catch {
-                        settingsError = String(describing: error)
+                        settingsError = error.localizedDescription
                     }
                 }
                 .buttonStyle(SettingsDangerButtonStyle())
@@ -598,7 +598,7 @@ struct SettingsView: View {
                 try await model.exportDiagnostics(to: url)
                 exportStatus = L10n.string("Diagnostics Exported")
             } catch {
-                settingsError = String(describing: error)
+                settingsError = error.localizedDescription
             }
         }
     }

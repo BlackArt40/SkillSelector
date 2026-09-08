@@ -93,9 +93,12 @@ final class MainWindowFrameCoordinator {
         // by remembering which window we restored onto.
         guard let id = restoredWindowID, window.windowNumber == id else { return }
         let frame = window.frame
-        UserDefaults.standard.set(
-            "\(frame.origin.x) \(frame.origin.y) \(frame.size.width) \(frame.size.height)",
-            forKey: Self.autosaveKey
-        )
+        let encoded =
+            "\(frame.origin.x) \(frame.origin.y) \(frame.size.width) \(frame.size.height)"
+        // The belt-and-braces timer fires every 5 seconds; skip the disk
+        // write when nothing changed so the app stays quiet at rest instead
+        // of issuing a periodic UserDefaults write for the whole session.
+        guard encoded != UserDefaults.standard.string(forKey: Self.autosaveKey) else { return }
+        UserDefaults.standard.set(encoded, forKey: Self.autosaveKey)
     }
 }
