@@ -739,4 +739,135 @@ final class McpProberTests: XCTestCase {
         }
         XCTAssertTrue(message.contains("scheme"), "failure should cite the scheme, got: \(message)")
     }
+
+    // MARK: - http/sse probes (URLProtocol stubbing; review P2-20)
+
+    /// Lock-protected shared state for the URLProtocol stub: URLProtocol
+    /// instances are created by the session machinery, so per-test data
+    /// rides on a static box that is safe under Swift 6 concurrency.
+    private final class HandlerBox: @unchecked Sendable {
+        private let lock = NSLock()
+        private var _handler: ((URLRequest) -> (Int, Data))?
+        private var _lastBody: Data?
+
+        var handler: ((URLRequest) -> (Int, Data))? {
+            get { lock.lock(); defer { lock.unlock() }; return _handler }
+            set { lock.lock(); defer { lock.unlock() }; _handler = newValue }
+        }
+
+        var lastBody: Data? {
+            get { lock.lock(); defer { lock.unlock() }; return _lastBody }
+            set { lock.lock(); defer { lock.unlock() }; _lastBody = newValue }
+        }
+    }
+
+    /// URLProtocol stub so probeHTTP's URLSession call resolves without
+    /// touching the network. A nil handler simulates a connection failure.
+    private final class StubHTTPURLProtocol: URLProtocol {
+        static let state = HandlerBox()
+
+        override class func canInit(with request: URLRequest) -> Bool { true }
+        override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+        override func startLoading() {
+            guard let handler = Self.state.handler else {
+                client?.urlProtocol(self, didFailWithError: URLError(.cannotConnectToHost))
+                return
+            }
+            // URLSession moves the httpBody into a stream here.
+            if let stream = request.httpBodyStream {
+                stream.open()
+                var body = Data()
+                let bufferSize = 16 * 1024
+                let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+                defer { buffer.deallocate() }
+                while stream.hasBytesAvailable {
+                    let read = stream.read(buffer, maxLength: bufferSize)
+                    guard read > 0 else { break }
+                    body.append(buffer, count: read)
+                }
+                stream.close()
+                Self.state.lastBody = body
+            } else {
+                Self.state.lastBody = request.httpBody
+            }
+            let (status, data) = handler(request)
+            let response = HTTPURLResponse(
+                url: request.url ?? URL(fileURLWithPath: "/"),
+                statusCode: status,
+                httpVersion: "HTTP/1.1",
+                headerFields: nil
+            ) ?? URLResponse()
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: data)
+            client?.urlProtocolDidFinishLoading(self)
+        }
+
+        override func stopLoading() {}
+    }
+
+    private func stubbedProber() -> McpProber {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StubHTTPURLProtocol.self]
+        return McpProber(handshakeTimeout: 3, session: URLSession(configuration: configuration))
+    }
+
+    private func httpDescriptor(url: String?) -> McpServerDescriptor {
+        McpServerDescriptor(
+            name: "remote",
+            agentID: "test",
+            transport: .http,
+            command: nil,
+            arguments: [],
+            url: url,
+            configFile: "/tmp/fake",
+            projectRootID: nil
+        )
+    }
+
+    /// Only a 2xx reply means the endpoint accepted the init handshake.
+    func testHTTPProbeRunningOn2xx() async {
+        StubHTTPURLProtocol.state.handler = { _ in (200, Data("{}".utf8)) }
+        defer { StubHTTPURLProtocol.state.handler = nil }
+
+        let status = await stubbedProber().probe(httpDescriptor(url: "https://mcp.example/rpc"))
+        XCTAssertEqual(status, .running)
+    }
+
+    /// 401/404 prove something answered but did not complete the handshake:
+    /// the server is not usable as configured, so it is not "running".
+    func testHTTPProbeNotRunningOn401And404() async {
+        StubHTTPURLProtocol.state.handler = { _ in (401, Data()) }
+        let unauthorized = await stubbedProber().probe(httpDescriptor(url: "https://mcp.example/rpc"))
+        XCTAssertEqual(unauthorized, .notRunning)
+
+        StubHTTPURLProtocol.state.handler = { _ in (404, Data()) }
+        let missing = await stubbedProber().probe(httpDescriptor(url: "https://mcp.example/rpc"))
+        XCTAssertEqual(missing, .notRunning)
+
+        StubHTTPURLProtocol.state.handler = nil
+    }
+
+    func testHTTPProbeNotRunningWhenConnectionFails() async {
+        StubHTTPURLProtocol.state.handler = nil // startLoading fails with URLError
+
+        let status = await stubbedProber().probe(httpDescriptor(url: "https://mcp.example/rpc"))
+        XCTAssertEqual(status, .notRunning)
+    }
+
+    func testHTTPProbeSendsInitializeHandshakeBody() async {
+        StubHTTPURLProtocol.state.handler = { _ in (200, Data("{}".utf8)) }
+        defer { StubHTTPURLProtocol.state.handler = nil }
+
+        _ = await stubbedProber().probe(httpDescriptor(url: "https://mcp.example/rpc"))
+
+        guard let body = StubHTTPURLProtocol.state.lastBody else {
+            return XCTFail("expected the probe to POST an initialize payload")
+        }
+        let payload = String(decoding: body, as: UTF8.self)
+        XCTAssertTrue(
+            payload.contains(#""method":"initialize""#),
+            "probe must POST the initialize handshake, got: \(payload)"
+        )
+    }
 }

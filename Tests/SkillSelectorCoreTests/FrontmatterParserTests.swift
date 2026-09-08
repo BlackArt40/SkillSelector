@@ -155,3 +155,56 @@ final class FrontmatterParserTests: XCTestCase {
         XCTAssertEqual(FrontmatterParser.bodyLines(from: clean).first, "# Clean")
     }
 }
+
+// MARK: - Malformed input hardening (review P2-19)
+// The parser already handles these shapes; the cases pin the behavior so
+// refactors cannot regress them into crashes or silent corruption.
+
+extension FrontmatterParserTests {
+    func testCRLFLineEndingsParseSameAsLF() {
+        let parsed = FrontmatterParser.parse(
+            "---\r\nname: crlf-skill\r\ndescription: line one\r\n---\r\n# CRLF Title"
+        )
+
+        XCTAssertEqual(parsed.name, "crlf-skill")
+        XCTAssertEqual(parsed.description, "line one")
+        XCTAssertEqual(parsed.title, "CRLF Title")
+        XCTAssertTrue(parsed.issues.isEmpty)
+    }
+
+    func testEmptyFrontmatterBlockDegradesToMissingFields() {
+        let parsed = FrontmatterParser.parse("---\n---\n# Body")
+
+        XCTAssertNil(parsed.name)
+        XCTAssertNil(parsed.description)
+        XCTAssertEqual(parsed.title, "Body")
+    }
+
+    func testScalarRootFrontmatterYieldsNoFields() {
+        let parsed = FrontmatterParser.parse("---\njust a scalar\n---\n# Scalar")
+
+        XCTAssertNil(parsed.name)
+        XCTAssertTrue(parsed.fields.isEmpty)
+        XCTAssertEqual(parsed.title, "Scalar")
+    }
+
+    func testSequenceRootFrontmatterYieldsNoFields() {
+        let parsed = FrontmatterParser.parse("---\n- one\n- two\n---\n# Sequence")
+
+        XCTAssertNil(parsed.name)
+        XCTAssertTrue(parsed.fields.isEmpty)
+        XCTAssertEqual(parsed.title, "Sequence")
+    }
+
+    func testDuplicateKeysDoNotCrashTheParser() {
+        let parsed = FrontmatterParser.parse(
+            "---\nname: first\nname: second\ndescription: kept\n---\n# Duplicate"
+        )
+
+        // libyaml tolerates duplicate keys; whichever mapping entry wins,
+        // the parser must not crash or fabricate a third value.
+        XCTAssertTrue(["first", "second"].contains(parsed.name ?? ""))
+        XCTAssertEqual(parsed.description, "kept")
+        XCTAssertEqual(parsed.title, "Duplicate")
+    }
+}

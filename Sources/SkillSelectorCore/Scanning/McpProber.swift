@@ -37,11 +37,15 @@ public enum McpProbeStatus: Hashable, Sendable {
 public struct McpProber: Sendable {
     /// Overall budget for one handshake, seconds.
     public var handshakeTimeout: TimeInterval
+    /// Session injected for tests (URLProtocol stubbing); production probes
+    /// create their own ephemeral session per http call.
+    private let injectedSession: URLSession?
     private static let jsonrpcVersion = "2.0"
     private static let clientName = "SkillSelector"
 
-    public init(handshakeTimeout: TimeInterval = 5) {
+    public init(handshakeTimeout: TimeInterval = 5, session: URLSession? = nil) {
         self.handshakeTimeout = handshakeTimeout
+        self.injectedSession = session
     }
 
     /// Probes one server. Never throws; errors surface as `.failed`.
@@ -244,7 +248,7 @@ public struct McpProber: Sendable {
             // handed to URLSession as a side effect.
             return .failed("unsupported url scheme: \(urlString)")
         }
-        let session = URLSession(configuration: .ephemeral)
+        let session = injectedSession ?? URLSession(configuration: .ephemeral)
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.timeoutInterval = handshakeTimeout
