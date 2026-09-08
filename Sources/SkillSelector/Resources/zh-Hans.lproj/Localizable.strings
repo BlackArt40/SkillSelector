@@ -376,7 +376,7 @@
 "DeepL API Key Sub" = "保存在钥匙串中，仅随翻译请求发送。";
 "API Key Placeholder" = "粘贴你的 API 密钥";
 "Get a Free Key" = "获取免费密钥";
-"Get a Free Key Sub" = "DeepL 免费档每月提供 50 万字符额度。";
+"Get a Free Key Sub" = "仅需邮箱注册，每月 50 万字符免费。登录后打开 Account → API Keys → Create Key，把以 :fx 结尾的密钥粘贴到上方。";
 "Open DeepL Signup" = "打开 DeepL 注册页";
 "Translate Description" = "翻译描述";
 "Show Original" = "显示原文";
@@ -386,3 +386,4 @@
 "Translation Error Rate Limited" = "请求过于频繁——请稍后重试。";
 "Translation Error Network" = "网络错误：";
 "Translation Error Unexpected" = "翻译服务返回了无法解析的响应。";
+"Open DeepL API Keys" = "打开密钥管理页";

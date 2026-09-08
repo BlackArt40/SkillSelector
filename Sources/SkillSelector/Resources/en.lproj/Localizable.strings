@@ -374,7 +374,7 @@
 "DeepL API Key Sub" = "Stored in your Keychain, sent only with translation requests.";
 "API Key Placeholder" = "Paste your API key";
 "Get a Free Key" = "Get a Free Key";
-"Get a Free Key Sub" = "DeepL's free tier covers 500,000 characters per month.";
+"Get a Free Key Sub" = "Email-only signup, 500K characters/month free. After signing in, open Account → API Keys → Create Key and paste the :fx key above.";
 "Open DeepL Signup" = "Open DeepL Signup";
 "Translate Description" = "Translate Description";
 "Show Original" = "Show Original";
@@ -384,3 +384,4 @@
 "Translation Error Rate Limited" = "Too many requests — try again in a moment.";
 "Translation Error Network" = "Network error:";
 "Translation Error Unexpected" = "The translation service returned an unreadable response.";
+"Open DeepL API Keys" = "Open API Keys Page";

@@ -217,13 +217,22 @@ struct SettingsView: View {
                     label: L10n.string("Get a Free Key"),
                     sub: L10n.string("Get a Free Key Sub")
                 ) {
-                    Button(L10n.string("Open DeepL Signup")) {
-                        if let url = URL(string: "https://www.deepl.com/pro-api") {
-                            NSWorkspace.shared.open(url)
+                    HStack(spacing: 8) {
+                        Button(L10n.string("Open DeepL Signup")) {
+                            if let url = URL(string: "https://www.deepl.com/pro-api") {
+                                NSWorkspace.shared.open(url)
+                            }
                         }
+                        .buttonStyle(SettingsButtonStyle())
+                        .help(L10n.string("Open DeepL Signup"))
+                        Button(L10n.string("Open DeepL API Keys")) {
+                            if let url = URL(string: "https://www.deepl.com/account/summary") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }
+                        .buttonStyle(SettingsButtonStyle())
+                        .help(L10n.string("Open DeepL API Keys"))
                     }
-                    .buttonStyle(SettingsButtonStyle())
-                    .help(L10n.string("Open DeepL Signup"))
                 }
             }
             }
