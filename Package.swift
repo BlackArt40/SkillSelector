@@ -39,7 +39,13 @@ let package = Package(
     targets: [
         .target(
             name: "SkillSelectorCore",
-            dependencies: ["Yams", .product(name: "GRDB", package: "GRDB.swift")]
+            dependencies: ["Yams", .product(name: "GRDB", package: "GRDB.swift")],
+            // tools 5.10 builds in the Swift 5 language mode, so restore the
+            // strict-concurrency diagnostics CI's Xcode 16 would skip. Core
+            // has no SwiftUI macros, so make every diagnostic fatal there.
+            swiftSettings: [
+                .unsafeFlags(["-strict-concurrency=complete", "-warnings-as-errors"]),
+            ]
         ),
         .executableTarget(
             name: "SkillSelector",
@@ -51,6 +57,11 @@ let package = Package(
                 .process("Resources"),
                 // SVG bundle: agent brand marks, loaded as template images.
                 .copy("AgentIcons"),
+            ],
+            // Strict concurrency without -warnings-as-errors: SwiftUI's
+            // macro expansion emits warnings outside our control.
+            swiftSettings: [
+                .unsafeFlags(["-strict-concurrency=complete"]),
             ]
         ),
     ] + testTargets

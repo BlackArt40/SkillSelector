@@ -67,7 +67,7 @@ public final class SecurityScopedBookmarkAdapter: BookmarkDataCreating, @uncheck
         // Best-effort: security-scoped access succeeds for sandboxed apps;
         // returns true unconditionally for plain bookmarks (the file
         // permission is checked at I/O time).
-        url.startAccessingSecurityScopedResource()
+        _ = url.startAccessingSecurityScopedResource()
         return true
     }
 
