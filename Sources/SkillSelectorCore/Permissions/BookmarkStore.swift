@@ -189,12 +189,25 @@ public final class BookmarkStore {
             if records.contains(where: { $0.id != record.id }) {
                 throw BookmarkStoreError.duplicateRootPath(url.path)
             }
-            record.bookmarkData = try adapter.createBookmarkData(for: url)
-            record.path = url.path
-            try database.write { try record.upsert($0) }
         }
 
         let didStart = adapter.startAccessing(url)
+        if resolution.isStale {
+            // Refresh a stale bookmark only once access to the URL has been
+            // established. Under App Sandbox, creating a security-scoped
+            // bookmark typically requires that access, so rebuilding before
+            // startAccessing could fail and mark an otherwise usable root
+            // unhealthy, forcing a needless re-authorization. A failed
+            // refresh is not fatal here: this access is already live, and
+            // the next resolve will simply see the stale flag again.
+            do {
+                record.bookmarkData = try adapter.createBookmarkData(for: url)
+                record.path = url.path
+                try database.write { try record.upsert($0) }
+            } catch {
+                // Best-effort refresh; keep the current bookmark data.
+            }
+        }
         let adapter = self.adapter
         let accessID = UUID()
         let rootID = record.id

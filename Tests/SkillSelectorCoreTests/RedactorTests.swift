@@ -101,6 +101,48 @@ final class RedactorTests: XCTestCase {
         XCTAssertFalse(output.contains("private Skill body"))
     }
 
+    func testRedactsQuotedJSONKeysAndURLUserinfo() {
+        // JSON-style config shapes are the most common MCP env form.
+        XCTAssertEqual(
+            redactor.redact(#"mcp env {"api_key": "sk-12345678"} loaded"#),
+            #"mcp env {"api_key": <redacted>} loaded"#
+        )
+        // URL userinfo keeps the user, drops the password.
+        XCTAssertEqual(
+            redactor.redact("failed https://user:super-secret@example.com/api"),
+            "failed https://user:\(Redactor.redactedValue)@example.com/api"
+        )
+        // host:port without a trailing "@" is not userinfo — ports survive.
+        XCTAssertEqual(
+            redactor.redact("port https://example.com:8080/path untouched"),
+            "port https://example.com:8080/path untouched"
+        )
+    }
+
+    func testRedactsNonBearerAuthorizationSchemesAndBareCredentials() {
+        // Non-bearer/basic Authorization schemes are redacted up to the
+        // next segment separator.
+        XCTAssertEqual(
+            redactor.redact(#"reply Authorization: Digest realm="x", nonce=abc"#),
+            #"reply Authorization: <redacted>, nonce=abc"#
+        )
+        // Bare credentials after a "token " label (GitHub style).
+        XCTAssertEqual(
+            redactor.redact("sent token ghp_0123456789abcdef"),
+            "sent token \(Redactor.redactedValue)"
+        )
+        // Unlabeled sk-… prefixes.
+        XCTAssertEqual(
+            redactor.redact("key sk-ant-api03-0123456789"),
+            "key sk-\(Redactor.redactedValue)"
+        )
+        // Ordinary words containing the same fragments are untouched.
+        XCTAssertEqual(
+            redactor.redact("task-list updated and skills repo synced"),
+            "task-list updated and skills repo synced"
+        )
+    }
+
     func testDiagnosticStoreBoundsAndRedactsMessagesBeforeRetention() {
         let store = DiagnosticStore(capacity: 2)
 

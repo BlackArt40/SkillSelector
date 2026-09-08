@@ -144,6 +144,43 @@ final class BookmarkStoreTests: XCTestCase {
         XCTAssertEqual(adapter.stoppedURLs, [saved.url])
     }
 
+    func testStaleBookmarkRefreshesOnlyAfterAccessStarts() throws {
+        let adapter = BookmarkAdapterSpy()
+        let store = try makeStore(adapter: adapter)
+        let url = URL(fileURLWithPath: "/tmp/custom")
+        let saved = try store.save(url: url, kind: .custom)
+        adapter.nextResolutionIsStale = true
+
+        let access = try store.resolve(id: saved.id)
+        access.lease.close()
+
+        // Sandbox-safe order: access is established before the stale
+        // bookmark is rebuilt (creating a security-scoped bookmark may
+        // require holding access to the URL).
+        XCTAssertEqual(
+            adapter.events,
+            ["create", "resolve", "start", "create", "stop"]
+        )
+    }
+
+    func testFailedStaleRefreshKeepsAccessAlive() throws {
+        let adapter = BookmarkAdapterSpy()
+        let store = try makeStore(adapter: adapter)
+        let url = URL(fileURLWithPath: "/tmp/custom")
+        let saved = try store.save(url: url, kind: .custom)
+        adapter.nextResolutionIsStale = true
+        adapter.failNextCreate = true
+
+        // The stale rebuild fails, but this resolve must still succeed:
+        // the access is already live and the refresh is best-effort.
+        let access = try store.resolve(id: saved.id)
+        access.lease.close()
+
+        XCTAssertEqual(access.root.url, url.standardizedFileURL)
+        XCTAssertEqual(adapter.startedURLs.count, 1)
+        XCTAssertEqual(adapter.stoppedURLs.count, 1)
+    }
+
     private func makeStore(adapter: BookmarkAdapterSpy) throws -> BookmarkStore {
         BookmarkStore(database: try makeDatabase(), adapter: adapter)
     }
@@ -157,17 +194,27 @@ private final class BookmarkAdapterSpy: BookmarkDataCreating, @unchecked Sendabl
     var nextResolutionIsStale = false
     var nextResolutionFails = false
     var shouldStartAccess = true
+    var failNextCreate = false
     private(set) var createdURLs: [URL] = []
     private(set) var resolvedData: [Data] = []
     private(set) var startedURLs: [URL] = []
     private(set) var stoppedURLs: [URL] = []
+    /// Timeline of adapter calls, for asserting call order in sandbox-safety
+    /// tests. Existing assertions on the arrays above are unaffected.
+    private(set) var events: [String] = []
 
     func createBookmarkData(for url: URL) throws -> Data {
+        events.append("create")
+        if failNextCreate {
+            failNextCreate = false
+            throw CocoaError(.fileWriteUnknown)
+        }
         createdURLs.append(url)
         return Data("bookmark-\(createdURLs.count)".utf8)
     }
 
     func resolveBookmarkData(_ data: Data) throws -> BookmarkResolution {
+        events.append("resolve")
         resolvedData.append(data)
         if nextResolutionFails {
             nextResolutionFails = false
@@ -180,11 +227,13 @@ private final class BookmarkAdapterSpy: BookmarkDataCreating, @unchecked Sendabl
     }
 
     func startAccessing(_ url: URL) -> Bool {
+        events.append("start")
         startedURLs.append(url)
         return shouldStartAccess
     }
 
     func stopAccessing(_ url: URL) {
+        events.append("stop")
         stoppedURLs.append(url)
     }
 }
