@@ -46,9 +46,14 @@ final class DeferredFingerprintTests: XCTestCase {
         }
         XCTAssertEqual(try index.backfillContentFingerprints(fingerprints), 2)
 
-        // Records expose the fingerprint…
+        // Records expose the fingerprint, and the single-row reader (M14
+        // incremental-merge helper) agrees with the whole-table read.
         let skills = try index.skills()
         XCTAssertTrue(skills.allSatisfy { $0.contentFingerprint != nil })
+        for skill in skills {
+            XCTAssertEqual(try index.skill(path: skill.path), skill)
+        }
+        XCTAssertNil(try index.skill(path: "/nonexistent"))
         XCTAssertEqual(skills.compactMap(\.contentFingerprint).count, 2)
         // …and the incremental cache serves it on the next scan's fast path.
         let entries = try index.cachedScanEntries()
@@ -56,8 +61,12 @@ final class DeferredFingerprintTests: XCTestCase {
         for (path, entry) in entries {
             XCTAssertEqual(entry.contentFingerprint, fingerprints[path])
         }
-        // Idempotent: nothing left to update.
-        XCTAssertEqual(try index.backfillContentFingerprints(fingerprints), 0)
+        // Idempotent: nothing left to update (and no changed paths either).
+        let repeatResult = try index.backfillFingerprints(
+            contentByPath: fingerprints, similarityByPath: [:]
+        )
+        XCTAssertEqual(repeatResult.updated, 0)
+        XCTAssertTrue(repeatResult.changedPaths.isEmpty)
         // Unknown paths (the Skill vanished) are skipped, not fatal.
         XCTAssertEqual(try index.backfillContentFingerprints(["/gone": "abc"]), 0)
     }

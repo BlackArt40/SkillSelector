@@ -162,8 +162,8 @@ final class AppModel: ObservableObject {
         backgroundWork.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
-        backgroundWork.onFingerprintsBackfilled = { [weak self] updated in
-            self?.handleFingerprintsBackfilled(updated: updated)
+        backgroundWork.onFingerprintsBackfilled = { [weak self] updated, changedPaths in
+            self?.handleFingerprintsBackfilled(updated: updated, changedPaths: changedPaths)
         }
     }
 
@@ -578,16 +578,41 @@ final class AppModel: ObservableObject {
         await backgroundWork.waitForBodySearchIndex()
     }
 
-    /// Reloads snapshots and records the diagnostic after a backfill wrote
-    /// fingerprints back into the index (see `BackgroundWorkCoordinator`).
-    private func handleFingerprintsBackfilled(updated: Int) {
-        try? reloadSnapshot()
+    /// Merges the backfilled rows into the published snapshots and records
+    /// the diagnostic. Review M14: a backfill changes only the rows it
+    /// wrote — merge those instead of a full `index.skills()` reload, so
+    /// large catalogs don't pay a whole-table read per backfill pass. The
+    /// scanner's own `reloadSnapshot()` stays authoritative for everything
+    /// else (roots, removals, agent associations).
+    private func handleFingerprintsBackfilled(updated: Int, changedPaths: Set<String>) {
+        guard updated > 0, !changedPaths.isEmpty else { return }
+        applyFingerprintUpdates(paths: changedPaths)
         diagnosticStore.record(
             category: .scanning,
             code: "FINGERPRINTS_BACKFILLED",
             message: L10n.string("Backfilled Fingerprints", updated),
             redactor: currentRedactor()
         )
+    }
+
+    private func applyFingerprintUpdates(paths: Set<String>) {
+        var updated = snapshots
+        var changed = false
+        for path in paths.sorted() {
+            guard let fresh = try? index.skill(path: path),
+                  let position = updated.firstIndex(where: { $0.path == path })
+            else {
+                // A skill the scan removed mid-backfill: leave the list as
+                // it is; the next refresh reloads authoritatively.
+                continue
+            }
+            if updated[position] != fresh {
+                updated[position] = fresh
+                changed = true
+            }
+        }
+        guard changed else { return }
+        snapshots = updated
     }
 
     private func recordRefreshHistory(_ summary: RefreshSummary) {
@@ -707,6 +732,15 @@ final class AppModel: ObservableObject {
     func reloadSnapshot() throws {
         let updatedSnapshots = try index.skills()
         let updatedRoots = try bookmarks?.roots() ?? []
+        // Review M14 fast path: when neither the rows nor the roots moved,
+        // skip the whole-tree invalidation (submodel reloads, bookmark
+        // health pass, background rescheduling). Empty snapshots always
+        // fall through so the first load initializes the submodels.
+        if updatedSnapshots == snapshots,
+           updatedRoots == authorizedRoots,
+           !updatedSnapshots.isEmpty {
+            return
+        }
         snapshots = updatedSnapshots
         authorizedRoots = updatedRoots
         rootsByID = Dictionary(updatedRoots.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })

@@ -18,7 +18,7 @@ final class BackgroundWorkCoordinator: ObservableObject {
     /// the app side reloads snapshots and records the diagnostic. Set by
     /// the composition root after init — the closure captures AppModel,
     /// which cannot happen while AppModel is still initializing.
-    var onFingerprintsBackfilled: (Int) -> Void = { _ in }
+    var onFingerprintsBackfilled: (Int, Set<String>) -> Void = { _, _ in }
 
     /// True while the deferred fingerprint backfill is running off the
     /// main thread — drives the "background indexing" status dot in the
@@ -133,12 +133,12 @@ final class BackgroundWorkCoordinator: ObservableObject {
         fingerprintFailures.formUnion(outcome.failures)
         shortSimilarityBodies.formUnion(outcome.shortBodies)
         do {
-            let updated = try index.backfillFingerprints(
+            let result = try index.backfillFingerprints(
                 contentByPath: outcome.fingerprints,
                 similarityByPath: outcome.similarities
             )
-            if updated > 0 {
-                onFingerprintsBackfilled(updated)
+            if result.updated > 0 {
+                onFingerprintsBackfilled(result.updated, result.changedPaths)
             }
         } catch {
             // Non-fatal: the duplicate view simply stays without these

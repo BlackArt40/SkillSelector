@@ -100,6 +100,15 @@ public final class SkillIndex {
         return try records.map { try snapshot($0) }
     }
 
+    /// Single-row read for incremental snapshot updates (review M14): a
+    /// fingerprint backfill only touches its own rows, so callers merge
+    /// just those snapshots instead of re-reading the whole table.
+    public func skill(path: String) throws -> SkillSnapshot? {
+        try database.read { db in
+            try SkillRecord.filter(Column("path") == path).fetchOne(db)
+        }.map { try snapshot($0) }
+    }
+
     public func cachedScanEntries() throws -> [String: ScannedSkillCacheEntry] {
         var entries: [String: ScannedSkillCacheEntry] = [:]
         try database.read { db in
@@ -116,20 +125,21 @@ public final class SkillIndex {
 
     @discardableResult
     public func backfillContentFingerprints(_ fingerprintsByPath: [String: String]) throws -> Int {
-        try backfillFingerprints(contentByPath: fingerprintsByPath, similarityByPath: [:])
+        try backfillFingerprints(contentByPath: fingerprintsByPath, similarityByPath: [:]).updated
     }
 
     @discardableResult
     public func backfillFingerprints(
         contentByPath: [String: String],
         similarityByPath: [String: String]
-    ) throws -> Int {
-        guard !contentByPath.isEmpty || !similarityByPath.isEmpty else { return 0 }
+    ) throws -> (updated: Int, changedPaths: Set<String>) {
+        guard !contentByPath.isEmpty || !similarityByPath.isEmpty else { return (0, []) }
         // The write closure returns Void and mutates `updated`: GRDB 7's
         // sync `write` overload is disfavored against the async Sendable
         // one, and a value-returning tail-expression closure fails to
         // type-check under Swift 6 ("missing return in instance method").
         var updated = 0
+        var changedPaths = Set<String>()
         try database.write { db in
             var records = try self.recordsByPath(db)
             for (path, content) in contentByPath {
@@ -142,6 +152,7 @@ public final class SkillIndex {
                 records[path] = record
                 try record.upsert(db)
                 updated += 1
+                changedPaths.insert(path)
             }
             for (path, similarity) in similarityByPath where contentByPath[path] == nil {
                 guard var record = records[path], record.similarityFingerprint != similarity else { continue }
@@ -150,9 +161,10 @@ public final class SkillIndex {
                 records[path] = record
                 try record.upsert(db)
                 updated += 1
+                changedPaths.insert(path)
             }
         }
-        return updated
+        return (updated, changedPaths)
     }
 
     @discardableResult
