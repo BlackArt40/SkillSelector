@@ -2,6 +2,10 @@ import XCTest
 @testable import SkillSelector
 @testable import SkillSelectorCore
 
+/// `@MainActor`: the end-to-end scenarios call the MainActor-isolated
+/// `BrowserSidebar.visibleAgentDefinitions`; the registry-only checks are
+/// isolation-neutral and fine to run there too.
+@MainActor
 final class LegacyAgentVisibilityTests: XCTestCase {
 
     private func builtInAgentIDs() -> Set<String> {
