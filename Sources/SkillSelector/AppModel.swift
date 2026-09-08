@@ -147,7 +147,7 @@ final class AppModel: ObservableObject {
         do {
             try reloadSnapshot()
         } catch {
-            refreshState = .failed(String(describing: error))
+            refreshState = .failed(currentRedactor().redact(String(describing: error)))
         }
         // Forward submodel mutations into this model's `objectWillChange`.
         // Views observe only `AppModel` (via `@EnvironmentObject`), so under
@@ -186,7 +186,7 @@ final class AppModel: ObservableObject {
             guard try bookmarks?.roots().isEmpty == false else { return }
             await checkEnvironment()
         } catch {
-            refreshState = .failed(String(describing: error))
+            refreshState = .failed(currentRedactor().redact(String(describing: error)))
         }
     }
 
@@ -313,7 +313,7 @@ final class AppModel: ObservableObject {
                 path: url.path
             )
         } catch {
-            refreshState = .failed(String(describing: error))
+            refreshState = .failed(currentRedactor().redact(String(describing: error)))
         }
     }
 

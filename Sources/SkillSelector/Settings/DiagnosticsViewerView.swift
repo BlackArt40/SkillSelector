@@ -47,7 +47,7 @@ struct DiagnosticsViewerView: View {
                         .font(AppTheme.body(12.5))
                 } icon: {
                     Image(systemName: "exclamationmark.triangle")
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(AppTheme.warn)
                 }
                 .padding(.top, 10)
             }

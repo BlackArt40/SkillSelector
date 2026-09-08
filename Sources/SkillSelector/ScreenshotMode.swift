@@ -4,7 +4,6 @@
 #if DEBUG
 import AppKit
 import SkillSelectorCore
-import GRDB
 import SwiftUI
 
 /// `--screenshots <dir> [--screenshot-language en|zh-Hans]`: renders every

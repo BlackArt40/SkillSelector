@@ -65,7 +65,7 @@ enum DetailViewSupport {
     static func errorShell(title: String, detail: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Label(title, systemImage: "exclamationmark.triangle")
-                .foregroundStyle(.orange)
+                .foregroundStyle(AppTheme.warn)
             Text(verbatim: detail)
                 .font(.caption)
                 .foregroundStyle(.secondary)

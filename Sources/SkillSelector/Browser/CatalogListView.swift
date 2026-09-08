@@ -492,7 +492,7 @@ struct AddCatalogSourceSheet: View {
             if let errorText {
                 Text(verbatim: errorText)
                     .font(AppTheme.body(12))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(AppTheme.warn)
             }
             HStack {
                 Spacer(minLength: 0)
@@ -567,7 +567,7 @@ struct EditCatalogSourceSheet: View {
             if let errorText {
                 Text(verbatim: errorText)
                     .font(AppTheme.body(12))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(AppTheme.warn)
             }
             HStack {
                 Spacer(minLength: 0)

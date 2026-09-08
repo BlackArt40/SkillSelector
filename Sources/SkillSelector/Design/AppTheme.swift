@@ -25,6 +25,7 @@ enum AppTheme {
     static let success = adaptive(light: 0x12A26D, dark: 0x34D399)
     static let warn = adaptive(light: 0xD99A0B, dark: 0xFBBF24)
     static let danger = adaptive(light: 0xD64545, dark: 0xF87171)
+    static let dangerHover = adaptive(light: 0xC81E1E, dark: 0xE05B5B)
     static let badgeWarnText = adaptive(light: 0x9A6A00, dark: 0xF0A24D)
 
     /// color-mix(in oklab, var(--accent), transparent 88%) — active row /

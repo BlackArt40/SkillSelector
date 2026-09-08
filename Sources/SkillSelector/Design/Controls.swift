@@ -208,7 +208,7 @@ struct ActionButtonStyle: ButtonStyle {
             case .secondary: AppTheme.borderSoft
             case .primary: AppTheme.accentHover
             case .destructive: AppTheme.dangerTint
-            case .dangerSolid: Color(hex: 0xC81E1E)
+            case .dangerSolid: AppTheme.dangerHover
             }
         } else {
             switch role {
