@@ -124,26 +124,38 @@ final class AgentRegistryTests: XCTestCase {
     }
 
     func testCustomDefinitionsReplaceSameIdentifierAndAppendNewDefinitions() throws {
-        let customCodex = AgentDefinition(
-            id: "codex",
-            displayName: "Custom Codex",
-            globalRoots: ["~/custom/codex/skills"],
-            projectPatterns: [".custom-codex/skills"]
+        let original = AgentDefinition(
+            id: "team-agent",
+            displayName: "Team Agent",
+            globalRoots: ["~/team-agent/skills"],
+            projectPatterns: [".team-agent/skills"]
         )
-        let customAgent = AgentDefinition(
+        let replacement = AgentDefinition(
+            id: "team-agent",
+            displayName: "Team Agent v2",
+            globalRoots: ["~/team-agent-v2/skills"],
+            projectPatterns: [".team-agent-v2/skills"]
+        )
+        let appended = AgentDefinition(
             id: "local-agent",
             displayName: "Local Agent",
             globalRoots: ["~/local-agent/skills"],
             projectPatterns: [".local-agent/skills"]
         )
 
-        let registry = AgentRegistry(
-            definitions: BuiltInAgentRegistry.make().definitions,
-            customDefinitions: [customCodex, customAgent]
-        )
+        let bundledCount = BuiltInAgentRegistry.make().definitions.count
+        var registry = AgentRegistry(definitions: BuiltInAgentRegistry.make().definitions)
+        registry.merge(customDefinitions: [original])
+        XCTAssertEqual(registry.definitions.count, bundledCount + 1)
+        XCTAssertEqual(try XCTUnwrap(registry.definition(id: "team-agent")).displayName, "Team Agent")
 
-        XCTAssertEqual(registry.definitions.count, 20)
-        XCTAssertEqual(try XCTUnwrap(registry.definition(id: "codex")).displayName, "Custom Codex")
+        // Custom-vs-custom with the same id replaces in place; a new id
+        // appends. A custom id colliding with a *bundled* id is ignored
+        // instead (audit R5) — covered by
+        // `testMergeIgnoresCustomDefinitionsCollidingWithBundledIDs`.
+        registry.merge(customDefinitions: [replacement, appended])
+        XCTAssertEqual(registry.definitions.count, bundledCount + 2)
+        XCTAssertEqual(try XCTUnwrap(registry.definition(id: "team-agent")).displayName, "Team Agent v2")
         XCTAssertEqual(try XCTUnwrap(registry.definition(id: "local-agent")).displayName, "Local Agent")
     }
 
@@ -208,8 +220,6 @@ final class AgentRegistryTests: XCTestCase {
         XCTAssertEqual(try store.definitions().first?.displayName, "Renamed")
     }
 
-}
-
     func testMergeIgnoresCustomDefinitionsCollidingWithBundledIDs() {
         var registry = BuiltInAgentRegistry.make()
         let bundledCount = registry.definitions.count
@@ -236,3 +246,4 @@ final class AgentRegistryTests: XCTestCase {
         XCTAssertEqual(registry.definitions.count, bundledCount + 1)
         XCTAssertEqual(registry.definition(id: "totally-custom")?.displayName, "Totally Custom")
     }
+}

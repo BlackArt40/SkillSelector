@@ -201,10 +201,17 @@ extension FrontmatterParserTests {
             "---\nname: first\nname: second\ndescription: kept\n---\n# Duplicate"
         )
 
-        // libyaml tolerates duplicate keys; whichever mapping entry wins,
-        // the parser must not crash or fabricate a third value.
-        XCTAssertTrue(["first", "second"].contains(parsed.name ?? ""))
-        XCTAssertEqual(parsed.description, "kept")
+        // Yams 6 rejects duplicate mapping keys outright
+        // (YamlError.duplicatedKeysInMapping), so the whole block is
+        // dropped with a loud diagnostic rather than silently picking a
+        // winner. The contract here: no crash, no fabricated values, and
+        // the authoring defect surfaces as a yamlParseFailed issue.
+        XCTAssertNil(parsed.name)
+        XCTAssertNil(parsed.description)
+        XCTAssertTrue(
+            parsed.issues.contains { $0.diagnostic?.code == .yamlParseFailed },
+            "A duplicate-key mapping must surface as a yamlParseFailed issue"
+        )
         XCTAssertEqual(parsed.title, "Duplicate")
     }
 }

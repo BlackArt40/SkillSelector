@@ -41,7 +41,8 @@ final class LegacyAgentVisibilityTests: XCTestCase {
             id: id,
             displayName: id,
             globalRoots: [],
-            projectPatterns: []
+            projectPatterns: [],
+            isLegacy: isLegacy
         )
     }
 
