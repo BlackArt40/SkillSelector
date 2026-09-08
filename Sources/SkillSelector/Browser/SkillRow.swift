@@ -170,7 +170,7 @@ struct SkillRow: View {
             }
             // Spec §2 motion: the selection background fades in over 120 ms
             // with the system curve — no pop, no easing bounce.
-            .animation(.smooth(duration: 0.12), value: isActive)
+            .animation(.easeInOut(duration: 0.12), value: isActive)
             .contentShape(Rectangle())
         }
         .buttonStyle(RowHoverStyle())

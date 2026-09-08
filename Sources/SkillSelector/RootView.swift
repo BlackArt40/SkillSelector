@@ -155,7 +155,7 @@ struct RootView: View {
         }
         .mainWindowFramePersistence()
         .frame(minWidth: 960, minHeight: 600)
-        .animation(.smooth(duration: 0.22), value: destination)
+        .animation(.easeInOut(duration: 0.22), value: destination)
         .navigationTitle(title)
     }
 

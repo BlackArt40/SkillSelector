@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 5.10
 import Foundation
 import PackageDescription
 
@@ -23,7 +23,8 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/jpsim/Yams.git", from: "6.0.0"),
-        .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
+        // tools 6.0+ since GRDB 7.0; 6.29.3 is the last tools-5.x release.
+        .package(url: "https://github.com/groue/GRDB.swift.git", exact: "6.29.3"),
         // Pinned exactly (GRDB precedent): MarkdownUI 2.4.1 is the newest tag
         // whose Package.swift still declares .macOS(.v12); a floating range
         // could pick up a release that raises the floor above 12.
@@ -31,6 +32,9 @@ let package = Package(
             url: "https://github.com/gonzalezreal/swift-markdown-ui",
             exact: "2.4.1"
         ),
+        // MarkdownUI's test-only transitive dependency; pin to the last
+        // tools-5.x release, otherwise resolution picks 1.19.4 (tools 6.0).
+        .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", exact: "1.17.0"),
     ],
     targets: [
         .target(

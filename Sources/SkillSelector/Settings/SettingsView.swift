@@ -233,6 +233,7 @@ struct SettingsView: View {
                 }
             }
 
+            Group {
             groupTitle(L10n.string("Data"))
                 .padding(.top, 4)
             SettingsGroup {
@@ -250,11 +251,12 @@ struct SettingsView: View {
                     }
                 }
             }
-            if let exportStatus {
-                Text(verbatim: exportStatus)
+            exportStatus.map { status in
+                Text(verbatim: status)
                     .font(AppTheme.body(12))
                     .foregroundStyle(AppTheme.muted)
                     .padding(.top, 8)
+            }
             }
         }
     }

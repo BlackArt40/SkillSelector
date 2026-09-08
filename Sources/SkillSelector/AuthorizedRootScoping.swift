@@ -4,7 +4,7 @@ import SkillSelectorCore
 /// Roots that carry user-level or project-level configs, flattened
 /// (home/system first, then project roots).
 func scopedRoots(of roots: [AuthorizedRootSnapshot]) -> [AuthorizedRootSnapshot] {
-    [roots.homeRoot].compactMap(\.self) + roots.projectRoots
+    [roots.homeRoot].compactMap { $0 } + roots.projectRoots
 }
 
 /// Resolves the scoped roots' leases — the one shared ingestion for every
