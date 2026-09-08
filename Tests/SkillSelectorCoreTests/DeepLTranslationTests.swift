@@ -33,8 +33,26 @@ final class DeepLTranslationTests: XCTestCase {
                 client?.urlProtocol(self, didFailWithError: URLError(.cannotConnectToHost))
                 return
             }
+            // URLSession moves the httpBody into a stream here — drain it
+            // back into a concrete request so handlers can assert on the
+            // body (same shape as the McpTests stub).
+            var readable = request
+            if readable.httpBody == nil, let stream = request.httpBodyStream {
+                stream.open()
+                var data = Data()
+                let bufferSize = 16 * 1024
+                let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+                defer { buffer.deallocate() }
+                while stream.hasBytesAvailable {
+                    let read = stream.read(buffer, maxLength: bufferSize)
+                    guard read > 0 else { break }
+                    data.append(buffer, count: read)
+                }
+                stream.close()
+                readable.httpBody = data
+            }
             do {
-                let (response, data) = try handler(request)
+                let (response, data) = try handler(readable)
                 client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
                 client?.urlProtocol(self, didLoad: data)
                 client?.urlProtocolDidFinishLoading(self)
