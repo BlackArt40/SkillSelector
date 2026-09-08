@@ -460,9 +460,10 @@ private struct LocalMatchVersionRow: View {
         }
         .help(L10n.string("Marketplace Version Diff Help"))
         .task(id: match.path) {
-            guard let summary = await model.marketVsLocalBodyDiff(
+            guard let summary = await model.comparisons.marketVsLocalBodyDiff(
                 marketBody: remoteBody,
-                local: match
+                local: match,
+                authorizedRoots: model.authorizedRoots
             ) else {
                 comparisonState = .unavailable
                 return

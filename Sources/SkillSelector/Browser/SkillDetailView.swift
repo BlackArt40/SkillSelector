@@ -139,6 +139,7 @@ struct SkillDetailView: View {
 
     // MARK: Skill document
 
+    @MainActor
     private func documentSection(_ skill: SkillSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             DetailViewSupport.sectionHeading(L10n.string("Skill Document"))

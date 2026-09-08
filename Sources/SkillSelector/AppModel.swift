@@ -47,20 +47,6 @@ final class AppModel: ObservableObject {
     /// process environment, so unit tests can exercise the sandboxed path.
     @Published var environmentIsSandboxed: Bool?
     private var activeRefresh: (id: UUID, task: Task<Void, Never>)?
-    private var activeFingerprintBackfill: (id: UUID, task: Task<Void, Never>)?
-    /// True while the deferred fingerprint backfill is running off the
-    /// main thread — drives the "background indexing" status dot in the
-    /// search field (spec §5.9 / §06).
-    @Published private(set) var isBackfilling = false
-    /// Paths whose deferred fingerprint failed to compute (unreadable
-    /// content). They are not retried until the next refresh, when files
-    /// may have changed — this keeps the schedule self-terminating.
-    private var fingerprintFailures: Set<String> = []
-    /// Paths whose body is too short for a similarity fingerprint: the
-    /// value is legitimately nil, so without this set the backfill would
-    /// re-read them after every reload. Reset on refresh (files change).
-    private var shortSimilarityBodies: Set<String> = []
-    private var activeBodyIndexBuild: (id: UUID, task: Task<Void, Never>)?
     /// Bridges the state submodels' `objectWillChange` into this model's
     /// (see the subscription at the end of `init`).
     private var cancellables: Set<AnyCancellable> = []
@@ -72,17 +58,19 @@ final class AppModel: ObservableObject {
     /// Marketplace catalog state (sources + listing), separated from this
     /// type to keep AppModel a composition root (Brooks finding 2).
     let catalog: CatalogModel
+    /// Deferred background work (fingerprint backfill, body search index),
+    /// separated from this type to keep AppModel a composition root
+    /// (Brooks finding 2 / review M10).
+    let backgroundWork: BackgroundWorkCoordinator
+    /// Stateless read-only comparison passes between Skill installations
+    /// (review M10).
+    let comparisons: ComparisonService
 
     @Published var refreshState: RefreshState = .idle
     @Published var selection: SkillSelection?
     /// Recent refreshes that changed something, newest first. Empty
     /// refreshes are not recorded — the history answers "what moved".
     @Published private(set) var refreshHistory: [RefreshChangeEntry] = []
-    /// Folded entry-file bodies by installation path, powering body
-    /// search (`body:` terms and free-term matching). Rebuilt in the
-    /// background after each refresh; empty until the first build lands,
-    /// and search degrades to name matching in the meantime.
-    @Published private(set) var bodySearchTextsByPath: [String: String] = [:]
     @Published private(set) var snapshots: [SkillSnapshot] = []
     @Published private(set) var authorizedRoots: [AuthorizedRootSnapshot] = []
     @Published private(set) var rootsByID: [String: AuthorizedRootSnapshot] = [:]
@@ -143,6 +131,11 @@ final class AppModel: ObservableObject {
         manuallyEnabledAgentIDs = Set(defaults.stringArray(forKey: Self.manuallyEnabledAgentsDefaultsKey) ?? [])
         agentDefinitions = effectiveRegistry.definitions
         refreshHistory = (try? self.refreshHistoryStore.entries()) ?? []
+        self.comparisons = ComparisonService(documentManager: documentManager)
+        self.backgroundWork = BackgroundWorkCoordinator(
+            index: index,
+            diagnosticStore: diagnosticStore
+        )
         refresher.updateRegistry(effectiveRegistry)
         do {
             try reloadSnapshot()
@@ -166,6 +159,12 @@ final class AppModel: ObservableObject {
         catalog.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
+        backgroundWork.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
+        backgroundWork.onFingerprintsBackfilled = { [weak self] updated in
+            self?.handleFingerprintsBackfilled(updated: updated)
+        }
     }
 
     func checkEnvironment() async {
@@ -534,8 +533,7 @@ final class AppModel: ObservableObject {
         refreshState = .running
         // Files may have changed since the last backfill attempt; give
         // previously failed paths another chance.
-        fingerprintFailures = []
-        shortSimilarityBodies = []
+        backgroundWork.resetFingerprintBookkeeping()
         do {
             let summary: RefreshSummary
             if let selectedRootIDs {
@@ -567,6 +565,31 @@ final class AppModel: ObservableObject {
     /// Persists a refresh that changed something into the history store
     /// (capped, newest first). Empty refreshes are skipped so launch-time
     /// scans do not flood the log.
+    /// Background-work state, bridged from `backgroundWork` (whose
+    /// `objectWillChange` is forwarded into this model's).
+    var isBackfilling: Bool { backgroundWork.isBackfilling }
+    var bodySearchTextsByPath: [String: String] { backgroundWork.bodySearchTextsByPath }
+
+    func waitForFingerprintBackfill() async {
+        await backgroundWork.waitForFingerprintBackfill()
+    }
+
+    func waitForBodySearchIndex() async {
+        await backgroundWork.waitForBodySearchIndex()
+    }
+
+    /// Reloads snapshots and records the diagnostic after a backfill wrote
+    /// fingerprints back into the index (see `BackgroundWorkCoordinator`).
+    private func handleFingerprintsBackfilled(updated: Int) {
+        try? reloadSnapshot()
+        diagnosticStore.record(
+            category: .scanning,
+            code: "FINGERPRINTS_BACKFILLED",
+            message: L10n.string("Backfilled Fingerprints", updated),
+            redactor: currentRedactor()
+        )
+    }
+
     private func recordRefreshHistory(_ summary: RefreshSummary) {
         guard !summary.isEmpty else { return }
         let entry = RefreshChangeEntry(summary: summary)
@@ -575,340 +598,6 @@ final class AppModel: ObservableObject {
             refreshHistory = try refreshHistoryStore.entries()
         } catch {
             // Non-fatal: the history view simply misses this entry.
-        }
-    }
-
-    // MARK: Deferred fingerprint backfill
-
-    /// Computes the fingerprints the scan deferred (its dominant I/O
-    /// cost) off the critical path: the list is already on screen, and the
-    /// duplicate views fill in when this lands. One read per Skill feeds
-    /// both the exact SHA-256 and the similarity SimHash. Read-only aside
-    /// from the write-back into the index.
-    func backfillMissingFingerprints() async {
-        let pending = snapshots.filter {
-            let needsContent = $0.contentFingerprint == nil
-                && !fingerprintFailures.contains($0.path)
-            let needsSimilarity = $0.similarityFingerprint == nil
-                && !shortSimilarityBodies.contains($0.path)
-                && !fingerprintFailures.contains($0.path)
-            return needsContent || needsSimilarity
-        }
-        guard !pending.isEmpty else { return }
-
-        // Reading content under the sandbox needs the roots' security
-        // scopes; hold every resolvable lease for the whole hash pass.
-        var accesses: [AuthorizedRootAccess] = []
-        if let bookmarks {
-            for root in authorizedRoots {
-                if let access = try? bookmarks.resolve(id: root.id) {
-                    accesses.append(access)
-                }
-            }
-        }
-        defer { accesses.forEach { $0.lease.close() } }
-
-        let targets = pending.map { skill in
-            // The scanner hashes the resolved target of a symlink, not the
-            // logical path; mirror that so fingerprints agree.
-            (
-                path: skill.path,
-                directory: skill.resolvedTarget ?? skill.path,
-                entryFilename: skill.entryFilename
-            )
-        }
-        let outcome = await Task.detached(priority: .utility) {
-            () -> (
-                fingerprints: [String: String],
-                similarities: [String: String],
-                shortBodies: [String],
-                failures: [String]
-            ) in
-            var fingerprints: [String: String] = [:]
-            var similarities: [String: String] = [:]
-            var shortBodies: [String] = []
-            var failures: [String] = []
-            for target in targets {
-                if Task.isCancelled { break }
-                do {
-                    let pair = try SkillSimilarityFingerprint.computePair(
-                        entryFileURL: URL(fileURLWithPath: target.directory)
-                            .appendingPathComponent(target.entryFilename)
-                    )
-                    fingerprints[target.path] = pair.content
-                    if let similarity = pair.similarity {
-                        similarities[target.path] = similarity
-                    } else {
-                        shortBodies.append(target.path)
-                    }
-                } catch {
-                    failures.append(target.path)
-                }
-            }
-            return (fingerprints, similarities, shortBodies, failures)
-        }.value
-        // Cancelled mid-hash (a newer scan or backfill replaced this one):
-        // drop everything, the replacement recomputes.
-        guard !Task.isCancelled else { return }
-
-        fingerprintFailures.formUnion(outcome.failures)
-        shortSimilarityBodies.formUnion(outcome.shortBodies)
-        do {
-            let updated = try index.backfillFingerprints(
-                contentByPath: outcome.fingerprints,
-                similarityByPath: outcome.similarities
-            )
-            if updated > 0 {
-                try reloadSnapshot()
-                diagnosticStore.record(
-                    category: .scanning,
-                    code: "FINGERPRINTS_BACKFILLED",
-                    message: L10n.string("Backfilled Fingerprints", updated),
-                    redactor: currentRedactor()
-                )
-            }
-        } catch {
-            // Non-fatal: the duplicate view simply stays without these
-            // fingerprints until the next refresh re-defers them.
-        }
-    }
-
-    /// Fires the background backfill when any snapshot is still missing a
-    /// fingerprint. Replaces an in-flight backfill — its hashes may
-    /// predate the scan that just reloaded the snapshots.
-    private func scheduleFingerprintBackfillIfNeeded() {
-        guard snapshots.contains(where: { skill in
-            (skill.contentFingerprint == nil && !fingerprintFailures.contains(skill.path))
-                || (skill.similarityFingerprint == nil
-                    && !shortSimilarityBodies.contains(skill.path)
-                    && !fingerprintFailures.contains(skill.path))
-        }) else { return }
-        activeFingerprintBackfill?.task.cancel()
-        let id = UUID()
-        isBackfilling = true
-        let task = Task { [weak self] in
-            await self?.backfillMissingFingerprints()
-            self?.clearFingerprintBackfill(id: id)
-        }
-        activeFingerprintBackfill = (id, task)
-    }
-
-    /// Waits for any in-flight background backfill. Test seam.
-    func waitForFingerprintBackfill() async {
-        if let active = activeFingerprintBackfill {
-            await active.task.value
-        }
-    }
-
-    private func clearFingerprintBackfill(id: UUID) {
-        guard activeFingerprintBackfill?.id == id else { return }
-        activeFingerprintBackfill = nil
-        isBackfilling = false
-    }
-
-    // MARK: Body search index
-
-    /// Rebuilds the folded body texts powering body search. Runs off the
-    /// critical path after every snapshot reload; skills whose entry file
-    /// cannot be read are simply absent from the index (name-only match).
-    private func rebuildBodySearchIndex() async {
-        // Reading content under the sandbox needs the roots' security
-        // scopes; hold every resolvable lease for the whole read pass.
-        var accesses: [AuthorizedRootAccess] = []
-        if let bookmarks {
-            for root in authorizedRoots {
-                if let access = try? bookmarks.resolve(id: root.id) {
-                    accesses.append(access)
-                }
-            }
-        }
-        defer { accesses.forEach { $0.lease.close() } }
-
-        let targets = snapshots.map { skill in
-            // The scanner reads the resolved target of a symlink; mirror
-            // that so the index sees the same content the scan saw.
-            (
-                path: skill.path,
-                directory: skill.resolvedTarget ?? skill.path,
-                entryFilename: skill.entryFilename
-            )
-        }
-        let texts = await Task.detached(priority: .utility) {
-            () -> [String: String] in
-            var folded: [String: String] = [:]
-            for target in targets {
-                if Task.isCancelled { break }
-                let entryURL = URL(fileURLWithPath: target.directory)
-                    .appendingPathComponent(target.entryFilename)
-                guard let fileSize = try? entryURL
-                    .resourceValues(forKeys: [.fileSizeKey]).fileSize,
-                      fileSize <= SkillDocumentReader.maximumRenderBytes,
-                      let text = try? String(contentsOf: entryURL, encoding: .utf8)
-                else { continue }
-                let body = FrontmatterParser.bodyLines(from: text)
-                    .joined(separator: "\n")
-                folded[target.path] = SkillQuery.foldedSearchKey(body)
-            }
-            return folded
-        }.value
-        guard !Task.isCancelled else { return }
-        bodySearchTextsByPath = texts
-    }
-
-    /// Fires (or replaces) the background body-index rebuild. The index is
-    /// derived purely from disk state and rebuilt wholesale — no
-    /// incremental bookkeeping for a few hundred small files.
-    private func scheduleBodySearchIndexRebuild() {
-        activeBodyIndexBuild?.task.cancel()
-        let id = UUID()
-        let task = Task { [weak self] in
-            await self?.rebuildBodySearchIndex()
-            self?.clearBodySearchIndexBuild(id: id)
-        }
-        activeBodyIndexBuild = (id, task)
-    }
-
-    /// Waits for any in-flight body-index build. Test seam.
-    func waitForBodySearchIndex() async {
-        if let active = activeBodyIndexBuild {
-            await active.task.value
-        }
-    }
-
-    private func clearBodySearchIndexBuild(id: UUID) {
-        guard activeBodyIndexBuild?.id == id else { return }
-        activeBodyIndexBuild = nil
-    }
-
-    // MARK: Copy comparison
-
-    /// Gathers the read-only comparison between two Skill installations:
-    /// both entry documents (validated reads) and fresh stat trees, fed
-    /// through the pure `SkillComparisonBuilder`. User-triggered from the
-    /// duplicates views; all I/O runs off the main actor while the leases
-    /// stay held here.
-    func compareSnapshots(
-        _ left: SkillSnapshot,
-        _ right: SkillSnapshot
-    ) async throws -> SkillComparison {
-        let leftAccess = try documentManager.resolveDocumentAccess(
-            for: left, authorizedRoots: authorizedRoots
-        )
-        let rightAccess = try documentManager.resolveDocumentAccess(
-            for: right, authorizedRoots: authorizedRoots
-        )
-        defer {
-            (leftAccess.leases + rightAccess.leases).forEach { $0.close() }
-        }
-        let leftRequest = leftAccess.request
-        let rightRequest = rightAccess.request
-        return try await Task.detached(priority: .userInitiated) {
-            let reader = SkillDocumentReader()
-            let leftDocument = try reader.read(leftRequest)
-            let rightDocument = try reader.read(rightRequest)
-            func state(for skill: SkillSnapshot) -> SkillScanState {
-                ScanStateBuilder.build(
-                    contentDirectory: URL(
-                        fileURLWithPath: skill.resolvedTarget ?? skill.path
-                    ),
-                    entryFilename: skill.entryFilename,
-                    resolvedTarget: skill.resolvedTarget.map(URL.init(fileURLWithPath:))
-                )
-            }
-            return SkillComparisonBuilder.compare(
-                leftPath: left.path,
-                rightPath: right.path,
-                leftDocument: FrontmatterParser.parse(leftDocument.source),
-                rightDocument: FrontmatterParser.parse(rightDocument.source),
-                leftBody: FrontmatterParser.bodyLines(from: leftDocument.source)
-                    .joined(separator: "\n"),
-                rightBody: FrontmatterParser.bodyLines(from: rightDocument.source)
-                    .joined(separator: "\n"),
-                leftState: state(for: left),
-                rightState: state(for: right)
-            )
-        }.value
-    }
-
-    /// Per-member body line differences within a near-duplicate group,
-    /// keyed by member path, relative to the group's highest-similarity
-    /// baseline member. Lightweight — body read + line diff only, no stat
-    /// tree — and drives the "+N −M lines" badges in the near-duplicates
-    /// list. Runs off the main actor while the document leases stay held
-    /// here, same as `compareSnapshots`.
-    func nearBodyDiffs(
-        in group: NearDuplicateSkillGroup
-    ) async -> [String: LineDiffSummary] {
-        guard let baseline = group.members.max(by: { $0.similarityPercent < $1.similarityPercent }) else {
-            return [:]
-        }
-        var summaries: [String: LineDiffSummary] = [:]
-        for member in group.members where member.snapshot.path != baseline.snapshot.path {
-            if let summary = try? await bodyDiffSummary(baseline.snapshot, member.snapshot) {
-                summaries[member.snapshot.path] = summary
-            }
-        }
-        return summaries
-    }
-
-    private func bodyDiffSummary(
-        _ left: SkillSnapshot,
-        _ right: SkillSnapshot
-    ) async throws -> LineDiffSummary {
-        let leftAccess = try documentManager.resolveDocumentAccess(
-            for: left, authorizedRoots: authorizedRoots
-        )
-        let rightAccess = try documentManager.resolveDocumentAccess(
-            for: right, authorizedRoots: authorizedRoots
-        )
-        defer {
-            (leftAccess.leases + rightAccess.leases).forEach { $0.close() }
-        }
-        let leftRequest = leftAccess.request
-        let rightRequest = rightAccess.request
-        return try await Task.detached(priority: .utility) {
-            let reader = SkillDocumentReader()
-            let leftBody = FrontmatterParser.bodyLines(from: try reader.read(leftRequest).source)
-                .joined(separator: "\n")
-            let rightBody = FrontmatterParser.bodyLines(from: try reader.read(rightRequest).source)
-                .joined(separator: "\n")
-            let diff = LineDiff.compute(
-                leftBody.components(separatedBy: "\n"),
-                rightBody.components(separatedBy: "\n")
-            )
-            return LineDiffSummary(diff: diff)
-        }.value
-    }
-
-    /// Line difference between a local installation's SKILL.md body and a
-    /// remote marketplace body (already fetched), for the 「对照本地」section:
-    /// "+N −M" means the marketplace body adds N lines and drops M that the
-    /// local body has. Read-only; a read failure yields nil and the badge
-    /// stays hidden.
-    func marketVsLocalBodyDiff(
-        marketBody: String,
-        local: SkillSnapshot
-    ) async -> LineDiffSummary? {
-        do {
-            let access = try documentManager.resolveDocumentAccess(
-                for: local, authorizedRoots: authorizedRoots
-            )
-            defer {
-                access.leases.forEach { $0.close() }
-            }
-            let request = access.request
-            return try await Task.detached(priority: .utility) {
-                let reader = SkillDocumentReader()
-                let localBody = FrontmatterParser.bodyLines(from: try reader.read(request).source)
-                    .joined(separator: "\n")
-                let diff = LineDiff.compute(
-                    localBody.components(separatedBy: "\n"),
-                    marketBody.components(separatedBy: "\n")
-                )
-                return LineDiffSummary(diff: diff)
-            }.value
-        } catch {
-            return nil
         }
     }
 
@@ -1029,8 +718,16 @@ final class AppModel: ObservableObject {
         mcps.reload(authorizedRoots: updatedRoots)
         recordMcpScanIssues(mcps.lastScanIssues)
         rules.reload(authorizedRoots: updatedRoots)
-        scheduleFingerprintBackfillIfNeeded()
-        scheduleBodySearchIndexRebuild()
+        backgroundWork.scheduleFingerprintBackfillIfNeeded(
+            snapshots: updatedSnapshots,
+            authorizedRoots: updatedRoots,
+            bookmarks: bookmarks
+        )
+        backgroundWork.scheduleBodySearchIndexRebuild(
+            snapshots: updatedSnapshots,
+            authorizedRoots: updatedRoots,
+            bookmarks: bookmarks
+        )
     }
 }
 

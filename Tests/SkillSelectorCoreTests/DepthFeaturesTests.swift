@@ -186,7 +186,7 @@ final class DepthFeaturesTests: XCTestCase {
             to: URL(fileURLWithPath: right.path).appendingPathComponent("template.txt")
         )
 
-        let comparison = try await harness.model.compareSnapshots(left, right)
+        let comparison = try await harness.model.comparisons.compareSnapshots(left, right, authorizedRoots: harness.model.authorizedRoots)
 
         XCTAssertEqual(comparison.leftPath, left.path)
         XCTAssertEqual(comparison.rightPath, right.path)

@@ -10,40 +10,40 @@ enum AppTheme {
 
     /// Scheme A — Cool Indigo: cool blue-gray neutrals with an indigo accent
     /// (light #F6F7FB / dark #171A21 base).
-    static let background = adaptive(light: 0xF6F7FB, dark: 0x171A21)
-    static let surface = adaptive(light: 0xEEF0F6, dark: 0x1E222C)
-    static let surfaceWarm = adaptive(light: 0xFAFBFE, dark: 0x232836)
-    static let foreground = adaptive(light: 0x1B1D24, dark: 0xEAECF4)
-    static let foregroundSecondary = adaptive(light: 0x3F4352, dark: 0xC2C7D6)
-    static let muted = adaptive(light: 0x71758A, dark: 0x9AA0B5)
-    static let meta = adaptive(light: 0x8E93A8, dark: 0x8E94A8)
-    static let border = adaptive(light: 0xD5D8E4, dark: 0x3A4054)
-    static let borderSoft = adaptive(light: 0xE7E9F1, dark: 0x2C3243)
-    static let accent = adaptive(light: 0x4F5BD5, dark: 0x7B86F0)
-    static let accentHover = adaptive(light: 0x5663DE, dark: 0x8E99F3)
-    static let accentActive = adaptive(light: 0x3F4BC0, dark: 0x9AA3F5)
-    static let success = adaptive(light: 0x12A26D, dark: 0x34D399)
-    static let warn = adaptive(light: 0xD99A0B, dark: 0xFBBF24)
-    static let danger = adaptive(light: 0xD64545, dark: 0xF87171)
-    static let dangerHover = adaptive(light: 0xC81E1E, dark: 0xE05B5B)
-    static let badgeWarnText = adaptive(light: 0x9A6A00, dark: 0xF0A24D)
+    nonisolated(unsafe) static let background = adaptive(light: 0xF6F7FB, dark: 0x171A21)
+    nonisolated(unsafe) static let surface = adaptive(light: 0xEEF0F6, dark: 0x1E222C)
+    nonisolated(unsafe) static let surfaceWarm = adaptive(light: 0xFAFBFE, dark: 0x232836)
+    nonisolated(unsafe) static let foreground = adaptive(light: 0x1B1D24, dark: 0xEAECF4)
+    nonisolated(unsafe) static let foregroundSecondary = adaptive(light: 0x3F4352, dark: 0xC2C7D6)
+    nonisolated(unsafe) static let muted = adaptive(light: 0x71758A, dark: 0x9AA0B5)
+    nonisolated(unsafe) static let meta = adaptive(light: 0x8E93A8, dark: 0x8E94A8)
+    nonisolated(unsafe) static let border = adaptive(light: 0xD5D8E4, dark: 0x3A4054)
+    nonisolated(unsafe) static let borderSoft = adaptive(light: 0xE7E9F1, dark: 0x2C3243)
+    nonisolated(unsafe) static let accent = adaptive(light: 0x4F5BD5, dark: 0x7B86F0)
+    nonisolated(unsafe) static let accentHover = adaptive(light: 0x5663DE, dark: 0x8E99F3)
+    nonisolated(unsafe) static let accentActive = adaptive(light: 0x3F4BC0, dark: 0x9AA3F5)
+    nonisolated(unsafe) static let success = adaptive(light: 0x12A26D, dark: 0x34D399)
+    nonisolated(unsafe) static let warn = adaptive(light: 0xD99A0B, dark: 0xFBBF24)
+    nonisolated(unsafe) static let danger = adaptive(light: 0xD64545, dark: 0xF87171)
+    nonisolated(unsafe) static let dangerHover = adaptive(light: 0xC81E1E, dark: 0xE05B5B)
+    nonisolated(unsafe) static let badgeWarnText = adaptive(light: 0x9A6A00, dark: 0xF0A24D)
 
     /// color-mix(in oklab, var(--accent), transparent 88%) — active row /
     /// selected item background.
-    static let accentTint = adaptive(
+    nonisolated(unsafe) static let accentTint = adaptive(
         light: blend(0x4F5BD5, over: 0xF6F7FB, alpha: 0.12),
         dark: blend(0x7B86F0, over: 0x171A21, alpha: 0.12)
     )
 
     /// color-mix(in oklab, var(--accent), transparent 70%) — active row
     /// border / selected segment border.
-    static let accentTintBorder = adaptive(
+    nonisolated(unsafe) static let accentTintBorder = adaptive(
         light: blend(0x4F5BD5, over: 0xF6F7FB, alpha: 0.30),
         dark: blend(0x7B86F0, over: 0x171A21, alpha: 0.30)
     )
 
     /// rgba(255,255,255,.7) — agent chip on an active skill row.
-    static let accentChip: Color = {
+    nonisolated(unsafe) static let accentChip: Color = {
         let lightTint = blend(0x4F5BD5, over: 0xF6F7FB, alpha: 0.12)
         let darkTint = blend(0x7B86F0, over: 0x171A21, alpha: 0.12)
         return adaptive(
@@ -56,53 +56,53 @@ enum AppTheme {
     /// both appearances, so the label stays the light-mode foreground in
     /// both — using the adaptive secondary foreground made the label
     /// near-invisible in dark mode (light-on-light).
-    static let accentChipText = Color(hex: 0x3F4352)
+    nonisolated(unsafe) static let accentChipText = Color(hex: 0x3F4352)
 
     /// Skill tile gradients (160deg) from the design — cool neutral in both
     /// appearances.
-    static let tileTop = adaptive(light: 0x3A3F4E, dark: 0x3A3F4E)
-    static let tileBottom = adaptive(light: 0x1B1D24, dark: 0x1B1D24)
-    static let tileActiveTop = adaptive(light: 0x7B86F0, dark: 0x7B86F0)
-    static let tileActiveBottom = adaptive(light: 0x4F5BD5, dark: 0x4F5BD5)
+    nonisolated(unsafe) static let tileTop = adaptive(light: 0x3A3F4E, dark: 0x3A3F4E)
+    nonisolated(unsafe) static let tileBottom = adaptive(light: 0x1B1D24, dark: 0x1B1D24)
+    nonisolated(unsafe) static let tileActiveTop = adaptive(light: 0x7B86F0, dark: 0x7B86F0)
+    nonisolated(unsafe) static let tileActiveBottom = adaptive(light: 0x4F5BD5, dark: 0x4F5BD5)
 
     /// Focus ring: color-mix(in oklab, var(--accent), transparent 65%).
-    static let focusRing = adaptive(
+    nonisolated(unsafe) static let focusRing = adaptive(
         light: blend(0x4F5BD5, over: 0xF6F7FB, alpha: 0.35),
         dark: blend(0x7B86F0, over: 0x171A21, alpha: 0.28)
     )
 
     /// Toast: rgba(29,29,31,.94) pill with #f5f5f7 text.
-    static let toastBackground = Color.black.opacity(0.86)
+    nonisolated(unsafe) static let toastBackground = Color.black.opacity(0.86)
 
     /// Hover tint for destructive text buttons:
     /// color-mix(in oklab, var(--danger), transparent 92%).
-    static let dangerTint = adaptive(
+    nonisolated(unsafe) static let dangerTint = adaptive(
         light: blend(0xD64545, over: 0xF6F7FB, alpha: 0.08),
         dark: blend(0xF87171, over: 0x171A21, alpha: 0.12)
     )
 
     /// Hover tint for accent text buttons:
     /// color-mix(in oklab, var(--accent), transparent 92%).
-    static let accentTintFaint = adaptive(
+    nonisolated(unsafe) static let accentTintFaint = adaptive(
         light: blend(0x4F5BD5, over: 0xF6F7FB, alpha: 0.08),
         dark: blend(0x7B86F0, over: 0x171A21, alpha: 0.12)
     )
 
     /// Pill warning background: color-mix(in oklab, var(--warn), transparent 85%).
-    static let warnTint = adaptive(
+    nonisolated(unsafe) static let warnTint = adaptive(
         light: blend(0xD99A0B, over: 0xF6F7FB, alpha: 0.15),
         dark: blend(0xFBBF24, over: 0x171A21, alpha: 0.15)
     )
 
     /// Markdown element accents (amber on light, amber-300 on dark).
-    static let codeInline = adaptive(light: 0xA16207, dark: 0xFBBF24)
+    nonisolated(unsafe) static let codeInline = adaptive(light: 0xA16207, dark: 0xFBBF24)
 
     /// Markdown blockquote tint (violet-700 / violet-300).
-    static let blockquote = adaptive(light: 0x6D28D9, dark: 0xA78BFA)
+    nonisolated(unsafe) static let blockquote = adaptive(light: 0x6D28D9, dark: 0xA78BFA)
 
     /// Fenced code block background — clearly darker/lighter than the warm
     /// card surface so blocks read as distinct panels.
-    static let codeBlockBackground = adaptive(light: 0xE8EAF2, dark: 0x10141A)
+    nonisolated(unsafe) static let codeBlockBackground = adaptive(light: 0xE8EAF2, dark: 0x10141A)
 
     // MARK: Fonts
 

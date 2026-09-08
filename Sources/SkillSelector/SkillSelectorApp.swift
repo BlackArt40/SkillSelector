@@ -5,7 +5,7 @@ import GRDB
 import SwiftUI
 import Darwin
 
-private let logger = Logger(subsystem: "com.SkillSelector", category: "App")
+nonisolated(unsafe) private let logger = Logger(subsystem: "com.SkillSelector", category: "App")
 
 /// Holds a flock on a lock file for the whole process lifetime. Two
 /// SkillSelector instances would otherwise open the same index database

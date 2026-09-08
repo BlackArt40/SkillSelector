@@ -335,10 +335,10 @@ struct RootView: View {
                     )
                 },
                 onLoadComparison: { left, right in
-                    try await model.compareSnapshots(left, right)
+                    try await model.comparisons.compareSnapshots(left, right, authorizedRoots: model.authorizedRoots)
                 },
                 onLoadNearDiffs: { group in
-                    await model.nearBodyDiffs(in: group)
+                    await model.comparisons.nearBodyDiffs(in: group, authorizedRoots: model.authorizedRoots)
                 },
                 onSelect: { path in selectSkill(path) }
             )
