@@ -382,6 +382,9 @@
 "Choose…" = "Choose…";
 "Choose" = "Choose";
 "Choose Global Root" = "Choose Global Root";
+"Rename Directory" = "Rename Directory";
+"Display Name" = "Display Name";
+"Rename Directory Sub" = "Leave empty to restore the folder name.";
 "Get a Free Key" = "Get a Free Key";
 "Get a Free Key Sub" = "Email-only signup, 500K characters/month free.";
 "Open DeepL Signup" = "Open DeepL Signup";

@@ -384,6 +384,9 @@
 "Choose…" = "选择…";
 "Choose" = "选择";
 "Choose Global Root" = "选择全局目录";
+"Rename Directory" = "重命名目录";
+"Display Name" = "显示名称";
+"Rename Directory Sub" = "留空可恢复为目录原名。";
 "Get a Free Key" = "获取免费密钥";
 "Get a Free Key Sub" = "仅需邮箱注册，每月 50 万字符免费。";
 "Open DeepL Signup" = "打开 DeepL 注册页";

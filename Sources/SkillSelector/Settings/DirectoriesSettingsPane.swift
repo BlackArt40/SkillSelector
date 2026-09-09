@@ -2,16 +2,15 @@ import SkillSelectorCore
 import SwiftUI
 
 /// The 目录授权 pane: authorized roots (with re-authorization and revoke),
-/// the add-project entry, and the custom agent directory list. Root
-/// rename state lives here — the context-menu entry seeds it (the edit
-/// UI is still pending, see the rename TODO in the review notes).
+/// the add-project entry, and the custom agent directory list. Renaming a
+/// project root opens `RootRenameSheet` — the write-only draft state the
+/// old context menu kept is gone with the now-working flow.
 struct DirectoriesSettingsPane: View {
     @EnvironmentObject private var model: AppModel
     @Binding var settingsError: String?
     @Binding var customAgentSheetRequest: CustomAgentSheetRequest?
-    /// Seeds the pending root-rename flow from the row context menu.
-    @State private var editingRootID: String?
-    @State private var editingRootName: String = ""
+    /// Root whose rename sheet is presented (project-level roots only).
+    @State private var renamingRoot: AuthorizedRootSnapshot?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -62,6 +61,9 @@ struct DirectoriesSettingsPane: View {
                 }
             }
         }
+        .sheet(item: $renamingRoot) { root in
+            RootRenameSheet(root: root)
+        }
     }
 
     // MARK: Rows
@@ -69,6 +71,7 @@ struct DirectoriesSettingsPane: View {
     private func authorizedRootRow(_ root: AuthorizedRootSnapshot) -> some View {
         let isHome = root.kind == .home
         let isHealthy = !model.unhealthyRootIDs.contains(root.id)
+        let isRenameable = root.kind == .project || root.kind == .custom
         return SettingsRow(
             label: isHome ? L10n.string("User Home Directory") : root.displayName,
             sub: isHome
@@ -105,10 +108,12 @@ struct DirectoriesSettingsPane: View {
             }
         }
         .contextMenu {
-            if editingRootID != root.id {
+            // System/home rows always render their kind label, so a custom
+            // display name would never show — offer Rename for project
+            // roots only.
+            if isRenameable {
                 Button(L10n.string("Rename")) {
-                    editingRootID = root.id
-                    editingRootName = root.customName ?? ""
+                    renamingRoot = root
                 }
             }
             Button(L10n.string("Re-authorize Directory")) {
