@@ -43,9 +43,10 @@ struct SkillListView: View {
             Rectangle()
                 .fill(AppTheme.borderSoft)
                 .frame(height: 1)
-            if !skills.isEmpty || hasActiveFilters {
-                searchBar
-            }
+            // Always visible so ⌘F (`.focusSearchField`) has a target even
+            // when the list is empty — a hidden field would swallow the
+            // shortcut with no visible effect.
+            searchBar
             content
         }
         .background(AppTheme.background)
