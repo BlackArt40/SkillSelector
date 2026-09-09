@@ -243,31 +243,35 @@ func actionButton(
     .accessibilityLabel(title)
 }
 
-/// `.switch`: 42×25 pill that fills success green when on.
+/// `.switch`: 42×25 pill that fills success green when on. Backed by a
+/// real Button so keyboard users (Space/Return once focused) and
+/// VoiceOver (action on the element) can operate it — the old
+/// `onTapGesture` variant was pointer-only.
 struct ThemeSwitch: View {
     @Binding var isOn: Bool
     var accessibilityLabel: String
 
     var body: some View {
-        ZStack(alignment: isOn ? .trailing : .leading) {
-            Capsule()
-                .fill(isOn ? AppTheme.success : AppTheme.border)
-                .frame(width: 42, height: 25)
-            Circle()
-                .fill(.white)
-                .frame(width: 21, height: 21)
-                .shadow(color: .black.opacity(0.22), radius: 2, y: 1)
-                .padding(2)
-        }
-        .contentShape(Capsule())
-        .onTapGesture {
+        Button {
             withAnimation(.easeOut(duration: 0.22)) {
                 isOn.toggle()
             }
+        } label: {
+            ZStack(alignment: isOn ? .trailing : .leading) {
+                Capsule()
+                    .fill(isOn ? AppTheme.success : AppTheme.border)
+                    .frame(width: 42, height: 25)
+                Circle()
+                    .fill(.white)
+                    .frame(width: 21, height: 21)
+                    .shadow(color: .black.opacity(0.22), radius: 2, y: 1)
+                    .padding(2)
+            }
+            .contentShape(Capsule())
         }
+        .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityValue(isOn ? "on" : "off")
-        .accessibilityAddTraits(isOn ? [.isSelected] : [])
     }
 }
 
