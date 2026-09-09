@@ -51,22 +51,22 @@ Roo Code 属于旧版兼容，只在检测到已有 Skill 或在设置里手动�
 
 ## 隐私
 
-本机功能离线运行。没有遥测、崩溃报告、文件监视器，也不捆绑模型；唯一的外联是「市场」按需抓取声明的 GitHub 来源（仅在打开该区或点刷新时请求，不轮询、不落盘）。 此外，配置你自己的翻译 API 密钥后（保存在钥匙串），即可使用简介翻译——请求只发往你选择的服务商，未配置密钥时绝不发起，应用内置时不带任何密钥。索引只存元数据（路径、归属 Agent、简介等），不复制 Skill 内容；目录访问走安全作用域书签，扫描范围限于注册表声明的固定路径。
+本机功能离线运行。没有遥测、崩溃报告、文件监视器，也不捆绑模型；唯一的外联是「市场」按需抓取声明的 GitHub 来源（仅在打开该区或点刷新时请求，不轮询、不落盘）。 此外，配置你自己的翻译 API 密钥后（加密保存于本机），即可使用简介翻译——请求只发往你选择的服务商，未配置密钥时绝不发起，应用内置时不带任何密钥。索引只存元数据（路径、归属 Agent、简介等），不复制 Skill 内容；目录访问走安全作用域书签，扫描范围限于注册表声明的固定路径。
 
 ## 安装
 
 需要 macOS 12 Monterey 或更高，Universal 2（Apple Silicon 和 Intel）。
 
-从 2.0.0 起：简介翻译功能已移除；升级后首次启动为全新状态（索引自动重建，需重新授权各目录，重复忽略标记清零）。
+升级到 2.x 后首次启动为全新状态（索引自动重建，需重新授权各目录，重复忽略标记清零）。简介翻译为可选云端功能：在设置中配置你自己的 API 密钥后可用，未配置时应用不发起任何翻译请求。
 
 1. 从 [GitHub Releases](https://github.com/BlackArt40/SkillSelector/releases) 下载 `.dmg` 和同名的 `.sha256`。通用版适合所有 Mac；也可以按机型选更小的单架构包：Apple Silicon 选 `-arm64`，Intel 选 `-x86_64`
 2. 校验完整性（两个文件放同一目录）：
 
    ```zsh
-   shasum -a 256 -c SkillSelector-2.0.0.dmg.sha256
+   shasum -a 256 -c SkillSelector-2.4.1.dmg.sha256
    ```
 
-   输出必须是 `SkillSelector-2.0.0.dmg: OK`。不是就别装。
+   输出必须是 `SkillSelector-2.4.1.dmg: OK`。不是就别装。
 
 3. 挂载 `.dmg`，把 `SkillSelector.app` 拖进 Applications
 4. 右键点击应用 → 打开 → 确认打开
@@ -88,16 +88,16 @@ Gatekeeper 会拦截未公证的应用，这是预期行为。如果右键菜单
 
 ```zsh
 swift build
-zsh Scripts/package-dmg.sh 2.0.0
+zsh Scripts/package-dmg.sh 2.4.1
 ```
 
-产物：`dist/SkillSelector.app`（通用 2）与 `dist/SkillSelector-arm64.app`、`dist/SkillSelector-x86_64.app`，三个 DMG（`SkillSelector.dmg`、`SkillSelector-2.0.0.dmg` 及两份单架构）和对应的 `.sha256`。
+产物：`dist/SkillSelector.app`（通用 2）与 `dist/SkillSelector-arm64.app`、`dist/SkillSelector-x86_64.app`，三个 DMG（`SkillSelector.dmg`、`SkillSelector-2.4.1.dmg` 及两份单架构）和对应的 `.sha256`。
 
 第三方依赖只有 Yams（frontmatter 解析）、GRDB（本地索引）和 MarkdownUI（Markdown 渲染）。测试用 `swift test`，CI 在每个 PR 和 push 上都会跑。
 
 ## 版本
 
-`MAJOR.MINOR.PATCH`：小改动升 PATCH（1.0.1 → 1.0.2），实质性功能升 MINOR（1.1.0），重设计升 MAJOR（2.0.0）。
+`MAJOR.MINOR.PATCH`：小改动升 PATCH（1.0.1 → 1.0.2），实质性功能升 MINOR（1.1.0），重设计升 MAJOR（2.4.1）。
 
 ## 许可证
 

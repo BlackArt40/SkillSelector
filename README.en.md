@@ -51,22 +51,22 @@ Roo Code is legacy compatibility and only appears once detected or enabled in Se
 
 ## Privacy
 
-The local features run offline. No telemetry, no crash reporter, no file watcher, no bundled model. The only outbound traffic is the Marketplace fetching its declared GitHub sources on demand (a request happens only when you open that section or hit refresh — never polled, never persisted). Separately, description translation is available once you configure your own translation API key in Settings (stored in the Keychain); those requests go only to the provider you chose, never happen without that key, and the app ships with none. The index stores metadata only (paths, owning Agents, descriptions) and never copies Skill content; folder access goes through security-scoped bookmarks, and scans stick to the fixed paths declared in the registry.
+The local features run offline. No telemetry, no crash reporter, no file watcher, no bundled model. The only outbound traffic is the Marketplace fetching its declared GitHub sources on demand (a request happens only when you open that section or hit refresh — never polled, never persisted). Separately, description translation is available once you configure your own translation API key in Settings (stored encrypted on your Mac); those requests go only to the provider you chose, never happen without that key, and the app ships with none. The index stores metadata only (paths, owning Agents, descriptions) and never copies Skill content; folder access goes through security-scoped bookmarks, and scans stick to the fixed paths declared in the registry.
 
 ## Install
 
 Requires macOS 12 Monterey or later; Universal 2 (Apple Silicon and Intel).
 
-Since 2.0.0: the description translation feature has been removed; after upgrading, the first launch starts fresh (the index rebuilds automatically — re-authorize your directories; duplicate-ignore marks reset).
+Since the 2.x line, the first launch after upgrading starts fresh (the index rebuilds automatically — re-authorize your directories; duplicate-ignore marks reset). Description translation is an optional cloud feature: enable it by configuring your own API key in Settings; no translation request is ever sent without it.
 
 1. Download the `.dmg` and its `.sha256` from [GitHub Releases](https://github.com/BlackArt40/SkillSelector/releases). The universal build runs on any Mac; for a smaller download, pick the single-arch build for your machine: `-arm64` on Apple Silicon, `-x86_64` on Intel
 2. Verify integrity (keep both files in the same directory):
 
    ```zsh
-   shasum -a 256 -c SkillSelector-2.0.0.dmg.sha256
+   shasum -a 256 -c SkillSelector-2.4.1.dmg.sha256
    ```
 
-   It must print `SkillSelector-2.0.0.dmg: OK`. If it doesn't, don't install it.
+   It must print `SkillSelector-2.4.1.dmg: OK`. If it doesn't, don't install it.
 
 3. Mount the `.dmg` and drag `SkillSelector.app` to Applications
 4. Right-click the app → Open → confirm Open
@@ -88,16 +88,16 @@ If that's not acceptable, build from source — it goes through the same packagi
 
 ```zsh
 swift build
-zsh Scripts/package-dmg.sh 2.0.0
+zsh Scripts/package-dmg.sh 2.4.1
 ```
 
-Produces `dist/SkillSelector.app` (Universal 2) plus `dist/SkillSelector-arm64.app` and `dist/SkillSelector-x86_64.app`, three DMGs (`SkillSelector.dmg`, `SkillSelector-2.0.0.dmg`, and the two single-arch ones), and matching `.sha256` files.
+Produces `dist/SkillSelector.app` (Universal 2) plus `dist/SkillSelector-arm64.app` and `dist/SkillSelector-x86_64.app`, three DMGs (`SkillSelector.dmg`, `SkillSelector-2.4.1.dmg`, and the two single-arch ones), and matching `.sha256` files.
 
 The only third-party dependencies are Yams (frontmatter parsing), GRDB (local index), and MarkdownUI (Markdown rendering). Run the tests with `swift test`; CI runs them on every PR and push.
 
 ## Versioning
 
-`MAJOR.MINOR.PATCH`: small changes bump PATCH (1.0.1 → 1.0.2), substantive features bump MINOR (1.1.0), a redesign bumps MAJOR (2.0.0).
+`MAJOR.MINOR.PATCH`: small changes bump PATCH (1.0.1 → 1.0.2), substantive features bump MINOR (1.1.0), a redesign bumps MAJOR (2.4.1).
 
 ## License
 
