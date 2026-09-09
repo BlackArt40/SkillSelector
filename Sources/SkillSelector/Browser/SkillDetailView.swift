@@ -12,10 +12,9 @@ struct SkillDetailView: View {
     var onOpenInEditor: ((SkillSnapshot) -> Void)?
 
     @EnvironmentObject private var model: AppModel
-    /// Per-selection description-translation state (see
-    /// `DescriptionTranslationState`); resets together when the
-    /// selection moves.
-    @State private var translation = DescriptionTranslationState()
+    /// Per-selection description-translation driver, shared with the
+    /// marketplace detail view (see `DescriptionTranslationController`).
+    @StateObject private var translator = DescriptionTranslationController()
 
     /// Dynamic Type scaling for the hero title (28 → ~34) and the core /
     /// document section bodies (14 → ~17 at the largest supported size).
@@ -45,7 +44,7 @@ struct SkillDetailView: View {
                 .onChange(of: skill.path) { _ in
                     // Per-skill translation state — reset when the
                     // selection moves.
-                    translation.resetForSkillChange()
+                    translator.resetForSkillChange()
                 }
             } else {
                 emptyState
@@ -130,159 +129,31 @@ struct SkillDetailView: View {
                     badge: srcBadge(skill)
                 )
                 Spacer(minLength: 8)
-                if model.isTranslationConfigured, isDescriptionTranslatable(skill) {
-                    descriptionTranslateButton
+                if model.isTranslationConfigured,
+                   translator.isTranslatable(descriptionText(skill)) {
+                    DescriptionTranslateButton(controller: translator) {
+                        translator.toggle(
+                            originalText: descriptionText(skill),
+                            ownerPath: skill.path,
+                            model: model
+                        )
+                    }
                 }
             }
-            Text(verbatim: displayedDescription(skill))
+            Text(verbatim: translator.displayedText(original: descriptionText(skill)))
                 .font(AppTheme.body(bodySize))
                 .foregroundStyle(AppTheme.foregroundSecondary)
                 .lineSpacing(4)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
-            if let descriptionTranslationError = translation.error {
-                Label(descriptionTranslationError, systemImage: "exclamationmark.triangle")
-                    .font(AppTheme.body(11.5))
-                    .foregroundStyle(Color.orange)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
+            if let descriptionTranslationError = translator.translation.error {
+                DescriptionTranslationErrorRow(message: descriptionTranslationError)
             }
         }
     }
 
     private func descriptionText(_ skill: SkillSnapshot) -> String {
         skill.localDescription ?? skill.name
-    }
-
-    // MARK: Description translation (opt-in cloud provider → zh-Hans)
-
-    /// The original description, or its translation once one is available.
-    private func displayedDescription(_ skill: SkillSnapshot) -> String {
-        if translation.isTranslated, let translated = translation.translatedText {
-            return translated
-        }
-        return descriptionText(skill)
-    }
-
-    /// Whether the translate button is offered: a key must be configured
-    /// (strict opt-in) and the description must carry a recognizable
-    /// non-Chinese language — a simplified-Chinese description is already
-    /// in the target language, so there is nothing to translate.
-    private func isDescriptionTranslatable(_ skill: SkillSnapshot) -> Bool {
-        DescriptionTranslationSource.preferredSource(in: descriptionText(skill)) != nil
-    }
-
-    /// 翻译/原文 toggle for the description. Highlights while translated;
-    /// shows a leading spinner while running.
-    private var descriptionTranslateButton: some View {
-        Button {
-            toggleDescriptionTranslation()
-        } label: {
-            HStack(spacing: 4) {
-                // Leading spinner while the translation runs; a clear
-                // placeholder keeps the button width stable.
-                if translation.isTranslating {
-                    ProgressView()
-                        .controlSize(.mini)
-                        .transition(.opacity)
-                } else {
-                    Color.clear
-                        .frame(width: 10, height: 10)
-                }
-                Image(systemName: translation.isTranslated ? "character.bubble.fill" : "character.bubble")
-                Text(verbatim: translation.isTranslated
-                    ? L10n.string("Show Original")
-                    : L10n.string("Translate Description"))
-            }
-            .font(AppTheme.mono(11))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.borderless)
-        .animation(.easeInOut(duration: 0.15), value: translation.isTranslating)
-        .help(L10n.string(translation.isTranslated ? "Show Original" : "Translate Description"))
-        .accessibilityLabel(L10n.string(translation.isTranslated ? "Show Original" : "Translate Description"))
-        .disabled(translation.isTranslating)
-    }
-
-    private func toggleDescriptionTranslation() {
-        guard let skill else { return }
-        let text = descriptionText(skill)
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        if translation.isTranslated {
-            // Toggling back is instant — the original is always at hand.
-            translation.isTranslated = false
-            return
-        }
-        if serveCachedTranslation(for: text, requestedPath: skill.path) {
-            // Cache hit — nothing to translate.
-            return
-        }
-        guard let apiKey = APIKeychain.load() else {
-            translation.error = L10n.string("Translation Error Missing Key")
-            return
-        }
-        // Pin the source from the description's own language; the button
-        // is hidden for Chinese descriptions, so a source is always found
-        // here. Languages outside the provider's set translate with
-        // server-side auto-detection (nil source).
-        guard let source = DescriptionTranslationSource.preferredSource(in: text) else { return }
-        translation.translatedText = nil
-        translation.error = nil
-        translation.isTranslating = true
-        translation.pendingSkillPath = skill.path
-        let requestedPath = skill.path
-        let deeplSource = DescriptionTranslationSource.deeplSourceCode(for: source)
-        Task {
-            do {
-                let client = DeepLTranslationClient(apiKey: apiKey)
-                let translated = try await client.translate(
-                    text, sourceLanguage: deeplSource, targetLanguage: "ZH"
-                )
-                // Commit only while the selection still points at the
-                // requesting skill.
-                guard skill.path == requestedPath else { return }
-                translation.translatedText = translated
-                translation.isTranslated = true
-                translation.isTranslating = false
-                model.storeDescriptionTranslation(translated, for: text)
-            } catch {
-                guard skill.path == requestedPath else { return }
-                translation.isTranslating = false
-                translation.error = Self.localizedTranslationError(error)
-            }
-        }
-    }
-
-    /// Commits a cached translation to the view, if one exists. Returns
-    /// true when a cached translation was served (committed only when the
-    /// selection still points at the requesting skill).
-    private func serveCachedTranslation(for text: String, requestedPath: String?) -> Bool {
-        guard let cached = model.cachedDescriptionTranslation(for: text) else { return false }
-        if skill?.path == requestedPath {
-            translation.translatedText = cached
-            translation.isTranslated = true
-        }
-        return true
-    }
-
-    /// Maps backend errors to localized copy (Core errors carry no text).
-    private static func localizedTranslationError(_ error: Error) -> String {
-        switch error as? TranslationClientError {
-        case .missingAPIKey:
-            return L10n.string("Translation Error Missing Key")
-        case .invalidAPIKey:
-            return L10n.string("Translation Error Invalid Key")
-        case .quotaExceeded:
-            return L10n.string("Translation Error Quota")
-        case .rateLimited:
-            return L10n.string("Translation Error Rate Limited")
-        case .network(let message):
-            return L10n.string("Translation Error Network") + " " + message
-        case .unexpectedResponse, .none:
-            return L10n.string("Translation Error Unexpected")
-        }
     }
 
     private func srcBadge(_ skill: SkillSnapshot) -> Text? {

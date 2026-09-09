@@ -387,3 +387,4 @@
 "Translation Error Network" = "网络错误：";
 "Translation Error Unexpected" = "翻译服务返回了无法解析的响应。";
 "Open DeepL API Keys" = "打开密钥管理页";
+"Description" = "简介";

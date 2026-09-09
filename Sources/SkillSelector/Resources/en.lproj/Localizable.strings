@@ -385,3 +385,4 @@
 "Translation Error Network" = "Network error:";
 "Translation Error Unexpected" = "The translation service returned an unreadable response.";
 "Open DeepL API Keys" = "Open API Keys Page";
+"Description" = "Description";

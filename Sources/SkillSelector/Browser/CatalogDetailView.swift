@@ -26,6 +26,12 @@ struct CatalogDetailView: View {
     /// Remote SKILL.md body (frontmatter stripped), kept alongside the
     /// rendered state for the 「对照本地」version-difference comparison.
     @State private var remoteBody: String?
+    /// The remote SKILL.md's frontmatter description — the「简介」the
+    /// description-translation entry operates on.
+    @State private var remoteDescription: String?
+    /// Per-skill description-translation driver, shared with the local
+    /// detail view (see `DescriptionTranslationController`).
+    @StateObject private var translator = DescriptionTranslationController()
 
     var body: some View {
         if let skill {
@@ -33,6 +39,7 @@ struct CatalogDetailView: View {
                 VStack(alignment: .leading, spacing: 32) {
                     hero(skill)
                     actionBar(skill)
+                    descriptionSection(skill)
                     repositorySection(skill)
                     localSection(skill)
                     contentSection(skill)
@@ -47,11 +54,52 @@ struct CatalogDetailView: View {
             .background(AppTheme.background)
             .navigationTitle(skill.name)
             .task(id: skill.id) {
+                // Per-skill translation state resets together with the
+                // document reload.
+                translator.resetForSkillChange()
                 await load(skill)
             }
         } else {
             emptyState
                 .background(AppTheme.background)
+        }
+    }
+
+    // MARK: Description
+
+    /// The remote SKILL.md's frontmatter description with the same
+    /// translate/original toggle the local detail view offers. Hidden
+    /// entirely when the description is absent — a catalog entry may not
+    /// carry one.
+    @ViewBuilder
+    private func descriptionSection(_ skill: CatalogSkill) -> some View {
+        if let description = remoteDescription,
+           !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .center, spacing: 8) {
+                    DetailViewSupport.sectionHeading(L10n.string("Description"))
+                    Spacer(minLength: 8)
+                    if model.isTranslationConfigured,
+                       translator.isTranslatable(description) {
+                        DescriptionTranslateButton(controller: translator) {
+                            translator.toggle(
+                                originalText: description,
+                                ownerPath: skill.id,
+                                model: model
+                            )
+                        }
+                    }
+                }
+                Text(verbatim: translator.displayedText(original: description))
+                    .font(AppTheme.body(14))
+                    .foregroundStyle(AppTheme.foregroundSecondary)
+                    .lineSpacing(4)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let descriptionTranslationError = translator.translation.error {
+                    DescriptionTranslationErrorRow(message: descriptionTranslationError)
+                }
+            }
         }
     }
 
@@ -363,9 +411,11 @@ struct CatalogDetailView: View {
     @MainActor
     private func load(_ skill: CatalogSkill) async {
         contentState = .loading
+        remoteDescription = nil
         do {
             let source = try await model.catalog.loadDocument(skill)
             try Task.checkCancellation()
+            remoteDescription = FrontmatterParser.parse(source).description
             let body = FrontmatterParser.bodyLines(from: source)
             remoteBody = body.joined(separator: "\n")
             let text = MarkdownBody.hardenedText(from: body)
