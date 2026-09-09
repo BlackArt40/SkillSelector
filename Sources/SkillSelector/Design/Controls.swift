@@ -178,7 +178,7 @@ struct ActionButtonStyle: ButtonStyle {
             .overlay {
                 if role == .secondary {
                     RoundedRectangle(cornerRadius: 8)
-                        .stroke(isHovering ? AppTheme.border : AppTheme.border, lineWidth: 1)
+                        .stroke(AppTheme.border, lineWidth: 1)
                 }
             }
             .onHover { hovering in

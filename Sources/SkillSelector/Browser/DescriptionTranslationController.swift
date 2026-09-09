@@ -150,7 +150,7 @@ struct DescriptionTranslationErrorRow: View {
     var body: some View {
         Label(message, systemImage: "exclamationmark.triangle")
             .font(AppTheme.body(11.5))
-            .foregroundStyle(Color.orange)
+            .foregroundStyle(AppTheme.warn)
             .textSelection(.enabled)
             .fixedSize(horizontal: false, vertical: true)
     }

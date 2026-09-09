@@ -126,7 +126,7 @@ private struct RefreshHistoryRow: View {
                     .foregroundStyle(color)
                 ForEach(paths, id: \.self) { path in
                     Text(verbatim: path)
-                        .font(.system(size: 10.5, design: .monospaced))
+                        .font(AppTheme.mono(10.5))
                         .foregroundStyle(AppTheme.muted)
                         .lineLimit(1)
                         .truncationMode(.middle)

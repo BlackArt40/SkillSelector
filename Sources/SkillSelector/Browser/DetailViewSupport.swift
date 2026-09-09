@@ -54,10 +54,11 @@ enum DetailViewSupport {
     static func messageShell(title: String, detail: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(verbatim: title)
-                .font(.callout.weight(.medium))
+                .font(AppTheme.body(13, weight: .medium))
+                .foregroundStyle(AppTheme.foreground)
             Text(verbatim: detail)
-                .font(.callout)
-                .foregroundStyle(.secondary)
+                .font(AppTheme.body(13))
+                .foregroundStyle(AppTheme.foregroundSecondary)
         }
     }
 
@@ -65,10 +66,11 @@ enum DetailViewSupport {
     static func errorShell(title: String, detail: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Label(title, systemImage: "exclamationmark.triangle")
+                .font(AppTheme.body(13))
                 .foregroundStyle(AppTheme.warn)
             Text(verbatim: detail)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(AppTheme.body(11.5))
+                .foregroundStyle(AppTheme.foregroundSecondary)
                 .textSelection(.enabled)
         }
         .accessibilityElement(children: .combine)
