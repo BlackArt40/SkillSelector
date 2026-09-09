@@ -7,7 +7,7 @@ import Foundation
 /// Cloud-provider edition: the macOS 15-only Translation framework was
 /// replaced by an opt-in HTTP backend (DeepL first) so the feature also
 /// serves macOS 12–14. No session warm-up, no configuration invalidation —
-/// a translation is one request, guarded by the Keychain-stored key.
+/// a translation is one request, guarded by the locally stored API key.
 struct DescriptionTranslationState {
     /// `true` shows the translated description instead of the original.
     var isTranslated = false

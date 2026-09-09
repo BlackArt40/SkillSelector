@@ -376,7 +376,7 @@
 // MARK: Description translation (opt-in cloud provider)
 "Translation" = "翻译";
 "DeepL API Key" = "DeepL API 密钥";
-"DeepL API Key Sub" = "保存在钥匙串中，仅随翻译请求发送。";
+"DeepL API Key Sub" = "加密保存在本机，仅随翻译请求发送。";
 "Translation Missing Sub" = "粘贴密钥后即可翻译技能简介。";
 "API Key Placeholder" = "粘贴你的 API 密钥";
 "API Key Replace Placeholder" = "输入新密钥以更换";

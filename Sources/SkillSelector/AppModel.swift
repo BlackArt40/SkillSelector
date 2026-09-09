@@ -175,7 +175,7 @@ final class AppModel: ObservableObject {
         backgroundWork.onFingerprintsBackfilled = { [weak self] updated, changedPaths in
             self?.handleFingerprintsBackfilled(updated: updated, changedPaths: changedPaths)
         }
-        isTranslationConfigured = APIKeychain.load() != nil
+        isTranslationConfigured = TranslationKeyStore.load() != nil
     }
 
     func checkEnvironment() async {
@@ -636,17 +636,17 @@ final class AppModel: ObservableObject {
         descriptionTranslations[text] = translation
     }
 
-    /// Persists the key to the Keychain (never UserDefaults, logs or
-    /// diagnostics) and flips the configured flag.
+    /// Encrypts and persists the key to local storage (never plaintext
+    /// UserDefaults, logs or diagnostics) and flips the configured flag.
     func saveTranslationAPIKey(_ key: String) throws {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        try APIKeychain.save(trimmed)
+        try TranslationKeyStore.save(trimmed)
         isTranslationConfigured = true
     }
 
     func removeTranslationAPIKey() {
-        APIKeychain.delete()
+        TranslationKeyStore.delete()
         isTranslationConfigured = false
     }
 

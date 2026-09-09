@@ -374,7 +374,7 @@
 // MARK: Description translation (opt-in cloud provider)
 "Translation" = "Translation";
 "DeepL API Key" = "DeepL API Key";
-"DeepL API Key Sub" = "Stored in your Keychain, sent only with translation requests.";
+"DeepL API Key Sub" = "Stored encrypted on your Mac, sent only with translation requests.";
 "Translation Missing Sub" = "Paste a key to enable description translation.";
 "API Key Placeholder" = "Paste your API key";
 "API Key Replace Placeholder" = "Enter a new key to replace it";

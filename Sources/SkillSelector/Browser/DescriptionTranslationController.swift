@@ -4,7 +4,7 @@ import SwiftUI
 
 /// Shared per-selection description-translation driver for both detail
 /// views (the local `SkillDetailView` and the marketplace
-/// `CatalogDetailView`): cache-first toggle, Keychain-keyed DeepL
+/// `CatalogDetailView`): cache-first toggle, local-store-keyed DeepL
 /// request, in-flight commits gated on the owning path. Views render
 /// `translation` (via `displayedText`) and delegate their buttons here;
 /// the model is passed per call so this type never holds a strong cycle.
@@ -48,7 +48,7 @@ final class DescriptionTranslationController: ObservableObject {
             translation.isTranslated = true
             return
         }
-        guard let apiKey = APIKeychain.load() else {
+        guard let apiKey = TranslationKeyStore.load() else {
             translation.error = L10n.string("Translation Error Missing Key")
             return
         }
