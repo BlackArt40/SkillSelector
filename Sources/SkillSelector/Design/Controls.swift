@@ -356,6 +356,7 @@ struct ListSearchBar: View {
                 Circle()
                     .fill(AppTheme.accent)
                     .frame(width: 6, height: 6)
+                    .help(L10n.string("Indexing"))
                     .accessibilityLabel(L10n.string("Indexing"))
             }
             if !text.isEmpty {
@@ -592,7 +593,7 @@ struct Banner: View {
                     Image(systemName: "xmark")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(AppTheme.muted)
-                        .frame(width: 20, height: 20)
+                        .frame(width: 28, height: 28)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)

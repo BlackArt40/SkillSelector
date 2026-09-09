@@ -33,7 +33,7 @@ struct RefreshHistoryPopover: View {
                         .padding(.horizontal, 16)
                     Spacer(minLength: 16)
                 }
-                .frame(width: 320, height: 180)
+                .frame(width: 420, height: 200)
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 2) {
@@ -47,7 +47,7 @@ struct RefreshHistoryPopover: View {
                     }
                     .padding(.vertical, 8)
                 }
-                .frame(width: 360, height: 320)
+                .frame(width: 420, height: 440)
             }
         }
         .background(AppTheme.background)

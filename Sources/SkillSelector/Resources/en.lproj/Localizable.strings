@@ -187,6 +187,9 @@
 "View…" = "View…";
 "View Redacted Diagnostics" = "View redacted diagnostics";
 "Diagnostics Viewer Title" = "Diagnostics";
+"Diagnostics Category Scanning" = "Scanning";
+"Diagnostics Category Persistence" = "Storage";
+"Diagnostics Category Operations" = "Operations";
 "Diagnostics Viewer Sub" = "A read-only, redacted view of what the JSON export contains.";
 "Diagnostics Roots Count" = "%d of %d authorized directories available";
 "Diagnostics Unavailable Roots" = "Some authorized directories are unavailable.";

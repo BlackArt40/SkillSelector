@@ -187,6 +187,9 @@
 "View…" = "查看…";
 "View Redacted Diagnostics" = "查看脱敏诊断";
 "Diagnostics Viewer Title" = "诊断";
+"Diagnostics Category Scanning" = "扫描";
+"Diagnostics Category Persistence" = "存储";
+"Diagnostics Category Operations" = "操作";
 "Diagnostics Viewer Sub" = "只读展示 JSON 导出包含的脱敏内容。";
 "Diagnostics Roots Count" = "%d / %d 个授权目录可用";
 "Diagnostics Unavailable Roots" = "部分授权目录当前不可用。";

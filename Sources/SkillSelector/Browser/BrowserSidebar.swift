@@ -330,7 +330,7 @@ struct BrowserSidebar: View {
                 Image(systemName: "plus")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(AppTheme.muted)
-                    .frame(width: 20, height: 20)
+                    .frame(width: 26, height: 26)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

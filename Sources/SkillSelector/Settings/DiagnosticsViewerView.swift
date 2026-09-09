@@ -72,7 +72,7 @@ struct DiagnosticsViewerView: View {
                                         Text(verbatim: Self.timestampFormatter.string(from: event.timestamp))
                                             .font(AppTheme.mono(10.5))
                                             .foregroundStyle(AppTheme.meta)
-                                        Text(verbatim: event.category.rawValue)
+                                        Text(verbatim: Self.categoryLabel(event.category))
                                             .font(AppTheme.body(10.5, weight: .semibold))
                                             .foregroundStyle(AppTheme.muted)
                                             .padding(.horizontal, 6)
@@ -121,5 +121,15 @@ struct DiagnosticsViewerView: View {
         Text(verbatim: text)
             .font(AppTheme.body(12.5))
             .foregroundStyle(AppTheme.foregroundSecondary)
+    }
+
+    /// Localized category labels — the raw enum cases are internal
+    /// identifiers, not user-facing copy.
+    private static func categoryLabel(_ category: AppLogCategory) -> String {
+        switch category {
+        case .scanning: L10n.string("Diagnostics Category Scanning")
+        case .persistence: L10n.string("Diagnostics Category Persistence")
+        case .operations: L10n.string("Diagnostics Category Operations")
+        }
     }
 }
