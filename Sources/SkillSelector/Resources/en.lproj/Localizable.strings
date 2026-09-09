@@ -372,9 +372,15 @@
 "Translation" = "Translation";
 "DeepL API Key" = "DeepL API Key";
 "DeepL API Key Sub" = "Stored in your Keychain, sent only with translation requests.";
+"Translation Missing Sub" = "Paste a key to enable description translation.";
 "API Key Placeholder" = "Paste your API key";
+"API Key Replace Placeholder" = "Enter a new key to replace it";
+"Configured" = "Configured";
+"Not Configured" = "Not configured";
+"Remove Translation API Key" = "Remove translation API key";
+"Save Translation API Key" = "Save translation API key";
 "Get a Free Key" = "Get a Free Key";
-"Get a Free Key Sub" = "Email-only signup, 500K characters/month free. After signing in, open Account → API Keys → Create Key and paste the :fx key above.";
+"Get a Free Key Sub" = "Email-only signup, 500K characters/month free.";
 "Open DeepL Signup" = "Open DeepL Signup";
 "Translate Description" = "Translate Description";
 "Show Original" = "Show Original";

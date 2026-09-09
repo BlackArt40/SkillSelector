@@ -188,52 +188,9 @@ struct SettingsView: View {
             groupTitle(L10n.string("Translation"))
                 .padding(.top, 4)
             SettingsGroup {
-                SettingsRow(
-                    label: L10n.string("DeepL API Key"),
-                    sub: L10n.string("DeepL API Key Sub")
-                ) {
-                    HStack(spacing: 8) {
-                        SecureField(
-                            L10n.string("API Key Placeholder"),
-                            text: $translationAPIKeyInput
-                        )
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 200)
-                        Button(L10n.string("Save")) {
-                            try? model.saveTranslationAPIKey(translationAPIKeyInput)
-                            translationAPIKeyInput = ""
-                        }
-                        .buttonStyle(SettingsButtonStyle())
-                        .disabled(translationAPIKeyInput.trimmingCharacters(in: .whitespaces).isEmpty)
-                        if model.isTranslationConfigured {
-                            Button(L10n.string("Remove")) {
-                                model.removeTranslationAPIKey()
-                            }
-                            .buttonStyle(SettingsButtonStyle())
-                        }
-                    }
-                }
-                SettingsRow(
-                    label: L10n.string("Get a Free Key"),
-                    sub: L10n.string("Get a Free Key Sub")
-                ) {
-                    HStack(spacing: 8) {
-                        Button(L10n.string("Open DeepL Signup")) {
-                            if let url = URL(string: "https://www.deepl.com/pro-api") {
-                                NSWorkspace.shared.open(url)
-                            }
-                        }
-                        .buttonStyle(SettingsButtonStyle())
-                        .help(L10n.string("Open DeepL Signup"))
-                        Button(L10n.string("Open DeepL API Keys")) {
-                            if let url = URL(string: "https://www.deepl.com/account/summary") {
-                                NSWorkspace.shared.open(url)
-                            }
-                        }
-                        .buttonStyle(SettingsButtonStyle())
-                        .help(L10n.string("Open DeepL API Keys"))
-                    }
-                }
+                translationStatusRow
+                translationKeyInputRow
+                translationHelpRow
             }
             }
 
@@ -351,6 +308,99 @@ struct SettingsView: View {
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityLabel(title)
+    }
+
+    // MARK: 翻译一览
+
+    /// Status row: the configured state reads at a glance, with the
+    /// removal entry attached only while a key exists.
+    private var translationStatusRow: some View {
+        SettingsRow(
+            label: L10n.string("DeepL API Key"),
+            sub: L10n.string(model.isTranslationConfigured
+                ? "DeepL API Key Sub"
+                : "Translation Missing Sub")
+        ) {
+            HStack(spacing: 10) {
+                statusDot(
+                    L10n.string(model.isTranslationConfigured ? "Configured" : "Not Configured"),
+                    color: model.isTranslationConfigured ? AppTheme.success : AppTheme.meta
+                )
+                if model.isTranslationConfigured {
+                    Button(L10n.string("Remove")) {
+                        model.removeTranslationAPIKey()
+                    }
+                    .buttonStyle(SettingsDangerButtonStyle())
+                    .accessibilityLabel(L10n.string("Remove Translation API Key"))
+                }
+            }
+        }
+    }
+
+    /// Key input row: a full-width secure field with the save button
+    /// docked at its trailing edge.
+    private var translationKeyInputRow: some View {
+        let canSave = !translationAPIKeyInput
+            .trimmingCharacters(in: .whitespaces).isEmpty
+        return HStack(spacing: 8) {
+            SecureField(
+                L10n.string(model.isTranslationConfigured
+                    ? "API Key Replace Placeholder"
+                    : "API Key Placeholder"),
+                text: $translationAPIKeyInput
+            )
+            .textFieldStyle(.roundedBorder)
+            .font(AppTheme.body(12.5))
+            .onSubmit {
+                if canSave { saveTranslationAPIKey() }
+            }
+            Button(L10n.string("Save")) {
+                saveTranslationAPIKey()
+            }
+            .buttonStyle(SettingsButtonStyle())
+            .disabled(!canSave)
+            .opacity(canSave ? 1 : 0.5)
+            .accessibilityLabel(L10n.string("Save Translation API Key"))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 11)
+        .background(AppTheme.surface)
+    }
+
+    /// Help row: signup/management entry points next to the short hint.
+    private var translationHelpRow: some View {
+        SettingsRow(
+            label: L10n.string("Get a Free Key"),
+            sub: L10n.string("Get a Free Key Sub")
+        ) {
+            HStack(spacing: 8) {
+                Button(L10n.string("Open DeepL Signup")) {
+                    if let url = URL(string: "https://www.deepl.com/pro-api") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+                .buttonStyle(SettingsButtonStyle())
+                .help(L10n.string("Open DeepL Signup"))
+                Button(L10n.string("Open DeepL API Keys")) {
+                    if let url = URL(string: "https://www.deepl.com/account/summary") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+                .buttonStyle(SettingsButtonStyle())
+                .help(L10n.string("Open DeepL API Keys"))
+            }
+        }
+    }
+
+    private func saveTranslationAPIKey() {
+        let key = translationAPIKeyInput.trimmingCharacters(in: .whitespaces)
+        guard !key.isEmpty else { return }
+        do {
+            try model.saveTranslationAPIKey(key)
+            translationAPIKeyInput = ""
+        } catch {
+            settingsError = error.localizedDescription
+        }
     }
 
     // MARK: 目录授权 pane
