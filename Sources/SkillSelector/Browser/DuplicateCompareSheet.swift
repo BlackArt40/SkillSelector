@@ -12,6 +12,7 @@ struct DuplicateCompareRequest: Identifiable {
 /// The read-only copy comparison: two member pickers over the group, then
 /// frontmatter / body / sibling-file deltas. Purely informational — the
 /// tidying itself still happens in Finder.
+@MainActor
 struct DuplicateCompareSheet: View {
     @Environment(\.dismiss) private var dismiss
 
