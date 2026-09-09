@@ -379,6 +379,9 @@
 "Not Configured" = "Not configured";
 "Remove Translation API Key" = "Remove translation API key";
 "Save Translation API Key" = "Save translation API key";
+"Choose…" = "Choose…";
+"Choose" = "Choose";
+"Choose Global Root" = "Choose Global Root";
 "Get a Free Key" = "Get a Free Key";
 "Get a Free Key Sub" = "Email-only signup, 500K characters/month free.";
 "Open DeepL Signup" = "Open DeepL Signup";

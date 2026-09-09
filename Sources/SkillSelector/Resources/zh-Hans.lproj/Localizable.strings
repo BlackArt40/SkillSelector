@@ -381,6 +381,9 @@
 "Not Configured" = "未配置";
 "Remove Translation API Key" = "移除翻译 API 密钥";
 "Save Translation API Key" = "保存翻译 API 密钥";
+"Choose…" = "选择…";
+"Choose" = "选择";
+"Choose Global Root" = "选择全局目录";
 "Get a Free Key" = "获取免费密钥";
 "Get a Free Key Sub" = "仅需邮箱注册，每月 50 万字符免费。";
 "Open DeepL Signup" = "打开 DeepL 注册页";

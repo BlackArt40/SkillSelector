@@ -80,7 +80,12 @@ struct CustomAgentSheet: View {
 
             VStack(spacing: 12) {
                 field(L10n.string("Agent Name"), text: $editor.agentName, prompt: L10n.string("Agent Name"))
-                field(L10n.string("Global Roots"), text: $editor.globalRoots, prompt: L10n.string("Comma-separated paths"))
+                field(
+                    L10n.string("Global Roots"),
+                    text: $editor.globalRoots,
+                    prompt: L10n.string("Comma-separated paths"),
+                    trailingAction: (L10n.string("Choose…"), appendSelectedDirectory)
+                )
                 field(L10n.string("Entry Filename"), text: $editor.entryFilename, prompt: "SKILL.md")
             }
 
@@ -124,21 +129,49 @@ struct CustomAgentSheet: View {
         }
     }
 
-    private func field(_ label: String, text: Binding<String>, prompt: String) -> some View {
+    private func field(
+        _ label: String,
+        text: Binding<String>,
+        prompt: String,
+        trailingAction: (title: String, action: () -> Void)? = nil
+    ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(verbatim: label)
                 .font(AppTheme.body(12.5, weight: .medium))
                 .foregroundStyle(AppTheme.foregroundSecondary)
-            TextField(prompt, text: text)
-                .textFieldStyle(.plain)
-                .font(AppTheme.body(13))
-                .padding(.horizontal, 10)
-                .frame(height: 32)
-                .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 8))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(AppTheme.border, lineWidth: 1)
+            HStack(spacing: 8) {
+                TextField(prompt, text: text)
+                    .textFieldStyle(.plain)
+                    .font(AppTheme.body(13))
+                    .padding(.horizontal, 10)
+                    .frame(height: 32)
+                    .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 8))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(AppTheme.border, lineWidth: 1)
+                    }
+                if let trailingAction {
+                    Button(trailingAction.title, action: trailingAction.action)
+                        .buttonStyle(ActionButtonStyle(role: .secondary))
                 }
+            }
         }
+    }
+
+    /// Appends a directory picked in the open panel to the comma-separated
+    /// roots field — hand-typing absolute paths was the only entry path
+    /// before. Trims parts, skips duplicates, joins with ", ".
+    private func appendSelectedDirectory() {
+        guard let url = DirectoryPanel.chooseSingleDirectory(
+            title: L10n.string("Choose Global Root"),
+            prompt: L10n.string("Choose")
+        ) else { return }
+        let existing = editor.globalRoots
+            .components(separatedBy: CharacterSet(charactersIn: ",\n"))
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        let path = url.path
+        guard !existing.contains(path) else { return }
+        editor.globalRoots = (existing + [path]).joined(separator: ", ")
     }
 }
