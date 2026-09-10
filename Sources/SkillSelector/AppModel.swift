@@ -82,6 +82,12 @@ final class AppModel: ObservableObject {
     /// refreshes are not recorded — the history answers "what moved".
     @Published private(set) var refreshHistory: [RefreshChangeEntry] = []
     @Published private(set) var snapshots: [SkillSnapshot] = []
+    /// Sidebar counts, maintained incrementally by the model instead of
+    /// recomputed on every view-body pass (review P3 / P2-15). Rebuilt only
+    /// when the underlying data changes (`reloadSnapshot`,
+    /// `reloadAgentDefinitions`). The Marketplace count is dynamic (loads on
+    /// demand) and is folded in at the view layer.
+    @Published private(set) var sidebarCounts: [BrowserDestination: Int] = [:]
     @Published private(set) var authorizedRoots: [AuthorizedRootSnapshot] = []
     @Published private(set) var rootsByID: [String: AuthorizedRootSnapshot] = [:]
     @Published private(set) var agentDefinitions: [AgentDefinition]
@@ -285,6 +291,7 @@ final class AppModel: ObservableObject {
     private func reloadAuthorizedRoots() throws {
         authorizedRoots = try bookmarks?.roots() ?? []
         rootsByID = Dictionary(authorizedRoots.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        recomputeSidebarCounts()
     }
 
     func authorize(_ url: URL, as kind: AuthorizedRootKind) async {
@@ -672,6 +679,7 @@ final class AppModel: ObservableObject {
         registry = effectiveRegistry
         agentDefinitions = registry.definitions
         refresher.updateRegistry(registry)
+        recomputeSidebarCounts()
     }
 
     private func normalizedLines(_ values: [String]) -> [String] {
@@ -797,6 +805,38 @@ final class AppModel: ObservableObject {
             authorizedRoots: updatedRoots,
             bookmarks: bookmarks
         )
+        recomputeSidebarCounts()
+    }
+
+    /// Rebuilds the sidebar counts (O(snapshots · sections)); called only
+    /// when the underlying data moved, not on every view-body pass.
+    private func recomputeSidebarCounts() {
+        var counts: [BrowserDestination: Int] = [:]
+        counts[.all] = snapshots.count
+        counts[.global] = SkillQuery(scope: .global).apply(to: snapshots, rootsByID: rootsByID).count
+        counts[.duplicates] = DuplicateSkillGrouper.memberCount(in: duplicateGroups)
+        counts[.links] = snapshots.filter { $0.resolvedTarget != nil }.count
+        counts[.rules] = rules.files.count
+        counts[.mcp] = mcps.servers.count
+        for root in authorizedRoots {
+            switch root.kind {
+            case .home, .system:
+                counts[.system(rootID: root.id)] = SkillQuery(scope: .root(rootID: root.id))
+                    .apply(to: snapshots, rootsByID: rootsByID).count
+            case .project, .custom:
+                counts[.project(rootID: root.id)] = SkillQuery(scope: .project(rootID: root.id))
+                    .apply(to: snapshots, rootsByID: rootsByID).count
+            }
+        }
+        for definition in agentDefinitions {
+            let skillCount = SkillQuery(scope: .all, agentID: definition.id)
+                .apply(to: snapshots, rootsByID: rootsByID).count
+            let mcpCount = mcps.servers.filter { $0.agentID == definition.id }.count
+            // An Agent detected only through MCP (no Skills on disk) still
+            // shows: the count reflects whatever it owns that is visible.
+            counts[.agent(id: definition.id)] = skillCount > 0 ? skillCount : mcpCount
+        }
+        sidebarCounts = counts
     }
 }
 

@@ -526,35 +526,13 @@ struct RootView: View {
             || !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// Static sidebar counts come from the model (maintained incrementally,
+    /// review P3); only the dynamic Marketplace count is folded in here.
     private var sidebarCounts: [BrowserDestination: Int] {
-        var counts: [BrowserDestination: Int] = [:]
-        counts[.all] = model.snapshots.count
-        counts[.global] = SkillQuery(scope: .global).apply(to: model.snapshots, rootsByID: model.rootsByID).count
-        counts[.duplicates] = DuplicateSkillGrouper.memberCount(in: model.duplicateGroups)
-        counts[.links] = model.snapshots.filter { $0.resolvedTarget != nil }.count
-        counts[.rules] = model.rules.files.count
-        counts[.mcp] = model.mcps.servers.count
+        var counts = model.sidebarCounts
         let catalogSkillCount = catalogSkills.count
         if catalogSkillCount > 0 {
             counts[.catalog] = catalogSkillCount
-        }
-        for root in model.authorizedRoots {
-            switch root.kind {
-            case .home, .system:
-                counts[.system(rootID: root.id)] = SkillQuery(scope: .root(rootID: root.id))
-                    .apply(to: model.snapshots, rootsByID: model.rootsByID).count
-            case .project, .custom:
-                counts[.project(rootID: root.id)] = SkillQuery(scope: .project(rootID: root.id))
-                    .apply(to: model.snapshots, rootsByID: model.rootsByID).count
-            }
-        }
-        for definition in model.agentDefinitions {
-            let skillCount = SkillQuery(scope: .all, agentID: definition.id)
-                .apply(to: model.snapshots, rootsByID: model.rootsByID).count
-            let mcpCount = model.mcps.servers.filter { $0.agentID == definition.id }.count
-            // An Agent detected only through MCP (no Skills on disk) still
-            // shows: the count reflects whatever it owns that is visible.
-            counts[.agent(id: definition.id)] = skillCount > 0 ? skillCount : mcpCount
         }
         return counts
     }
