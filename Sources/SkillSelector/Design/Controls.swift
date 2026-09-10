@@ -98,6 +98,7 @@ struct AgentChipLarge: View {
 /// ZStack and are pushed into rows by running x/y accumulators captured in
 /// the guide closures; the measured block height is fed back through state
 /// so the container stays as compact as the chips.
+@MainActor
 struct FlowChips: View {
     let names: [String]
 
