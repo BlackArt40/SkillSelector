@@ -22,12 +22,23 @@ public enum TranslationKeyStore {
     private static let service = "com.skillselector.translation"
     private static let account = "deepl-api-key"
 
+    /// Test seam: redirects the on-disk location so unit tests never touch
+    /// the real Application Support folder. Product code always writes the
+    /// default directory; only tests set this.
+    nonisolated(unsafe) static var overrideDirectoryURL: URL?
+
     /// Encrypted blob location — the app's Application Support directory,
     /// the same folder that already hosts the index database.
-    private static let fileURL: URL = FileManager.default
-        .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("SkillSelector", isDirectory: true)
-        .appendingPathComponent("translation-key.enc")
+    private static var fileURL: URL {
+        (overrideDirectoryURL ?? defaultDirectoryURL)
+            .appendingPathComponent("translation-key.enc")
+    }
+
+    private static var defaultDirectoryURL: URL {
+        FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("SkillSelector", isDirectory: true)
+    }
 
     /// Returns the stored key, or nil when absent/unreadable. A missing or
     /// corrupt blob reads as absent rather than crashing the launch path.
