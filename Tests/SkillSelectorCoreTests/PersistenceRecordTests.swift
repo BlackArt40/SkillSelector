@@ -10,11 +10,14 @@ final class PersistenceRecordTests: XCTestCase {
 
     // MARK: - AuthorizedRootKind
 
-    func testRootKindLocalizedNames() {
-        XCTAssertEqual(AuthorizedRootKind.home.localizedName, "Home Directory")
-        XCTAssertEqual(AuthorizedRootKind.project.localizedName, "Project Directory")
-        XCTAssertEqual(AuthorizedRootKind.system.localizedName, "System Skill Directory")
-        XCTAssertEqual(AuthorizedRootKind.custom.localizedName, "Custom Skill Directory")
+    /// The kind's localization key must stay stable — the UI looks it up in
+    /// Localizable.strings with exactly this string (L10nParityTests guard
+    /// both languages carry the key).
+    func testRootKindLocalizationKeys() {
+        XCTAssertEqual(AuthorizedRootKind.home.localizationKey, "Home Directory")
+        XCTAssertEqual(AuthorizedRootKind.project.localizationKey, "Project Directory")
+        XCTAssertEqual(AuthorizedRootKind.system.localizationKey, "System Skill Directory")
+        XCTAssertEqual(AuthorizedRootKind.custom.localizationKey, "Custom Skill Directory")
     }
 
     func testRootKindRawValuesRoundTrip() {
