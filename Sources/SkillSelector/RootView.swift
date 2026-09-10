@@ -23,9 +23,17 @@ struct RootView: View {
     /// Local event monitor resigning the toolbar search field on outside
     /// clicks (AppKit focus; see `installSearchFocusMonitors`).
     /// Notification observers removed with the monitor.
-    /// Suppresses history recording while a back/forward navigation is
-    /// restoring state — the restore is not a new action.
-    @State private var suppressingHistory = false
+    /// Back/forward restore targets (review P2-12). SwiftUI's `onChange`
+    /// fires asynchronously — after `apply` has already returned — so a
+    /// boolean gate cannot distinguish a restore from a real user switch:
+    /// the gate is down by the time the change lands, and the restore gets
+    /// mis-recorded as a history step (observed at runtime: ~12ms gap).
+    /// Instead each restore records the exact destination / search value it
+    /// is restoring; the matching `onChange` consumes the value and stays
+    /// out of history, while any user change (a different value) records
+    /// normally.
+    @State private var suppressedRestoreDestination: BrowserDestination?
+    @State private var suppressedRestoreSearchText: String?
     /// Seeds the history stack bottom once with the initial destination.
     @State private var didSeedHistory = false
     /// Selected MCP server id for the MCP detail pane.
@@ -175,17 +183,22 @@ struct RootView: View {
         eventMonitors.removeAll()
     }
 
-    /// Destination change: record a sidebar history step (suppressed while
-    /// a back/forward navigation is restoring state).
+    /// Destination change: record a sidebar history step. A change that
+    /// matches the in-flight restore target is the restore itself — consume
+    /// it and stay out of history.
     private func destinationChanged(_ newValue: BrowserDestination) {
-        guard !suppressingHistory else { return }
+        if newValue == suppressedRestoreDestination {
+            suppressedRestoreDestination = nil
+            return
+        }
+        suppressedRestoreDestination = nil
         model.recordNavigation(.sidebar(newValue))
     }
 
     /// Search-focus change: opening the field starts a search session
-    /// (one history step); dismissing it ends the session (AC-15).
+    /// (one history step); dismissing it ends the session (AC-15). Restores
+    /// never touch focus, so nothing is suppressed here.
     private func searchFocusChanged(_ focused: Bool) {
-        guard !suppressingHistory else { return }
         if focused {
             model.recordNavigation(.search(searchText))
         } else {
@@ -194,9 +207,15 @@ struct RootView: View {
     }
 
     /// Search-term change: rewrite the in-flight search entry in place,
-    /// never a second stack push.
+    /// never a second stack push. A term matching the restore target is the
+    /// restore itself — consume it and stay out of history.
     private func searchTextChanged(_ newValue: String) {
-        guard !suppressingHistory, searchFocused else { return }
+        if newValue == suppressedRestoreSearchText {
+            suppressedRestoreSearchText = nil
+            return
+        }
+        suppressedRestoreSearchText = nil
+        guard searchFocused else { return }
         if case .search = model.backEntries.last {
             model.recordNavigation(.search(newValue))
         }
@@ -594,8 +613,9 @@ struct RootView: View {
     }
 
     private func apply(_ entry: NavigationEntry) {
-        suppressingHistory = true
         if let destination = entry.sidebarDestination {
+            suppressedRestoreDestination = destination
+            suppressedRestoreSearchText = ""
             self.destination = destination
             searchText = ""
             model.selectOnly(nil)
@@ -603,24 +623,27 @@ struct RootView: View {
             if destination != .rules { rulesSelection = nil }
             if destination != .catalog { catalogSelection = nil }
         } else if let query = entry.searchQuery {
+            suppressedRestoreSearchText = query
+            suppressedRestoreDestination = nil
             searchText = query
             model.selectOnly(nil)
         } else if let selection = entry.skillSelection {
+            suppressedRestoreDestination = nil
+            suppressedRestoreSearchText = nil
             model.selectOnly(selection.path)
         }
-        suppressingHistory = false
     }
 
     /// At the stack bottom, back restores the All Skills view.
     private func restoreDefault() {
-        suppressingHistory = true
+        suppressedRestoreDestination = .all
+        suppressedRestoreSearchText = ""
         destination = .all
         searchText = ""
         model.selectOnly(nil)
         mcpSelection = nil
         rulesSelection = nil
         catalogSelection = nil
-        suppressingHistory = false
     }
 
     // MARK: Reveal / open
