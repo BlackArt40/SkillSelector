@@ -157,12 +157,38 @@ struct McpDetailView: View {
 
     private var statusText: String {
         switch status {
-        case .running: L10n.string("Running")
-        case .notRunning: L10n.string("Not Running")
-        case .failed(let reason):
-            L10n.string("Failed") + (reason.isEmpty ? "" : ": \(reason)")
-        case .probing: L10n.string("Probing…")
-        case .unknown: L10n.string("Not Probed")
+        case .running:
+            return L10n.string("Running")
+        case .notRunning:
+            return L10n.string("Not Running")
+        case .failed(let failure):
+            let reason = Self.probeFailureText(failure)
+            return reason.isEmpty ? L10n.string("Failed") : "\(L10n.string("Failed")): \(reason)"
+        case .probing:
+            return L10n.string("Probing…")
+        case .unknown:
+            return L10n.string("Not Probed")
+        }
+    }
+
+    /// Localized primary cause; dynamic details (command names, system
+    /// errors) are appended verbatim after a translated label (P2-16).
+    private static func probeFailureText(_ failure: McpProbeFailure) -> String {
+        switch failure {
+        case .missingCommand:
+            return L10n.string("MCP Missing Command")
+        case .executableNotFound(let command):
+            return "\(L10n.string("MCP Executable Not Found")): \(command)"
+        case .launchFailed(let detail):
+            return "\(L10n.string("MCP Launch Failed")): \(detail)"
+        case .writeFailed:
+            return L10n.string("MCP Write Failed")
+        case .initializeError:
+            return L10n.string("MCP Initialize Error")
+        case .missingURL:
+            return L10n.string("MCP Missing URL")
+        case .unsupportedScheme(let url):
+            return "\(L10n.string("MCP Unsupported Scheme")): \(url)"
         }
     }
 

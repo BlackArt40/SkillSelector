@@ -14,8 +14,10 @@ public enum McpProbeStatus: Hashable, Sendable {
     /// endpoint did not respond (http/sse) within the window.
     case notRunning
     /// The probe failed for a concrete reason (bad command, unparseable
-    /// reply, probe itself errored).
-    case failed(String)
+    /// reply, probe itself errored). The failure is typed so the UI can
+    /// localize the primary cause instead of stitching raw English text
+    /// into a translated prefix (review P2-16).
+    case failed(McpProbeFailure)
 
     public var isResolved: Bool {
         switch self {
@@ -23,6 +25,26 @@ public enum McpProbeStatus: Hashable, Sendable {
         case .running, .notRunning, .failed: return true
         }
     }
+}
+
+/// Typed failure causes for a probe. Dynamic details (command names,
+/// system errors) ride along as associated values; the cause itself is a
+/// stable identifier the UI can map to localized copy.
+public enum McpProbeFailure: Hashable, Sendable {
+    /// stdio servers must declare a command.
+    case missingCommand
+    /// The configured command could not be resolved to an executable.
+    case executableNotFound(command: String)
+    /// The process launch itself failed (e.g. not executable).
+    case launchFailed(detail: String)
+    /// Writing the initialize request to the child's stdin failed.
+    case writeFailed
+    /// The server answered JSON-RPC with an `error` payload.
+    case initializeError
+    /// http/sse servers must declare a URL.
+    case missingURL
+    /// Only http/https are probeable transports.
+    case unsupportedScheme(url: String)
 }
 
 /// Probes MCP servers by performing the real `initialize` handshake —
@@ -62,10 +84,10 @@ public struct McpProber: Sendable {
 
     private func probeStdio(_ server: McpServerDescriptor) async -> McpProbeStatus {
         guard let command = server.command, !command.isEmpty else {
-            return .failed("stdio server missing command")
+            return .failed(.missingCommand)
         }
         guard let executableURL = Self.resolveExecutable(command) else {
-            return .failed("executable not found: \(command)")
+            return .failed(.executableNotFound(command: command))
         }
 
         let process = Process()
@@ -93,7 +115,7 @@ public struct McpProber: Sendable {
         do {
             try process.run()
         } catch {
-            return .failed("launch failed: \(error.localizedDescription)")
+            return .failed(.launchFailed(detail: error.localizedDescription))
         }
 
         // initialize request (JSON-RPC 2.0).
@@ -103,7 +125,7 @@ public struct McpProber: Sendable {
             try stdin.fileHandleForWriting.close()
         } catch {
             terminate(process)
-            return .failed("could not write initialize request")
+            return .failed(.writeFailed)
         }
 
         let status = await waitForVerdict(
@@ -142,7 +164,7 @@ public struct McpProber: Sendable {
                 case .result:
                     return .running
                 case .error:
-                    return .failed("server returned initialize error")
+                    return .failed(.initializeError)
                 case .unknown:
                     if !process.isRunning {
                         // Server answered something that was neither a result nor
@@ -240,13 +262,13 @@ public struct McpProber: Sendable {
 
     private func probeHTTP(_ server: McpServerDescriptor) async -> McpProbeStatus {
         guard let urlString = server.url, let url = URL(string: urlString) else {
-            return .failed("http/sse server missing url")
+            return .failed(.missingURL)
         }
         guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
             // Only http/https are probeable transports; anything else (file:,
             // custom schemes) cannot complete an MCP handshake and must not be
             // handed to URLSession as a side effect.
-            return .failed("unsupported url scheme: \(urlString)")
+            return .failed(.unsupportedScheme(url: urlString))
         }
         let session = injectedSession ?? URLSession(configuration: .ephemeral)
         var request = URLRequest(url: url)

@@ -734,10 +734,10 @@ final class McpProberTests: XCTestCase {
 
         let status = await McpProber(handshakeTimeout: 1).probe(descriptor)
 
-        guard case .failed(let message) = status else {
+        guard case .failed(let failure) = status else {
             return XCTFail("expected .failed, got \(status)")
         }
-        XCTAssertTrue(message.contains("scheme"), "failure should cite the scheme, got: \(message)")
+        XCTAssertEqual(failure, .unsupportedScheme(url: "file:///tmp/fake-endpoint"))
     }
 
     // MARK: - http/sse probes (URLProtocol stubbing; review P2-20)

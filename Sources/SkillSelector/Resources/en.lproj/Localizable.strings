@@ -260,6 +260,13 @@
 "Not Running" = "Not Running";
 "Not Probed" = "Not probed";
 "Failed" = "Failed";
+"MCP Missing Command" = "Missing command";
+"MCP Executable Not Found" = "Executable not found";
+"MCP Launch Failed" = "Launch failed";
+"MCP Write Failed" = "Failed to write the initialize request";
+"MCP Initialize Error" = "Server returned an initialize error";
+"MCP Missing URL" = "Missing URL";
+"MCP Unsupported Scheme" = "Unsupported URL scheme";
 "Shared MCP Server" = "Shared (project .mcp.json)";
 "No MCP Servers" = "No MCP Servers";
 "No MCP Servers Description" = "Authorize a home or project directory and configure MCP servers for a supported Agent; they appear here on the next scan.";
