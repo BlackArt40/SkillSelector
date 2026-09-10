@@ -321,7 +321,7 @@ struct BrowserSidebar: View {
                 .font(.system(size: 13))
                 .foregroundStyle(AppTheme.muted)
                 .frame(width: 18)
-            Text(L10n.string(AuthorizedRootKind.home.localizedName))
+            Text(L10n.string(AuthorizedRootKind.home.localizationKey))
                 .font(AppTheme.body(13))
                 .foregroundStyle(AppTheme.muted)
                 .lineLimit(1)
@@ -416,7 +416,7 @@ struct BrowserSidebar: View {
     private func systemRow(_ root: AuthorizedRootSnapshot) -> some View {
         let showsPath = duplicateSystemNames.contains(root.url.lastPathComponent.lowercased())
         return SidebarItem(
-            title: L10n.string(root.kind.localizedName),
+            title: L10n.string(root.kind.localizationKey),
             subtitle: showsPath ? root.url.path : nil,
             glyph: Image(systemName: root.kind.systemImage),
             count: counts[.system(rootID: root.id)],
