@@ -133,11 +133,24 @@ final class RulesStateModel: ObservableObject {
     /// used by the same-name comparison (e.g. a project CLAUDE.md vs the
     /// global one). Returns nil when either file cannot be read.
     func bodyDiff(_ left: RulesFileDescriptor, _ right: RulesFileDescriptor) async -> LineDiff? {
+        await bodyComparison(left, right)?.lines
+    }
+
+    /// Both views of one read: the line diff the card renders, and the
+    /// paragraph-level comparison it summarizes. Kept together so a card
+    /// comparing two files does not read each of them twice.
+    func bodyComparison(
+        _ left: RulesFileDescriptor,
+        _ right: RulesFileDescriptor
+    ) async -> (lines: LineDiff, structure: RulesStructuralComparison)? {
         guard let leftBody = try? await bodyLines(of: left),
               let rightBody = try? await bodyLines(of: right) else {
             return nil
         }
-        return LineDiff.compute(leftBody, rightBody)
+        return (
+            lines: LineDiff.compute(leftBody, rightBody),
+            structure: RulesStructuralDiff.compare(leftBody, rightBody)
+        )
     }
 
     private func bodyLines(of file: RulesFileDescriptor) async throws -> [String] {

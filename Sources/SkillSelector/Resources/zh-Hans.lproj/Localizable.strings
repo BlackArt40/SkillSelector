@@ -420,6 +420,16 @@
 "Health Criteria Wins None" = "这里没有任何一项判据是独占最优的";
 "Health Authority Note" = "这些事实并列展示。本应用不会给它们打分，也不会替你挑副本——哪一份更重要取决于你怎么用它。";
 
+/* 规则文件对比：两个规则文件之间的段级漂移 */
+"Other Rules Files" = "同目录下的其他规则文件";
+"Rules Paragraph" = "段落";
+"Paragraphs Differ %d" = "%d 段不一致";
+"Paragraphs Differ More %d" = "…另有 %d 段";
+"Paragraph Compare Too Large" = "文件过大，无法逐段比较";
+"Paragraph Changed" = "内容有差异";
+"Paragraph Only In This File" = "仅本文件有";
+"Paragraph Only In That File" = "仅对方文件有";
+
 /* 自定义 Agent 校验错误 */
 "Invalid Entry Filename" = "无效的入口文件名";
 "Invalid Path Template" = "无效的路径模板";

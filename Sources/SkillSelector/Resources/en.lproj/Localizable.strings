@@ -418,6 +418,16 @@
 "Health Criteria Wins None" = "No criterion is uniquely best here";
 "Health Authority Note" = "These facts are listed side by side. This app does not score them and does not pick a copy for you — which one matters depends on how you use them.";
 
+/* Rules comparison: paragraph-level drift between two rules files */
+"Other Rules Files" = "Other rules files here";
+"Rules Paragraph" = "Block";
+"Paragraphs Differ %d" = "%d paragraphs differ";
+"Paragraphs Differ More %d" = "…and %d more";
+"Paragraph Compare Too Large" = "Too large to compare paragraph by paragraph";
+"Paragraph Changed" = "changed";
+"Paragraph Only In This File" = "only in this file";
+"Paragraph Only In That File" = "only in the other file";
+
 /* Custom agent validation errors */
 "Invalid Entry Filename" = "Invalid entry filename";
 "Invalid Path Template" = "Invalid path template";

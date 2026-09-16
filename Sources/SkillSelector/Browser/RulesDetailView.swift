@@ -214,21 +214,36 @@ struct RulesDetailView: View {
         }
     }
 
-    // MARK: Same-name comparison
+    // MARK: Comparison
 
-    /// Lists rules files that share this file's name in another root
-    /// (typically the same-named file at global vs project scope), each
-    /// with a lazy line diff against the selected file.
+    /// Rules files worth comparing against this one.
+    ///
+    /// Two axes, answering different questions. The same name in another
+    /// root is the global-versus-project case that was always covered. A
+    /// different name in the *same* root is the one nothing covered before:
+    /// a project that has both `CLAUDE.md` and `AGENTS.md` and no longer
+    /// keeps them in step.
     @ViewBuilder
     private func comparisonSection(_ file: RulesFileDescriptor) -> some View {
-        let counterparts = model.rules.files.filter {
+        let sameName = model.rules.files.filter {
             $0.filename == file.filename && $0.id != file.id
         }
-        if !counterparts.isEmpty {
+        let otherNames = model.rules.files.filter {
+            $0.filename != file.filename && $0.projectRootID == file.projectRootID
+        }
+        if !sameName.isEmpty || !otherNames.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                DetailViewSupport.sectionHeading(L10n.string("Same-Name Rules Comparison"))
-                ForEach(counterparts) { counterpart in
-                    RuleFileDiffCard(file: file, counterpart: counterpart)
+                if !sameName.isEmpty {
+                    DetailViewSupport.sectionHeading(L10n.string("Same-Name Rules Comparison"))
+                    ForEach(sameName) { counterpart in
+                        RuleFileDiffCard(file: file, counterpart: counterpart)
+                    }
+                }
+                if !otherNames.isEmpty {
+                    DetailViewSupport.sectionHeading(L10n.string("Other Rules Files"))
+                    ForEach(otherNames) { counterpart in
+                        RuleFileDiffCard(file: file, counterpart: counterpart)
+                    }
                 }
             }
         }
@@ -281,14 +296,15 @@ struct RulesDetailView: View {
     }
 }
 
-/// One same-named rules file in another root, with a lazy line diff against
-/// the selected file and an expandable diff view.
+/// One counterpart rules file, with a lazy line diff against the selected
+/// file and an expandable view of both the paragraph summary and the diff.
 private struct RuleFileDiffCard: View {
     @EnvironmentObject private var model: AppModel
     let file: RulesFileDescriptor
     let counterpart: RulesFileDescriptor
 
     @State private var diff: LineDiff?
+    @State private var structure: RulesStructuralComparison?
     @State private var isExpanded = false
 
     var body: some View {
@@ -323,16 +339,20 @@ private struct RuleFileDiffCard: View {
 
             if isExpanded {
                 if let diff {
-                    if diff.rows.allSatisfy({ $0.kind == .same }) {
-                        Text(verbatim: L10n.string("Identical Content"))
-                            .font(AppTheme.body(11.5))
-                            .foregroundStyle(AppTheme.muted)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(12)
-                    } else {
-                        LineDiffView(diff: diff)
-                            .padding(12)
+                    VStack(alignment: .leading, spacing: 10) {
+                        if let structure, !structure.isIdentical || !structure.isAligned {
+                            structuralSummary(structure)
+                        }
+                        if diff.rows.allSatisfy({ $0.kind == .same }) {
+                            Text(verbatim: L10n.string("Identical Content"))
+                                .font(AppTheme.body(11.5))
+                                .foregroundStyle(AppTheme.muted)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        } else {
+                            LineDiffView(diff: diff)
+                        }
                     }
+                    .padding(12)
                 }
                 Rectangle()
                     .fill(AppTheme.borderSoft)
@@ -345,9 +365,65 @@ private struct RuleFileDiffCard: View {
                 .stroke(AppTheme.borderSoft, lineWidth: 1)
         }
         .task(id: counterpart.id) {
-            diff = await model.rules.bodyDiff(file, counterpart)
+            guard let result = await model.rules.bodyComparison(file, counterpart) else { return }
+            diff = result.lines
+            structure = result.structure
         }
     }
+
+    // MARK: Paragraph summary
+
+    /// The paragraph-level answer, above the line diff: "which paragraphs
+    /// differ" is the question, and the diff is the receipt for it.
+    @ViewBuilder
+    private func structuralSummary(_ structure: RulesStructuralComparison) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if structure.isAligned {
+                Text(verbatim: L10n.string("Paragraphs Differ %d", structure.divergences.count))
+                    .font(AppTheme.body(11, weight: .medium))
+                    .foregroundStyle(AppTheme.foregroundSecondary)
+                // Capped: a badly drifted pair can produce hundreds of
+                // divergences, and the line diff below already carries the
+                // full picture.
+                ForEach(structure.divergences.prefix(Self.maximumListedDivergences)) { divergence in
+                    Text(verbatim: summaryLine(divergence))
+                        .font(AppTheme.body(11))
+                        .foregroundStyle(AppTheme.muted)
+                        .lineLimit(1)
+                }
+                let remaining = structure.divergences.count - Self.maximumListedDivergences
+                if remaining > 0 {
+                    Text(verbatim: L10n.string("Paragraphs Differ More %d", remaining))
+                        .font(AppTheme.body(11))
+                        .foregroundStyle(AppTheme.muted)
+                }
+            } else {
+                Text(verbatim: L10n.string("Paragraph Compare Too Large"))
+                    .font(AppTheme.body(11))
+                    .foregroundStyle(AppTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// "Block 3 · changed" — block numbers stay visible so the two files can
+    /// be checked in place, which is the whole point of reporting paragraphs
+    /// rather than lines.
+    private func summaryLine(_ divergence: RulesStructuralComparison.Divergence) -> String {
+        let kind: String
+        switch divergence.kind {
+        case .changed: kind = L10n.string("Paragraph Changed")
+        case .onlyInFirst: kind = L10n.string("Paragraph Only In This File")
+        case .onlyInSecond: kind = L10n.string("Paragraph Only In That File")
+        }
+        let numbers = [divergence.firstBlock, divergence.secondBlock]
+            .compactMap { $0 }
+            .map(String.init)
+            .joined(separator: "/")
+        return "\(L10n.string("Rules Paragraph")) \(numbers) · \(kind)"
+    }
+
+    private static let maximumListedDivergences = 8
 
     private var scopeBadge: some View {
         PillBadge(
