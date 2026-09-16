@@ -88,6 +88,11 @@ final class AppModel: ObservableObject {
     /// `reloadAgentDefinitions`). The Marketplace count is dynamic (loads on
     /// demand) and is folded in at the view layer.
     @Published private(set) var sidebarCounts: [BrowserDestination: Int] = [:]
+    /// The consistency census behind the Health destination, rebuilt with
+    /// the sidebar counts rather than on every view-body pass: assembling it
+    /// runs the near-duplicate union-find, which is the most expensive thing
+    /// this model does outside a scan.
+    @Published private(set) var healthSections: [SkillHealthSection] = []
     @Published private(set) var authorizedRoots: [AuthorizedRootSnapshot] = []
     @Published private(set) var rootsByID: [String: AuthorizedRootSnapshot] = [:]
     @Published private(set) var agentDefinitions: [AgentDefinition]
@@ -804,9 +809,14 @@ final class AppModel: ObservableObject {
     }
 
     /// Rebuilds the sidebar counts (O(snapshots · sections)); called only
-    /// when the underlying data moved, not on every view-body pass.
+    /// when the underlying data moved, not on every view-body pass. The
+    /// Health census is built in the same pass for the same reason — the
+    /// near-duplicate clusterer it runs is the costly part.
     private func recomputeSidebarCounts() {
         var counts: [BrowserDestination: Int] = [:]
+        let health = SkillHealthReport.sections(for: snapshots)
+        healthSections = health
+        counts[.health] = SkillHealthReport.totalItemCount(in: health)
         counts[.all] = snapshots.count
         counts[.global] = SkillQuery(scope: .global).apply(to: snapshots, rootsByID: rootsByID).count
         counts[.duplicates] = DuplicateSkillGrouper.memberCount(in: duplicateGroups)

@@ -396,6 +396,30 @@
 "MCP Scope Conflict" = "在两处作用域重复声明";
 "MCP Scope Conflict Description" = "该名称在全局与项目两处都有声明。Agent 实际使用哪一处由客户端决定，修改其中任何一个之前请先确认这两个文件。";
 
+/* 一致性健康度：重复副本、漂移副本与失效链接的普查 */
+"Consistency Health" = "一致性健康度";
+"Health Items To Review" = "%d 项待处理";
+"Health Nothing To Review" = "没有需要处理的项";
+"Health Nothing To Review Detail" = "在你已授权的目录中没有发现重复副本、漂移副本或失效符号链接。这不代表授权范围之外也没有问题。";
+"Health Select Item" = "选择一项";
+"Health Select Item Detail" = "从左侧列表选择一项，查看它为什么被列出，以及每一份副本已知的信息。";
+"Health Why" = "为什么列出";
+"Health Copies %d" = "%d 份副本";
+"Health Copies Heading" = "副本";
+"Health Exact Duplicates" = "重复副本";
+"Health Near Duplicates" = "近似重复副本";
+"Health Unreachable Links" = "指向失效目标的链接";
+"Health Exact Duplicates Reason" = "SKILL.md 正文完全相同";
+"Health Near Duplicates Reason" = "因小幅修改而出现差异";
+"Health Unreachable Links Reason" = "链接目标已不存在";
+"Health Unknown Date" = "未记录";
+"Criterion Path Depth" = "路径层级";
+"Criterion Last Modified" = "最近修改";
+"Criterion Referenced By" = "被引用 Agent 数";
+"Health Criteria Wins %d of %d" = "占优 %d / %d 项判据";
+"Health Criteria Wins None" = "这里没有任何一项判据是独占最优的";
+"Health Authority Note" = "这些事实并列展示。本应用不会给它们打分，也不会替你挑副本——哪一份更重要取决于你怎么用它。";
+
 /* 自定义 Agent 校验错误 */
 "Invalid Entry Filename" = "无效的入口文件名";
 "Invalid Path Template" = "无效的路径模板";

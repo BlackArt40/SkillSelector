@@ -140,6 +140,10 @@ final class BrowserSidebarTests: XCTestCase {
             BrowserDestination.fallback(afterRemoving: "root-1", from: .links),
             .links
         )
+        XCTAssertEqual(
+            BrowserDestination.fallback(afterRemoving: "root-1", from: .health),
+            .health
+        )
     }
 
     // AC-33 revision: system-directory rows persist once imported — an

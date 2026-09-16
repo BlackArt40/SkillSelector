@@ -4,6 +4,9 @@ import SwiftUI
 enum BrowserDestination: Hashable {
     case all
     case global
+    /// The consistency census: duplicate copies, near-duplicate clusters and
+    /// unreachable links gathered into one review list.
+    case health
     case duplicates
     case links
     case rules
@@ -15,7 +18,7 @@ enum BrowserDestination: Hashable {
 
     var queryScope: SkillQuery.Scope {
         switch self {
-        case .all, .agent, .duplicates, .links, .rules, .mcp, .catalog:
+        case .all, .agent, .health, .duplicates, .links, .rules, .mcp, .catalog:
             .all
         case .global:
             .global
@@ -209,6 +212,18 @@ struct BrowserSidebar: View {
                 isActive: destination == .global
             ) {
                 destination = .global
+            }
+            // Placed at the head of the review cluster rather than at the
+            // very top: All/Global are the browsing primaries and keeping
+            // their position stable matters more than promoting the census,
+            // which is the first entry of the "what needs a look" group.
+            SidebarItem(
+                title: L10n.string("Consistency Health"),
+                glyph: Image(systemName: "checkmark.circle"),
+                count: counts[.health],
+                isActive: destination == .health
+            ) {
+                destination = .health
             }
             SidebarItem(
                 title: L10n.string("Duplicate Skills"),
@@ -540,6 +555,7 @@ extension BrowserDestination {
         switch self {
         case .all: L10n.string("All Skills")
         case .global: L10n.string("Global Skills")
+        case .health: L10n.string("Consistency Health")
         case .duplicates: L10n.string("Duplicate Skills")
         case .links: L10n.string("Symbolic Links")
         case .rules: L10n.string("Rules")

@@ -38,6 +38,8 @@ struct RootView: View {
     @State private var didSeedHistory = false
     /// Selected MCP server id for the MCP detail pane.
     @State private var mcpSelection: String?
+    /// Selected health item id for the Health detail pane.
+    @State private var healthSelection: String?
     /// Selected rules file id for the Rules detail pane.
     @State private var rulesSelection: String?
     /// Selected catalog skill id for the Catalog detail pane.
@@ -323,7 +325,17 @@ struct RootView: View {
     /// time.
     @ViewBuilder
     private var listPane: some View {
-        if destination == .duplicates {
+        if destination == .health {
+            HealthListView(
+                sections: model.healthSections,
+                selection: healthSelection,
+                onSelect: { item in
+                    healthSelection = item.id
+                    model.recordNavigation(.sidebar(.health))
+                }
+            )
+            .frame(width: listColumnWidth)
+        } else if destination == .duplicates {
             DuplicateGroupsView(
                 groups: model.duplicateGroups,
                 nearGroups: model.nearDuplicateGroups,
@@ -446,6 +458,15 @@ struct RootView: View {
                 agentNamesByID: agentNamesByID,
                 onReveal: { file in revealRules(file) },
                 onOpen: { file in openRules(file) }
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if destination == .health {
+            HealthDetailView(
+                item: model.healthSections
+                    .flatMap(\.items)
+                    .first { $0.id == healthSelection },
+                agentNamesByID: agentNamesByID,
+                onRevealInFinder: { skill in reveal(skill) }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if destination == .mcp {

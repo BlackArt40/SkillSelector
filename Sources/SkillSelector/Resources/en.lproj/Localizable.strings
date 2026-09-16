@@ -394,6 +394,30 @@
 "MCP Scope Conflict" = "Declared in two scopes";
 "MCP Scope Conflict Description" = "This name is declared both globally and inside a project. Which declaration an Agent actually uses is up to the client, so check both files before editing either.";
 
+/* Consistency Health: the census of duplicates, drifted copies and dead links */
+"Consistency Health" = "Consistency Health";
+"Health Items To Review" = "%d to review";
+"Health Nothing To Review" = "Nothing to review";
+"Health Nothing To Review Detail" = "No duplicate copies, drifted copies or unreachable links were found in the directories you have authorized. That is not a statement about anything outside them.";
+"Health Select Item" = "Select an Item";
+"Health Select Item Detail" = "Choose an entry from the list to see why it is listed and what is known about each copy.";
+"Health Why" = "Why this is listed";
+"Health Copies %d" = "%d copies";
+"Health Copies Heading" = "Copies";
+"Health Exact Duplicates" = "Duplicate copies";
+"Health Near Duplicates" = "Near-duplicate copies";
+"Health Unreachable Links" = "Links to missing targets";
+"Health Exact Duplicates Reason" = "Identical SKILL.md content";
+"Health Near Duplicates Reason" = "Drifted apart by small edits";
+"Health Unreachable Links Reason" = "The link target no longer exists";
+"Health Unknown Date" = "Not recorded";
+"Criterion Path Depth" = "Path depth";
+"Criterion Last Modified" = "Last modified";
+"Criterion Referenced By" = "Referenced by";
+"Health Criteria Wins %d of %d" = "Wins %d of %d criteria";
+"Health Criteria Wins None" = "No criterion is uniquely best here";
+"Health Authority Note" = "These facts are listed side by side. This app does not score them and does not pick a copy for you — which one matters depends on how you use them.";
+
 /* Custom agent validation errors */
 "Invalid Entry Filename" = "Invalid entry filename";
 "Invalid Path Template" = "Invalid path template";
