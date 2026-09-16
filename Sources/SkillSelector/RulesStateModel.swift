@@ -157,4 +157,48 @@ final class RulesStateModel: ObservableObject {
         let document = try await loadDocument(file)
         return FrontmatterParser.bodyLines(from: document.source)
     }
+
+    /// Instruction files in the same root whose bodies disagree.
+    ///
+    /// On demand rather than during `reload`: that runs synchronously on the
+    /// main actor and returns early when nothing moved, so neither is a
+    /// place to read files. Each body is read once and the pairs are
+    /// compared in memory, so a root with four instruction files costs four
+    /// reads.
+    ///
+    /// Only registry-declared instruction files take part. Directory sources
+    /// hold many rule files with different jobs, and reporting drift between
+    /// those would be noise dressed up as a finding.
+    func driftFindings() async -> [RulesDriftFinding] {
+        let instructionFilenames = RulesRegistry.declaredInstructionFilenames
+        let candidates = files.filter { instructionFilenames.contains($0.filename) }
+        let byRoot = Dictionary(grouping: candidates) { $0.projectRootID ?? "" }
+
+        var findings: [RulesDriftFinding] = []
+        for group in byRoot.values {
+            guard group.count > 1 else { continue }
+            var loaded: [(file: RulesFileDescriptor, lines: [String])] = []
+            for file in group.sorted(by: { $0.path < $1.path }) {
+                guard let lines = try? await bodyLines(of: file) else { continue }
+                loaded.append((file, lines))
+            }
+            for i in loaded.indices {
+                for j in loaded.indices where j > i {
+                    let comparison = RulesStructuralDiff.compare(loaded[i].lines, loaded[j].lines)
+                    guard !comparison.isIdentical else { continue }
+                    findings.append(
+                        RulesDriftFinding(
+                            firstPath: loaded[i].file.path,
+                            firstFilename: loaded[i].file.filename,
+                            secondPath: loaded[j].file.path,
+                            secondFilename: loaded[j].file.filename,
+                            divergenceCount: comparison.divergences.count,
+                            isAligned: comparison.isAligned
+                        )
+                    )
+                }
+            }
+        }
+        return findings
+    }
 }

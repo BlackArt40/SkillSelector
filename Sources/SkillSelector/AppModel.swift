@@ -93,6 +93,12 @@ final class AppModel: ObservableObject {
     /// runs the near-duplicate union-find, which is the most expensive thing
     /// this model does outside a scan.
     @Published private(set) var healthSections: [SkillHealthSection] = []
+    /// Instruction files that disagree with a sibling in the same root.
+    /// Detected asynchronously after each reload — see
+    /// `scheduleRulesDriftDetection` for why it cannot ride along in the
+    /// synchronous pass.
+    @Published private(set) var rulesDrift: [RulesDriftFinding] = []
+    private var rulesDriftTask: Task<Void, Never>?
     @Published private(set) var authorizedRoots: [AuthorizedRootSnapshot] = []
     @Published private(set) var rootsByID: [String: AuthorizedRootSnapshot] = [:]
     @Published private(set) var agentDefinitions: [AgentDefinition]
@@ -795,6 +801,7 @@ final class AppModel: ObservableObject {
         mcps.reload(authorizedRoots: updatedRoots)
         recordMcpScanIssues(mcps.lastScanIssues)
         rules.reload(authorizedRoots: updatedRoots)
+        scheduleRulesDriftDetection()
         backgroundWork.scheduleFingerprintBackfillIfNeeded(
             snapshots: updatedSnapshots,
             authorizedRoots: updatedRoots,
@@ -808,13 +815,33 @@ final class AppModel: ObservableObject {
         recomputeSidebarCounts()
     }
 
+    /// Detects rules-file drift, one shot per reload, and republishes when it
+    /// lands.
+    ///
+    /// It cannot ride along inside `reloadSnapshot`: that runs synchronously
+    /// on the main actor, so reading the files there would block the UI, and
+    /// its M14 fast path returns early when nothing moved — which is exactly
+    /// the case where the rules files on disk may still have changed. One
+    /// shot per reload, cancelling any in-flight pass, mirroring how the
+    /// fingerprint backfill is scheduled.
+    private func scheduleRulesDriftDetection() {
+        rulesDriftTask?.cancel()
+        rulesDriftTask = Task { [weak self] in
+            guard let self else { return }
+            let findings = await self.rules.driftFindings()
+            guard !Task.isCancelled else { return }
+            self.rulesDrift = findings
+            self.recomputeSidebarCounts()
+        }
+    }
+
     /// Rebuilds the sidebar counts (O(snapshots · sections)); called only
     /// when the underlying data moved, not on every view-body pass. The
     /// Health census is built in the same pass for the same reason — the
     /// near-duplicate clusterer it runs is the costly part.
     private func recomputeSidebarCounts() {
         var counts: [BrowserDestination: Int] = [:]
-        let health = SkillHealthReport.sections(for: snapshots)
+        let health = SkillHealthReport.sections(for: snapshots, rulesDrift: rulesDrift)
         healthSections = health
         counts[.health] = SkillHealthReport.totalItemCount(in: health)
         counts[.all] = snapshots.count

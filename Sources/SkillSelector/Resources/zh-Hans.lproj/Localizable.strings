@@ -419,6 +419,10 @@
 "Health Criteria Wins %d of %d" = "占优 %d / %d 项判据";
 "Health Criteria Wins None" = "这里没有任何一项判据是独占最优的";
 "Health Authority Note" = "这些事实并列展示。本应用不会给它们打分，也不会替你挑副本——哪一份更重要取决于你怎么用它。";
+"Health Rules Drift" = "内容不一致的规则文件";
+"Health Rules Drift Reason" = "同一目录下的两个指令文件说法不一致";
+"Health Rules Drift Files" = "涉及文件";
+"Health Rules Drift Hint" = "在「规则文件」中打开其中任意一个，即可把两者并排对比。";
 
 /* 规则文件对比：两个规则文件之间的段级漂移 */
 "Other Rules Files" = "同目录下的其他规则文件";

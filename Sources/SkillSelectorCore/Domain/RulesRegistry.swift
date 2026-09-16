@@ -293,6 +293,22 @@ public enum RulesRegistry {
         declarations.filter { $0.globalPath != nil || $0.globalDirectory != nil }
     }
 
+    /// The filenames the registry declares as *single* instruction files —
+    /// "CLAUDE.md", "AGENTS.md", ".cursorrules", and their peers.
+    ///
+    /// Directory sources are deliberately excluded. Those hold many rule
+    /// files serving different purposes, so comparing them against each
+    /// other would report drift where there is only difference. The
+    /// instruction files are the ones that are supposed to agree.
+    public static var declaredInstructionFilenames: Set<String> {
+        Set(
+            declarations
+                .flatMap { [$0.globalPath, $0.projectPath] }
+                .compactMap { $0 }
+                .map { URL(fileURLWithPath: $0).lastPathComponent }
+        )
+    }
+
     /// Project-level sources, deduplicated by path — a project `CLAUDE.md`
     /// is one file no matter how many Agents read it, and directory sources
     /// dedupe separately from same-named files.

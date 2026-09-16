@@ -417,6 +417,10 @@
 "Health Criteria Wins %d of %d" = "Wins %d of %d criteria";
 "Health Criteria Wins None" = "No criterion is uniquely best here";
 "Health Authority Note" = "These facts are listed side by side. This app does not score them and does not pick a copy for you — which one matters depends on how you use them.";
+"Health Rules Drift" = "Rules files that disagree";
+"Health Rules Drift Reason" = "Two instruction files in the same directory say different things";
+"Health Rules Drift Files" = "Files";
+"Health Rules Drift Hint" = "Open either file from the Rules list to read the two against each other.";
 
 /* Rules comparison: paragraph-level drift between two rules files */
 "Other Rules Files" = "Other rules files here";

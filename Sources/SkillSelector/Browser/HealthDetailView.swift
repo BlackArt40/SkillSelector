@@ -19,6 +19,9 @@ struct HealthDetailView: View {
                 VStack(alignment: .leading, spacing: 32) {
                     header(item)
                     reasonSection(item)
+                    if let drift = item.rulesDrift {
+                        driftSection(drift)
+                    }
                     if item.snapshots.count > 1 {
                         copiesSection(item)
                     }
@@ -66,6 +69,35 @@ struct HealthDetailView: View {
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
+        }
+    }
+
+    // MARK: Rules drift
+
+    /// Drift has no copies to lay out. It names the two files and points at
+    /// where they can actually be read against each other — the comparison
+    /// itself lives in the rules view, not here.
+    private func driftSection(_ finding: RulesDriftFinding) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            DetailViewSupport.sectionHeading(L10n.string("Health Rules Drift Files"))
+            VStack(alignment: .leading, spacing: 10) {
+                DetailViewSupport.keyValueRow(
+                    finding.firstFilename,
+                    value: finding.firstPath,
+                    monospaced: true
+                )
+                DetailViewSupport.keyValueRow(
+                    finding.secondFilename,
+                    value: finding.secondPath,
+                    monospaced: true
+                )
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Text(verbatim: L10n.string("Health Rules Drift Hint"))
+                .font(AppTheme.body(12))
+                .foregroundStyle(AppTheme.muted)
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

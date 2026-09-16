@@ -12,11 +12,78 @@ final class SkillHealthReportTests: XCTestCase {
 
         XCTAssertEqual(
             sections.map(\.category),
-            [.exactDuplicates, .nearDuplicates, .unreachableLinks],
+            [.exactDuplicates, .nearDuplicates, .unreachableLinks, .rulesDrift],
             "every category is listed, in declaration order, even when clean"
         )
         XCTAssertTrue(sections.allSatisfy { $0.items.isEmpty })
         XCTAssertEqual(SkillHealthReport.totalItemCount(in: sections), 0)
+    }
+
+    // MARK: - Rules drift
+
+    func testRulesDriftFindingsBecomeItems() {
+        let sections = SkillHealthReport.sections(
+            for: [],
+            rulesDrift: [drift(first: "/p/CLAUDE.md", second: "/p/AGENTS.md", paragraphs: 3)]
+        )
+        let items = section(.rulesDrift, in: sections).items
+
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(items[0].rulesDrift?.divergenceCount, 3)
+        XCTAssertEqual(items[0].rulesDrift?.secondFilename, "AGENTS.md")
+    }
+
+    /// The drift case describes files, not skills — the snapshot list is
+    /// empty rather than carrying an unrelated payload.
+    func testRulesDriftItemCarriesNoSnapshots() {
+        let sections = SkillHealthReport.sections(
+            for: [snapshot("/work/a/tool", content: "same"), snapshot("/work/b/tool", content: "same")],
+            rulesDrift: [drift(first: "/p/CLAUDE.md", second: "/p/AGENTS.md", paragraphs: 1)]
+        )
+        let item = section(.rulesDrift, in: sections).items[0]
+
+        XCTAssertTrue(item.snapshots.isEmpty)
+        XCTAssertNotNil(item.rulesDrift)
+        XCTAssertEqual(section(.exactDuplicates, in: sections).count, 1)
+        XCTAssertEqual(SkillHealthReport.totalItemCount(in: sections), 2)
+    }
+
+    func testRulesDriftIsCountedInTheHeadline() {
+        let sections = SkillHealthReport.sections(
+            for: [snapshot("/work/a/tool", content: "same"), snapshot("/work/b/tool", content: "same")],
+            rulesDrift: [
+                drift(first: "/p/CLAUDE.md", second: "/p/AGENTS.md", paragraphs: 1),
+                drift(first: "/p/CLAUDE.md", second: "/p/.cursorrules", paragraphs: 2),
+            ]
+        )
+        XCTAssertEqual(SkillHealthReport.totalItemCount(in: sections), 3)
+    }
+
+    func testRulesDriftItemsAreOrderedStably() {
+        let findings = [
+            drift(first: "/p/AGENTS.md", second: "/p/.cursorrules", paragraphs: 1),
+            drift(first: "/p/CLAUDE.md", second: "/p/AGENTS.md", paragraphs: 1),
+        ]
+        let forward = SkillHealthReport.sections(for: [], rulesDrift: findings)
+            .flatMap(\.items).map(\.id)
+        let backward = SkillHealthReport.sections(for: [], rulesDrift: findings.reversed())
+            .flatMap(\.items).map(\.id)
+
+        XCTAssertEqual(forward, backward)
+        XCTAssertEqual(forward, forward.sorted())
+    }
+
+    /// A pair too large to align reports zero divergences; the flag is what
+    /// stops that being read as "no differences".
+    func testUnalignedRulesDriftKeepsItsFlag() throws {
+        let sections = SkillHealthReport.sections(
+            for: [],
+            rulesDrift: [drift(first: "/p/CLAUDE.md", second: "/p/AGENTS.md", paragraphs: 0, aligned: false)]
+        )
+        let finding = try XCTUnwrap(section(.rulesDrift, in: sections).items[0].rulesDrift)
+
+        XCTAssertFalse(finding.isAligned)
+        XCTAssertEqual(finding.divergenceCount, 0)
     }
 
     /// The headline acceptance case: one duplicate group plus one broken
@@ -161,6 +228,22 @@ final class SkillHealthReportTests: XCTestCase {
         (0..<lines)
             .map { "Rule \($0): prefer the smallest change that solves the problem at hand." }
             .joined(separator: "\n")
+    }
+
+    private func drift(
+        first: String,
+        second: String,
+        paragraphs: Int,
+        aligned: Bool = true
+    ) -> RulesDriftFinding {
+        RulesDriftFinding(
+            firstPath: first,
+            firstFilename: (first as NSString).lastPathComponent,
+            secondPath: second,
+            secondFilename: (second as NSString).lastPathComponent,
+            divergenceCount: paragraphs,
+            isAligned: aligned
+        )
     }
 
     private func snapshot(

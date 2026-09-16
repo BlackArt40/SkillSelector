@@ -15,6 +15,7 @@ enum HealthExplanations {
         case .exactDuplicates: return L10n.string("Health Exact Duplicates")
         case .nearDuplicates: return L10n.string("Health Near Duplicates")
         case .unreachableLinks: return L10n.string("Health Unreachable Links")
+        case .rulesDrift: return L10n.string("Health Rules Drift")
         }
     }
 
@@ -25,6 +26,7 @@ enum HealthExplanations {
         case .exactDuplicates: return L10n.string("Health Exact Duplicates Reason")
         case .nearDuplicates: return L10n.string("Health Near Duplicates Reason")
         case .unreachableLinks: return L10n.string("Health Unreachable Links Reason")
+        case .rulesDrift: return L10n.string("Health Rules Drift Reason")
         }
     }
 
@@ -40,6 +42,16 @@ enum HealthExplanations {
             return names.isEmpty ? copies : "\(names.joined(separator: " · ")) · \(copies)"
         case .unreachableLinks:
             return item.snapshots.first?.path ?? ""
+        case .rulesDrift:
+            guard let finding = item.rulesDrift else { return "" }
+            let pair = "\(finding.firstFilename) ↔ \(finding.secondFilename)"
+            // An unaligned pair reports zero divergences; presenting that as
+            // "0 paragraphs differ" would turn "we could not tell" into
+            // "these agree", which is the opposite of the truth.
+            guard finding.isAligned else {
+                return "\(pair) · \(L10n.string("Paragraph Compare Too Large"))"
+            }
+            return "\(pair) · \(L10n.string("Paragraphs Differ %d", finding.divergenceCount))"
         }
     }
 

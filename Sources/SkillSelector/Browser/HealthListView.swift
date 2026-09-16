@@ -151,6 +151,7 @@ private struct HealthItemRow: View {
         case .exactDuplicates: return "doc.on.doc"
         case .nearDuplicates: return "square.on.square"
         case .unreachableLinks: return "link"
+        case .rulesDrift: return "doc.text"
         }
     }
 }
