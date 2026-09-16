@@ -54,6 +54,22 @@ jobs:
           grep -E "error: " /tmp/test-output.txt | grep -v "is only available in macOS" | head -10 | while IFS= read -r line; do echo "::error::$line"; done
           grep -E "error: " /tmp/test-output.txt | grep "is only available in macOS" | head -10 | while IFS= read -r line; do echo "::error::$line"; done
           exit 0
+      - name: Performance baseline
+        if: always()
+        run: |
+          # The baseline test prints one PERF| line per corpus size. Surface
+          # them on the run summary: the raw job log needs a token to fetch,
+          # so without this the numbers are effectively write-only.
+          if [ -f /tmp/test-output.txt ]; then
+            {
+              echo "### Index performance baseline"
+              echo ""
+              echo '```'
+              grep -a 'PERF|' /tmp/test-output.txt || echo "(no PERF lines — did the baseline test run?)"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit 0
 
   package:
     name: Package DMG (clean checkout)
