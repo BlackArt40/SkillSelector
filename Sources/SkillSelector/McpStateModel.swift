@@ -16,6 +16,16 @@ final class McpStateModel: ObservableObject {
     @Published var servers: [McpServerDescriptor] = []
     @Published var probeStatuses: [String: McpProbeStatus] = [:]
 
+    /// Server names declared in both the global and a project scope. Derived
+    /// from `servers` on every reload, never persisted.
+    @Published private(set) var scopeConflicts: [McpScopeConflict] = []
+
+    /// The ids on either side of every conflict, so a list row can flag
+    /// itself without walking the conflict array per render.
+    var conflictingServerIDs: Set<String> {
+        McpScopeConflicts.conflictingIDs(in: scopeConflicts)
+    }
+
     /// The bookmark store is immutable after app launch, so the submodel
     /// keeps its own reference instead of reaching into `AppModel`.
     private let bookmarks: BookmarkStore?
@@ -29,9 +39,11 @@ final class McpStateModel: ObservableObject {
     /// — so authorize/revoke/refresh all keep the list current.
     ///
     /// Configs that exist but were skipped (oversized/unreadable/unparseable)
-    /// land in `lastScanIssues` for the AppModel to surface in diagnostics;
-    /// missing configs stay silent (the common "not configured" case).
-    private(set) var lastScanIssues: [McpScanIssue] = []
+    /// land in `lastScanIssues` so the MCP panel can explain the gap instead
+    /// of showing an empty list, and so the AppModel can also record them as
+    /// diagnostics. Missing configs stay silent (the common "not configured"
+    /// case). Published so the panel re-renders when it changes.
+    @Published private(set) var lastScanIssues: [McpScanIssue] = []
 
     func reload(authorizedRoots: [AuthorizedRootSnapshot]) {
         let homeRoot = authorizedRoots.homeRoot
@@ -45,6 +57,7 @@ final class McpStateModel: ObservableObject {
         let scanner = McpScanner()
         let result = scanner.scanWithDiagnostics(homeRoot: homeRoot, projectRoots: projectRoots)
         servers = result.servers
+        scopeConflicts = McpScopeConflicts.detect(in: result.servers)
         lastScanIssues = result.issues
         probeStatuses = [:]
     }

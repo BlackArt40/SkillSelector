@@ -6,6 +6,13 @@ import SwiftUI
 struct McpListView: View {
     let servers: [McpServerDescriptor]
     let statuses: [String: McpProbeStatus]
+    /// Configs that exist but produced no servers (oversized, unreadable, or
+    /// unparseable). Surfaced here so a broken config never reads as "this
+    /// Agent has no MCP servers" — which is the whole difference the panel
+    /// previously could not make.
+    var scanIssues: [McpScanIssue] = []
+    /// Ids of servers whose name is also declared in the other scope.
+    var conflictingIDs: Set<String> = []
     var selection: String?
     var agentNamesByID: [String: String] = [:]
     var isProbing: Bool = false
@@ -40,6 +47,9 @@ struct McpListView: View {
             Rectangle()
                 .fill(AppTheme.borderSoft)
                 .frame(height: 1)
+            if !servers.isEmpty && !scanIssues.isEmpty {
+                issueBanner
+            }
             if !servers.isEmpty {
                 ListSearchBar(placeholderKey: "Search Mcp Placeholder", text: $searchText)
             }
@@ -90,7 +100,12 @@ struct McpListView: View {
 
     @ViewBuilder
     private var content: some View {
-        if servers.isEmpty {
+        if servers.isEmpty && !scanIssues.isEmpty {
+            // Deliberately not the plain empty state: config files were
+            // found and could not be read, which is a different problem
+            // with a different fix.
+            skippedConfigsState
+        } else if servers.isEmpty {
             emptyState
         } else if displayedServers.isEmpty {
             NoResultsView()
@@ -101,6 +116,7 @@ struct McpListView: View {
                         McpServerRow(
                             server: server,
                             status: statuses[server.id] ?? .unknown,
+                            isConflicted: conflictingIDs.contains(server.id),
                             agentNamesByID: agentNamesByID,
                             isActive: selection == server.id,
                             highlightQuery: searchText,
@@ -122,6 +138,82 @@ struct McpListView: View {
             message: L10n.string("No MCP Servers Description")
         )
     }
+
+    /// Compact form for when servers *were* found but some configs were not
+    /// read: the list below is incomplete, and this is why.
+    private var issueBanner: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(scanIssues, id: \.configPath) { issue in
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 10))
+                        .foregroundStyle(AppTheme.warn)
+                        .padding(.top, 2)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(verbatim: McpExplanations.scanIssueReason(issue))
+                            .font(AppTheme.body(11, weight: .medium))
+                            .foregroundStyle(AppTheme.foregroundSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(verbatim: issue.configPath)
+                            .font(AppTheme.mono(10))
+                            .foregroundStyle(AppTheme.muted)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Text(verbatim: McpExplanations.scanIssueNextStep(issue))
+                            .font(AppTheme.body(11))
+                            .foregroundStyle(AppTheme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.warn.opacity(0.10))
+    }
+
+    /// What the panel shows when every config it found is unreadable.
+    private var skippedConfigsState: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                EmptyState(
+                    icon: "exclamationmark.triangle",
+                    title: L10n.string("MCP Skipped Configs"),
+                    message: L10n.string("MCP Skipped Configs Description")
+                )
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(scanIssues, id: \.configPath) { issue in
+                        issueCard(issue)
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+            .padding(.bottom, 24)
+        }
+    }
+
+    private func issueCard(_ issue: McpScanIssue) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(verbatim: McpExplanations.scanIssueReason(issue))
+                .font(AppTheme.body(12, weight: .medium))
+                .foregroundStyle(AppTheme.foreground)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(verbatim: issue.configPath)
+                .font(AppTheme.mono(11))
+                .foregroundStyle(AppTheme.muted)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(verbatim: McpExplanations.scanIssueNextStep(issue))
+                .font(AppTheme.body(12))
+                .foregroundStyle(AppTheme.foregroundSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.warn.opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
+    }
 }
 
 /// One `.skill-row`-like row for an MCP server: name, transport/launch line,
@@ -129,6 +221,9 @@ struct McpListView: View {
 struct McpServerRow: View {
     let server: McpServerDescriptor
     let status: McpProbeStatus
+    /// This name is also declared in the other scope; the detail pane
+    /// explains what to check.
+    var isConflicted: Bool = false
     var agentNamesByID: [String: String] = [:]
     let isActive: Bool
     /// Active search text; hits in the name/launch line are highlighted.
@@ -148,6 +243,13 @@ struct McpServerRow: View {
                         baseColor: isActive ? AppTheme.accentActive : AppTheme.foreground
                     )
                     .lineLimit(1)
+                    if isConflicted {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 9))
+                            .foregroundStyle(AppTheme.warn)
+                            .help(L10n.string("MCP Scope Conflict"))
+                            .accessibilityLabel(L10n.string("MCP Scope Conflict"))
+                    }
                     if let agentName = agentNamesByID[server.agentID ?? ""] {
                         Text(verbatim: agentName)
                             .font(AppTheme.body(11))

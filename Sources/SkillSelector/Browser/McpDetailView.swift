@@ -7,6 +7,8 @@ import SwiftUI
 struct McpDetailView: View {
     let server: McpServerDescriptor?
     let status: McpProbeStatus
+    /// Present when this server's name is also declared in the other scope.
+    var conflict: McpScopeConflict?
     var agentNamesByID: [String: String] = [:]
     var onProbe: (() -> Void)?
     var onRevealConfig: ((McpServerDescriptor) -> Void)?
@@ -21,6 +23,9 @@ struct McpDetailView: View {
                 VStack(alignment: .leading, spacing: 32) {
                     hero(server)
                     actionBar(server)
+                    if let conflict {
+                        conflictSection(conflict)
+                    }
                     statusSection
                     configurationSection(server)
                 }
@@ -121,12 +126,28 @@ struct McpDetailView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
             }
-            Text(verbatim: L10n.string("Probe Hint"))
-                .font(AppTheme.body(13))
-                .foregroundStyle(AppTheme.muted)
-                .lineSpacing(3)
-                .fixedSize(horizontal: false, vertical: true)
-                .textSelection(.enabled)
+            if let nextStep = McpExplanations.probeNextStep(for: status) {
+                // A verdict the user can act on replaces the generic hint:
+                // they already probed, so what they need now is the fix.
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(verbatim: L10n.string("MCP Next Step"))
+                        .font(AppTheme.body(12, weight: .medium))
+                        .foregroundStyle(AppTheme.foregroundSecondary)
+                    Text(verbatim: nextStep)
+                        .font(AppTheme.body(13))
+                        .foregroundStyle(AppTheme.muted)
+                        .lineSpacing(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                }
+            } else {
+                Text(verbatim: L10n.string("Probe Hint"))
+                    .font(AppTheme.body(13))
+                    .foregroundStyle(AppTheme.muted)
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
         }
     }
 
@@ -162,7 +183,7 @@ struct McpDetailView: View {
         case .notRunning:
             return L10n.string("Not Running")
         case .failed(let failure):
-            let reason = Self.probeFailureText(failure)
+            let reason = McpExplanations.probeReason(failure)
             return reason.isEmpty ? L10n.string("Failed") : "\(L10n.string("Failed")): \(reason)"
         case .probing:
             return L10n.string("Probing…")
@@ -171,24 +192,32 @@ struct McpDetailView: View {
         }
     }
 
-    /// Localized primary cause; dynamic details (command names, system
-    /// errors) are appended verbatim after a translated label (P2-16).
-    private static func probeFailureText(_ failure: McpProbeFailure) -> String {
-        switch failure {
-        case .missingCommand:
-            return L10n.string("MCP Missing Command")
-        case .executableNotFound(let command):
-            return "\(L10n.string("MCP Executable Not Found")): \(command)"
-        case .launchFailed(let detail):
-            return "\(L10n.string("MCP Launch Failed")): \(detail)"
-        case .writeFailed:
-            return L10n.string("MCP Write Failed")
-        case .initializeError:
-            return L10n.string("MCP Initialize Error")
-        case .missingURL:
-            return L10n.string("MCP Missing URL")
-        case .unsupportedScheme(let url):
-            return "\(L10n.string("MCP Unsupported Scheme")): \(url)"
+    // MARK: Scope conflict
+
+    /// Shown only when the same name is declared in both scopes. It names
+    /// both files and stops there: which declaration an Agent honours is the
+    /// client's rule, not ours, and the app has no verified answer for any
+    /// of them — so it points at the evidence instead of guessing.
+    private func conflictSection(_ conflict: McpScopeConflict) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            DetailViewSupport.sectionHeading(L10n.string("MCP Scope Conflict"))
+            VStack(alignment: .leading, spacing: 10) {
+                Text(verbatim: L10n.string("MCP Scope Conflict Description"))
+                    .font(AppTheme.body(13))
+                    .foregroundStyle(AppTheme.muted)
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(conflict.declarations) { declaration in
+                    DetailViewSupport.keyValueRow(
+                        declaration.projectRootID == nil
+                            ? L10n.string("Global")
+                            : L10n.string("Project"),
+                        value: declaration.configFile,
+                        monospaced: true
+                    )
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

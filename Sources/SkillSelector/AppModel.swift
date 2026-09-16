@@ -717,22 +717,17 @@ final class AppModel: ObservableObject {
     }
 
     /// Surfaces MCP configs that exist but were skipped (oversized,
-    /// unreadable, or unparseable) so a broken config is distinguishable
-    /// from "agent not installed" in the diagnostics viewer. Paths go
-    /// through the redactor like every other diagnostic record.
+    /// unreadable, or unparseable) as diagnostics, so they stay visible in
+    /// an exported report after the panel is closed. Paths go through the
+    /// redactor like every other diagnostic record.
+    ///
+    /// The wording comes from `McpExplanations`, the same source the MCP
+    /// panel reads.
     private func recordMcpScanIssues(_ issues: [McpScanIssue]) {
         guard !issues.isEmpty else { return }
         let redactor = currentRedactor()
         for issue in issues {
-            let reason: String
-            switch issue.kind {
-            case .fileTooLarge(let bytes):
-                reason = "\(L10n.string("MCP Config Skipped Too Large")) (\(bytes))"
-            case .unreadable:
-                reason = L10n.string("MCP Config Skipped Unreadable")
-            case .parseFailed(let description):
-                reason = "\(L10n.string("MCP Config Parse Failed")): \(description)"
-            }
+            let reason = McpExplanations.scanIssueReason(issue)
             diagnosticStore.record(
                 category: .scanning,
                 code: "MCP_CONFIG_SKIPPED",

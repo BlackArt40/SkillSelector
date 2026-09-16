@@ -369,10 +369,30 @@
 "Refresh completed" = "Refresh completed";
 "Backfilled Fingerprints" = "Backfilled %d content fingerprints";
 
-/* MCP scan issues (surfaced in diagnostics when a config exists but is skipped) */
+/* MCP scan issues (surfaced in the MCP panel and in diagnostics when a config exists but is skipped) */
 "MCP Config Skipped Too Large" = "MCP config skipped (file too large)";
 "MCP Config Skipped Unreadable" = "MCP config skipped (unreadable)";
 "MCP Config Parse Failed" = "MCP config parse failed";
+"MCP Skipped Configs" = "Configs skipped";
+"MCP Skipped Configs Description" = "These config files were found but could not be read, so none of their servers are listed. This is not the same as having no MCP configuration.";
+"MCP Scan Next Step Too Large" = "Shrink the file below the 1 MB read limit, or move these servers into a project config.";
+"MCP Scan Next Step Unreadable" = "Check that the file is readable and is a regular file, then refresh.";
+"MCP Scan Next Step Parse Failed" = "Fix the syntax error, then refresh.";
+
+/* MCP probe verdicts: the reason is paired with one thing to try next */
+"MCP Next Step" = "Next step";
+"MCP Probe Next Step Missing Command" = "Add a command to this server's config entry.";
+"MCP Probe Next Step Executable Not Found" = "Install the command or correct its path — a bare name is resolved against PATH.";
+"MCP Probe Next Step Launch Failed" = "Check that the file is executable and runs from a terminal.";
+"MCP Probe Next Step Write Failed" = "Confirm the server reads stdin; the probe writes one initialize request and then closes it.";
+"MCP Probe Next Step Initialize Error" = "The server refused the initialize handshake — check its own logs for the reason.";
+"MCP Probe Next Step Missing URL" = "Add a URL to this server's config entry.";
+"MCP Probe Next Step Unsupported Scheme" = "Only http and https endpoints can be probed; switch this server to one of those.";
+"MCP Probe Next Step Not Running" = "Start the server manually to see its error output — the probe discards stderr, so a failure here says nothing about why.";
+
+/* MCP scope conflict: the same name declared globally and in a project */
+"MCP Scope Conflict" = "Declared in two scopes";
+"MCP Scope Conflict Description" = "This name is declared both globally and inside a project. Which declaration an Agent actually uses is up to the client, so check both files before editing either.";
 
 /* Custom agent validation errors */
 "Invalid Entry Filename" = "Invalid entry filename";

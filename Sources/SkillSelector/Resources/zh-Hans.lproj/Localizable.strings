@@ -371,10 +371,30 @@
 "Refresh completed" = "刷新完成";
 "Backfilled Fingerprints" = "已补录 %d 个内容指纹";
 
-/* MCP 扫描问题（配置存在但被跳过时在诊断中呈现） */
+/* MCP 扫描问题（配置存在但被跳过时在 MCP 面板与诊断中呈现） */
 "MCP Config Skipped Too Large" = "已跳过 MCP 配置（文件过大）";
 "MCP Config Skipped Unreadable" = "已跳过 MCP 配置（无法读取）";
 "MCP Config Parse Failed" = "MCP 配置解析失败";
+"MCP Skipped Configs" = "已跳过的配置";
+"MCP Skipped Configs Description" = "找到了这些配置文件，但无法读取，因此没有列出其中的任何 server。这与「没有配置 MCP」不是一回事。";
+"MCP Scan Next Step Too Large" = "把文件缩小到 1 MB 读取上限以内，或把这些 server 移到项目级配置。";
+"MCP Scan Next Step Unreadable" = "检查文件是否可读、是否为普通文件，然后重新扫描。";
+"MCP Scan Next Step Parse Failed" = "修好语法错误后重新扫描。";
+
+/* MCP 探活结论：原因之后紧跟一条可执行的下一步 */
+"MCP Next Step" = "下一步";
+"MCP Probe Next Step Missing Command" = "在该 server 的配置项里补上 command。";
+"MCP Probe Next Step Executable Not Found" = "安装该命令或修正其路径——不带路径的命令会按 PATH 解析。";
+"MCP Probe Next Step Launch Failed" = "检查该文件是否可执行，并确认它能在终端里运行。";
+"MCP Probe Next Step Write Failed" = "确认该 server 会读取 stdin；探活只写入一条 initialize 请求随即关闭。";
+"MCP Probe Next Step Initialize Error" = "该 server 拒绝了 initialize 握手——请查看它自己的日志。";
+"MCP Probe Next Step Missing URL" = "在该 server 的配置项里补上 url。";
+"MCP Probe Next Step Unsupported Scheme" = "只有 http 与 https 端点可以探活，请改用其中之一。";
+"MCP Probe Next Step Not Running" = "手动启动该 server 以查看它的错误输出——探活会丢弃 stderr，所以这里的失败并不能说明原因。";
+
+/* MCP 作用域冲突：同一名称在全局与项目两处都有声明 */
+"MCP Scope Conflict" = "在两处作用域重复声明";
+"MCP Scope Conflict Description" = "该名称在全局与项目两处都有声明。Agent 实际使用哪一处由客户端决定，修改其中任何一个之前请先确认这两个文件。";
 
 /* 自定义 Agent 校验错误 */
 "Invalid Entry Filename" = "无效的入口文件名";

@@ -385,6 +385,8 @@ struct RootView: View {
             McpListView(
                 servers: model.mcps.servers,
                 statuses: model.mcps.probeStatuses,
+                scanIssues: model.mcps.lastScanIssues,
+                conflictingIDs: model.mcps.conflictingServerIDs,
                 selection: mcpSelection,
                 agentNamesByID: agentNamesByID,
                 isProbing: mcpProbingAll,
@@ -450,6 +452,11 @@ struct RootView: View {
             McpDetailView(
                 server: model.mcps.servers.first { $0.id == mcpSelection },
                 status: mcpSelection.flatMap { id in model.mcps.probeStatuses[id] } ?? .unknown,
+                conflict: mcpSelection.flatMap { id in
+                    model.mcps.scopeConflicts.first {
+                        $0.global.id == id || $0.project.id == id
+                    }
+                },
                 agentNamesByID: agentNamesByID,
                 onProbe: {
                     if let id = mcpSelection {
