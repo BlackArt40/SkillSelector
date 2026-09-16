@@ -1,18 +1,30 @@
 #!/bin/zsh
 set -euo pipefail
 
-if (( $# != 1 )); then
-    print -u2 "usage: $0 VERSION"
-    exit 64
-fi
-
-VERSION="$1"
-if [[ ! "$VERSION" =~ '^[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9]+)*$' ]]; then
-    print -u2 "VERSION must use numeric major.minor.patch form"
+if (( $# > 1 )); then
+    print -u2 "usage: $0 [VERSION]"
     exit 64
 fi
 
 ROOT_DIR="${0:A:h:h}"
+
+# VERSION at the repo root is the single source of truth for the released
+# version (DocsDriftTests keeps the READMEs' install commands in lockstep
+# with it), so a bare invocation packages the current release. An explicit
+# argument still wins, which keeps out-of-band builds possible.
+if (( $# == 1 )); then
+    VERSION="$1"
+elif [[ -f "$ROOT_DIR/VERSION" ]]; then
+    VERSION="$(< "$ROOT_DIR/VERSION")"
+else
+    print -u2 "usage: $0 VERSION  (no VERSION file at $ROOT_DIR/VERSION)"
+    exit 64
+fi
+
+if [[ ! "$VERSION" =~ '^[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9]+)*$' ]]; then
+    print -u2 "VERSION must use numeric major.minor.patch form"
+    exit 64
+fi
 DIST_DIR="$ROOT_DIR/dist"
 ARM_SCRATCH="$ROOT_DIR/.build/package-arm64"
 X86_SCRATCH="$ROOT_DIR/.build/package-x86_64"

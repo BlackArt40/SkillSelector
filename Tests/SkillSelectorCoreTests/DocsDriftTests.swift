@@ -2,7 +2,8 @@ import XCTest
 @testable import SkillSelectorCore
 
 /// Guards the mechanical facts docs and code must agree on: the READMEs'
-/// built-in agent list mirrors `BuiltInAgentRegistry`. The spec drift the
+/// built-in agent list mirrors `BuiltInAgentRegistry`, and the DMG their
+/// install commands name matches the `VERSION` file. The spec drift the
 /// 2026-08 review surfaced (docs promising what the build no longer does)
 /// started exactly here — a count updated in code but not in prose.
 final class DocsDriftTests: XCTestCase {
@@ -63,5 +64,35 @@ final class DocsDriftTests: XCTestCase {
                 )
             }
         }
+    }
+
+    /// The install section hands out a checksum command for a DMG named
+    /// after the release version, so the READMEs and `VERSION` must agree.
+    /// This is the 2026-09 drift it catches: the app had shipped 2.5.3 while
+    /// both READMEs still told readers to verify `SkillSelector-2.4.1.dmg`
+    /// — a copy-pasteable command that can only ever fail.
+    func testReadmesNameTheReleaseVersion() throws {
+        let version = releaseVersion()
+        for name in ["README.md", "README.en.md"] {
+            let text = try readme(name)
+            XCTAssertTrue(
+                text.contains("SkillSelector-\(version).dmg"),
+                "\(name) never mentions SkillSelector-\(version).dmg"
+            )
+        }
+    }
+
+    /// Single source of truth for the released version. A bare file rather
+    /// than a Swift constant so the shell packaging scripts can read the
+    /// same value without parsing Swift.
+    private func releaseVersion() -> String {
+        let url = packageRoot.appendingPathComponent("VERSION")
+        guard let raw = try? String(contentsOf: url, encoding: .utf8) else {
+            XCTFail("VERSION not present in this checkout")
+            return ""
+        }
+        let version = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        XCTAssertFalse(version.isEmpty, "VERSION must name a release")
+        return version
     }
 }
