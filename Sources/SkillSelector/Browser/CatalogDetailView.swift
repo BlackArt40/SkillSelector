@@ -231,7 +231,7 @@ struct CatalogDetailView: View {
             } else {
                 VStack(spacing: 10) {
                     ForEach(matches) { match in
-                        localMatchCard(match, remoteBody: remoteBody)
+                        localMatchCard(match, remoteBody: remoteBody, sourceID: skill.sourceID)
                     }
                 }
             }
@@ -242,7 +242,11 @@ struct CatalogDetailView: View {
         }
     }
 
-    private func localMatchCard(_ match: SkillSnapshot, remoteBody: String?) -> some View {
+    private func localMatchCard(
+        _ match: SkillSnapshot,
+        remoteBody: String?,
+        sourceID: String
+    ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "checkmark.circle.fill")
@@ -270,9 +274,14 @@ struct CatalogDetailView: View {
                 .lineLimit(2)
                 .truncationMode(.middle)
                 .textSelection(.enabled)
-            if let remoteBody, !remoteBody.isEmpty {
-                LocalMatchVersionRow(match: match, remoteBody: remoteBody)
-            }
+            // Rendered even without a marketplace body: "could not be
+            // compared" is one of the three facts, and saying nothing at all
+            // is indistinguishable from "identical".
+            LocalMatchVersionRow(
+                match: match,
+                remoteBody: remoteBody,
+                sourceID: sourceID
+            )
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -461,64 +470,116 @@ struct CatalogDetailView: View {
     }
 }
 
-/// One line inside an installed-local card: compares the local SKILL.md
-/// body against the remote marketplace body and reports "identical" or a
-/// "+N −M lines" difference. Pure read-only — no writes, no commands.
+/// One line inside an installed-local card: how the local copy's content
+/// compares with the marketplace's.
+///
+/// Three facts and no verdict beyond them — the content matches, does not
+/// match, or could not be compared. There is deliberately no "out of date":
+/// a difference is at least as likely to be a local edit, and the app has no
+/// way to tell the two apart, so it states what it knows and stops.
 private struct LocalMatchVersionRow: View {
     @EnvironmentObject private var model: AppModel
     let match: SkillSnapshot
-    let remoteBody: String
+    /// The marketplace document, when it was fetched. Absent is itself one of
+    /// the three facts rather than a reason to render nothing.
+    let remoteBody: String?
+    /// The repository being compared against, named so the fact reads as
+    /// "content matches <repo>" instead of an unattributed claim.
+    let sourceID: String
 
-    private enum ComparisonState {
-        case loading
+    private enum Verdict: Equatable {
         case identical
-        case differs(LineDiffSummary)
-        case unavailable
+        case differs
+        case undecidable(Reason)
+
+        enum Reason: Equatable {
+            /// The marketplace document was not fetched.
+            case noMarketplaceBody
+            /// The local copy carries no fingerprint yet — the backfill has
+            /// not reached it.
+            case localNotFingerprinted
+            /// The local fingerprint predates the body-only scheme, so the
+            /// two are not comparable.
+            case localFingerprintLegacy
+        }
     }
 
-    @State private var comparisonState: ComparisonState = .loading
+    /// Decided by content fingerprint, never by reading the local file: the
+    /// snapshot already carries the fingerprint, so the common case costs
+    /// nothing. The line diff runs only when they disagree, to explain what
+    /// changed.
+    private var verdict: Verdict {
+        guard let remoteBody, !remoteBody.isEmpty else {
+            return .undecidable(.noMarketplaceBody)
+        }
+        guard let local = match.contentFingerprint else {
+            return .undecidable(.localNotFingerprinted)
+        }
+        guard SkillContentFingerprint.isCurrentVersion(local) else {
+            return .undecidable(.localFingerprintLegacy)
+        }
+        let remote = SkillContentFingerprint.compute(bodyOfEntryText: remoteBody)
+        return local == remote ? .identical : .differs
+    }
+
+    @State private var diffSummary: LineDiffSummary?
 
     var body: some View {
-        HStack(spacing: 6) {
-            switch comparisonState {
-            case .loading:
-                ProgressView()
-                    .controlSize(.mini)
-                Text(verbatim: L10n.string("Comparing With Marketplace"))
-                    .font(AppTheme.body(11.5))
-                    .foregroundStyle(AppTheme.muted)
-            case .identical:
-                Image(systemName: "checkmark.circle")
-                    .font(.system(size: 11))
-                    .foregroundStyle(AppTheme.success)
-                Text(verbatim: L10n.string("Matches Marketplace Version"))
-                    .font(AppTheme.body(11.5, weight: .medium))
-                    .foregroundStyle(AppTheme.success)
-            case .differs(let summary):
-                Image(systemName: "arrow.left.arrow.right")
-                    .font(.system(size: 11))
-                    .foregroundStyle(AppTheme.warn)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                switch verdict {
+                case .identical:
+                    Image(systemName: "checkmark.circle")
+                        .font(.system(size: 11))
+                        .foregroundStyle(AppTheme.success)
+                    Text(verbatim: L10n.string("Marketplace Content Matches %@", sourceID))
+                        .font(AppTheme.body(11.5, weight: .medium))
+                        .foregroundStyle(AppTheme.success)
+                case .differs:
+                    Image(systemName: "arrow.left.arrow.right")
+                        .font(.system(size: 11))
+                        .foregroundStyle(AppTheme.warn)
+                    Text(verbatim: L10n.string("Marketplace Content Differs %@", sourceID))
+                        .font(AppTheme.body(11.5, weight: .medium))
+                        .foregroundStyle(AppTheme.warn)
+                case .undecidable(let reason):
+                    Image(systemName: "questionmark.circle")
+                        .font(.system(size: 11))
+                        .foregroundStyle(AppTheme.meta)
+                    Text(verbatim: "\(L10n.string("Marketplace Content Undecidable")) — \(reasonText(reason))")
+                        .font(AppTheme.body(11.5))
+                        .foregroundStyle(AppTheme.muted)
+                }
+            }
+            if let diffSummary, !diffSummary.isEmpty {
                 Text(verbatim: String.localizedStringWithFormat(
                     L10n.string("Marketplace Version Diff Format"),
-                    summary.added, summary.removed
+                    diffSummary.added, diffSummary.removed
                 ))
-                .font(AppTheme.body(11.5, weight: .medium))
-                .foregroundStyle(AppTheme.warn)
-            case .unavailable:
-                EmptyView()
+                .font(AppTheme.body(11))
+                .foregroundStyle(AppTheme.muted)
+                .padding(.leading, 17)
             }
         }
+        .fixedSize(horizontal: false, vertical: true)
         .help(L10n.string("Marketplace Version Diff Help"))
         .task(id: match.path) {
-            guard let summary = await model.comparisons.marketVsLocalBodyDiff(
+            // Only a mismatch needs the line diff; the verdict itself came
+            // from fingerprints and never touched the local file.
+            guard verdict == .differs, let remoteBody else { return }
+            diffSummary = await model.comparisons.marketVsLocalBodyDiff(
                 marketBody: remoteBody,
                 local: match,
                 authorizedRoots: model.authorizedRoots
-            ) else {
-                comparisonState = .unavailable
-                return
-            }
-            comparisonState = summary.isEmpty ? .identical : .differs(summary)
+            )
+        }
+    }
+
+    private func reasonText(_ reason: Verdict.Reason) -> String {
+        switch reason {
+        case .noMarketplaceBody: return L10n.string("Marketplace Content No Body")
+        case .localNotFingerprinted: return L10n.string("Marketplace Content No Local Fingerprint")
+        case .localFingerprintLegacy: return L10n.string("Marketplace Content Legacy Local Fingerprint")
         }
     }
 }

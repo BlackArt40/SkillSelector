@@ -307,8 +307,12 @@
 "No Associated Agent" = "No Associated Agent";
 "Not Installed Locally" = "Not Installed Locally";
 "Not Installed Locally Hint" = "No skill with this name was found in your authorized directories. Copy the install command above and run it in a terminal to install.";
-"Comparing With Marketplace" = "Comparing with the marketplace version…";
-"Matches Marketplace Version" = "Matches the marketplace version";
+"Marketplace Content Matches %@" = "Content matches %@";
+"Marketplace Content Differs %@" = "Content differs from %@";
+"Marketplace Content Undecidable" = "Cannot compare content";
+"Marketplace Content No Body" = "the marketplace document was not loaded";
+"Marketplace Content No Local Fingerprint" = "the local copy has no content fingerprint yet";
+"Marketplace Content Legacy Local Fingerprint" = "the local copy's fingerprint uses an older scheme";
 "Marketplace Version Diff Format" = "Body differs from the marketplace version (+%d −%d lines)";
 "Marketplace Version Diff Help" = "SKILL.md body line differences vs. the marketplace version (+added −removed from the local side).";
 "Open in GitHub" = "Open on GitHub";

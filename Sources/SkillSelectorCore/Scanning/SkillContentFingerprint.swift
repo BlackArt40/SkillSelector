@@ -38,6 +38,14 @@ public enum SkillContentFingerprint {
         return currentVersionPrefix + sha256Hex(of: body)
     }
 
+    /// Fingerprint of an entry file's *text*, for content that never reached
+    /// the disk. The marketplace fetches SKILL.md on demand, and comparing
+    /// it against local copies has to use the same identity everything else
+    /// in the app uses.
+    public static func compute(bodyOfEntryText text: String) -> String {
+        currentVersionPrefix + sha256Hex(of: bodyText(ofEntryText: text))
+    }
+
     /// Shared ingestion pipeline for both fingerprints: applies the 1 MiB
     /// entry-file bound, decodes UTF-8, and strips the frontmatter, so the
     /// exact and similarity hashes never drift on their input.
@@ -47,10 +55,19 @@ public enum SkillContentFingerprint {
             throw Error.oversizedEntry(limit: SkillDocumentReader.maximumRenderBytes)
         }
         let text = try String(contentsOf: entryFileURL, encoding: .utf8)
+        return bodyText(ofEntryText: text)
+    }
+
+    /// The post-read half of the pipeline, shared with
+    /// `compute(bodyOfEntryText:)`. Both entry points route through here by
+    /// construction rather than by convention: a drift between them would
+    /// make every marketplace comparison report a difference that is not
+    /// there.
+    static func bodyText(ofEntryText text: String) -> String {
         // bodyLines() tolerates whitespace around the delimiters and falls
         // back to the whole text when no frontmatter boundary exists — the
         // same single implementation the renderer uses.
-        return FrontmatterParser.bodyLines(from: text).joined(separator: "\n")
+        FrontmatterParser.bodyLines(from: text).joined(separator: "\n")
     }
 
     /// Hex SHA-256 of a fingerprint body — the exact digest.

@@ -308,8 +308,12 @@
 "No Associated Agent" = "未关联 Agent";
 "Not Installed Locally" = "本地未安装";
 "Not Installed Locally Hint" = "当前授权目录中未检测到同名 Skill；可复制上面的安装命令，在终端完成安装。";
-"Comparing With Marketplace" = "正在与市场版本对比…";
-"Matches Marketplace Version" = "与市场版本内容一致";
+"Marketplace Content Matches %@" = "内容与 %@ 一致";
+"Marketplace Content Differs %@" = "内容与 %@ 不一致";
+"Marketplace Content Undecidable" = "无法比对内容";
+"Marketplace Content No Body" = "市场文档未加载";
+"Marketplace Content No Local Fingerprint" = "本地副本尚未建立内容指纹";
+"Marketplace Content Legacy Local Fingerprint" = "本地副本的指纹来自旧版算法";
 "Marketplace Version Diff Format" = "正文与市场版本有差异（+%d −%d 行）";
 "Marketplace Version Diff Help" = "本地与市场版本的 SKILL.md 正文行差异（+市场多 −市场少）。";
 "Open in GitHub" = "在 GitHub 打开";

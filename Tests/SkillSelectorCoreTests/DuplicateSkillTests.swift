@@ -126,6 +126,46 @@ final class SkillContentFingerprintTests: XCTestCase {
             try fingerprint(of: second)
         )
     }
+
+    // MARK: - Fingerprinting text rather than a file
+
+    /// The marketplace fetches SKILL.md on demand and compares it against
+    /// local copies by fingerprint, so hashing the text and hashing the file
+    /// it came from have to agree. If the two paths ever drift, every
+    /// marketplace comparison reports a difference that is not there —
+    /// silently, and in the direction of noise.
+    func testFingerprintOfTextMatchesFingerprintOfTheFileItCameFrom() throws {
+        let source = "---\nname: demo\ndescription: demo\n---\n# demo\nshared body\n"
+        let directory = try makeSkill(name: "text-vs-file", skillMDContent: source)
+
+        XCTAssertEqual(
+            try fingerprint(of: directory),
+            SkillContentFingerprint.compute(bodyOfEntryText: source),
+            "the two entry points must be interchangeable"
+        )
+    }
+
+    func testFingerprintOfTextMatchesTheFileWithoutFrontmatter() throws {
+        let source = "# demo\nbody with no frontmatter at all\n"
+        let directory = try makeSkill(name: "no-frontmatter", skillMDContent: source)
+
+        XCTAssertEqual(
+            try fingerprint(of: directory),
+            SkillContentFingerprint.compute(bodyOfEntryText: source)
+        )
+    }
+
+    func testFingerprintingTextStillSeparatesDifferentBodies() {
+        XCTAssertNotEqual(
+            SkillContentFingerprint.compute(bodyOfEntryText: "body one"),
+            SkillContentFingerprint.compute(bodyOfEntryText: "body two")
+        )
+    }
+
+    func testFingerprintOfTextIsAVersionedFingerprint() {
+        let fingerprint = SkillContentFingerprint.compute(bodyOfEntryText: "body")
+        XCTAssertTrue(SkillContentFingerprint.isCurrentVersion(fingerprint))
+    }
 }
 
 final class DuplicateSkillGrouperTests: XCTestCase {
