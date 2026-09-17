@@ -110,8 +110,7 @@ private struct HealthItemRow: View {
     var body: some View {
         Button(action: onSelect) {
             HStack(alignment: .top, spacing: 8) {
-                Image(systemName: Self.glyph(item.category))
-                    .font(.system(size: 11))
+                categoryGlyph
                     .foregroundStyle(glyphColor)
                     .frame(width: 16)
                     .padding(.top, 2)
@@ -146,12 +145,21 @@ private struct HealthItemRow: View {
         return item.category == .unreachableLinks ? AppTheme.warn : AppTheme.meta
     }
 
-    private static func glyph(_ category: SkillHealthCategory) -> String {
-        switch category {
-        case .exactDuplicates: return "doc.on.doc"
-        case .nearDuplicates: return "square.on.square"
-        case .unreachableLinks: return "link"
-        case .rulesDrift: return "doc.text"
+    /// A switch of `Image(systemName:)` call sites rather than a helper
+    /// returning a name string: `SymbolAvailabilityTests` reads those call
+    /// sites, and a name that travels through a function is invisible to the
+    /// macOS 12 availability guard.
+    @ViewBuilder
+    private var categoryGlyph: some View {
+        switch item.category {
+        case .exactDuplicates:
+            Image(systemName: "doc.on.doc").font(.system(size: 11))
+        case .nearDuplicates:
+            Image(systemName: "square.on.square").font(.system(size: 11))
+        case .unreachableLinks:
+            Image(systemName: "link").font(.system(size: 11))
+        case .rulesDrift:
+            Image(systemName: "doc.text").font(.system(size: 11))
         }
     }
 }
