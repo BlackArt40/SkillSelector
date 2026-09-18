@@ -516,7 +516,7 @@ struct ListSearchBar: View {
                     // Background index in progress: search already works, hits
                     // will refresh when it lands (spec §5.9 / §06).
                     Circle()
-                        .fill(AppTheme.accent)
+                        .fill(AppTheme.accentInk)
                         .frame(width: 6, height: 6)
                         .help(L10n.string("Indexing"))
                         .accessibilityLabel(L10n.string("Indexing"))
@@ -551,13 +551,13 @@ struct ListSearchBar: View {
                     Rectangle().stroke(AppTheme.ink, lineWidth: 2)
                 case .inputInk:
                     Rectangle()
-                        .stroke(searchFocused ? AppTheme.accent : AppTheme.ink, lineWidth: searchFocused ? 3 : 2)
+                        .stroke(searchFocused ? AppTheme.accentInk : AppTheme.ink, lineWidth: searchFocused ? 3 : 2)
                 case .card:
                     Rectangle()
-                        .stroke(searchFocused ? AppTheme.accent : AppTheme.ink, lineWidth: searchFocused ? 2 : 1)
+                        .stroke(searchFocused ? AppTheme.accentInk : AppTheme.ink, lineWidth: searchFocused ? 2 : 1)
                 case .standard:
                     Rectangle()
-                        .stroke(searchFocused ? AppTheme.accent : AppTheme.border, lineWidth: searchFocused ? 2 : 1)
+                        .stroke(searchFocused ? AppTheme.accentInk : AppTheme.border, lineWidth: searchFocused ? 2 : 1)
                 }
             }
         }
@@ -605,7 +605,7 @@ struct EmptyState: View {
                 Button(action: action) {
                     Text(verbatim: actionTitle)
                         .font(AppTheme.body(13, weight: .medium))
-                        .foregroundStyle(AppTheme.accent)
+                        .foregroundStyle(AppTheme.accentInk)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .contentShape(Rectangle())
@@ -796,7 +796,7 @@ struct Banner: View {
     private var tint: Color {
         switch tone {
         case .warning: AppTheme.warn
-        case .info: AppTheme.accent
+        case .info: AppTheme.accentInk
         case .success: AppTheme.success
         }
     }

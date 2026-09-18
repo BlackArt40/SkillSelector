@@ -132,11 +132,13 @@ enum AppTheme {
     nonisolated(unsafe) static let blockquote = adaptive(light: 0x888888, dark: 0xAAAAAA)
     nonisolated(unsafe) static let codeBlockBackground = adaptive(light: 0xC5C9C9, dark: 0x0A0A0A)
 
-    /// Markdown h1 + link accent. Light takes `--accent` (cobalt); the
-    /// design inverts `--accent` to monochrome in dark, where it would
-    /// vanish on the card fill, so dark takes `--chart-1` — the design's
-    /// only saturated dark family.
-    nonisolated(unsafe) static let markdownAccent = adaptive(light: 0x0040FF, dark: 0x60A5FA)
+    /// Accent used as *ink* — links, markdown h1, action text, status icons,
+    /// focus strokes. Light takes `--accent` (cobalt); the design inverts
+    /// `--accent` to monochrome in dark, where it would vanish on the card
+    /// fill, so dark takes `--chart-1` — the design's only saturated dark
+    /// family. Accent-as-surface (selected rows, primary fills) keeps
+    /// `accent`, whose white label stays readable on the inverted tone.
+    nonisolated(unsafe) static let accentInk = adaptive(light: 0x0040FF, dark: 0x60A5FA)
 
     // Data visualization — `--chart-1`…`--chart-5` (the design's only
     // saturated colors in dark mode; `chart-3` doubles as the positive
@@ -189,19 +191,29 @@ enum AppTheme {
     /// Brutalist hard offset shadow: `2px 2px 0 0` pure black; `rest` and
     /// `raised` add the faint soft secondary shadow from `--shadow-sm` /
     /// `--shadow-md`.
+    ///
+    /// The content is flattened with `compositingGroup()` before the
+    /// shadows apply: without it, the stacked shadows composite per-subview
+    /// and the text's own silhouette gets re-projected over the content —
+    /// visible as double-struck glyphs on every bold label inside a
+    /// shadowed control (both on screen and in the screenshot pipeline).
     struct HardShadow: ViewModifier {
         var level: ShadowLevel = .rest
 
         func body(content: Content) -> some View {
             switch level {
             case .flat:
-                content.shadow(color: AppTheme.shadowColor.opacity(0.5), radius: 0, x: 2, y: 2)
+                content
+                    .compositingGroup()
+                    .shadow(color: AppTheme.shadowColor.opacity(0.5), radius: 0, x: 2, y: 2)
             case .rest:
                 content
+                    .compositingGroup()
                     .shadow(color: AppTheme.shadowColor, radius: 0, x: 2, y: 2)
                     .shadow(color: AppTheme.shadowColor.opacity(0.55), radius: 2, x: 2, y: 1)
             case .raised:
                 content
+                    .compositingGroup()
                     .shadow(color: AppTheme.shadowColor, radius: 0, x: 2, y: 2)
                     .shadow(color: AppTheme.shadowColor.opacity(0.55), radius: 4, x: 2, y: 2)
             }

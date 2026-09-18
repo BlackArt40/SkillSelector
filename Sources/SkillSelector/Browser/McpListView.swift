@@ -290,7 +290,7 @@ struct McpServerRow: View {
             } label: {
                 Image(systemName: "doc")
                     .font(.system(size: 13))
-                    .foregroundStyle(AppTheme.accent)
+                    .foregroundStyle(AppTheme.accentInk)
                     .frame(width: 32, height: 32)
                     .background(AppTheme.surface)
                     .overlay(Rectangle().stroke(AppTheme.ink, lineWidth: 1))

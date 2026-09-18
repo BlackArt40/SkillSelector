@@ -527,7 +527,7 @@ private struct NearDuplicateGroupSection: View {
                 groupName: groupName,
                 meta: groupMeta,
                 icon: "doc.on.doc",
-                iconColor: AppTheme.accent,
+                iconColor: AppTheme.accentInk,
                 ignoreHelp: L10n.string("Ignore Near Duplicate Group"),
                 onIgnore: { onIgnoreGroup?(group) },
                 onCompare: onCompare

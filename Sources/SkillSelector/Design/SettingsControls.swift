@@ -97,7 +97,7 @@ struct RadioDot: View {
 
     var body: some View {
         Circle()
-            .strokeBorder(isOn ? AppTheme.accent : AppTheme.meta, lineWidth: isOn ? 5.5 : 1.5)
+            .strokeBorder(isOn ? AppTheme.accentInk : AppTheme.meta, lineWidth: isOn ? 5.5 : 1.5)
             .frame(width: 17, height: 17)
             .accessibilityHidden(true)
     }

@@ -388,7 +388,7 @@ private struct RuleFileDiffCard: View {
                 HStack(spacing: 8) {
                     Image(systemName: "doc.on.doc")
                         .font(.system(size: 12))
-                        .foregroundStyle(AppTheme.accent)
+                        .foregroundStyle(AppTheme.accentInk)
                     Text(verbatim: counterpart.path)
                         .font(AppTheme.mono(12))
                         .foregroundStyle(AppTheme.foregroundSecondary)

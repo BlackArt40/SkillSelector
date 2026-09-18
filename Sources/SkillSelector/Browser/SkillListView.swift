@@ -252,7 +252,7 @@ struct SkillListView: View {
         Button(action: action) {
             Text(verbatim: title)
                 .font(AppTheme.body(13, weight: .medium))
-                .foregroundStyle(AppTheme.accent)
+                .foregroundStyle(AppTheme.accentInk)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .contentShape(Rectangle())
