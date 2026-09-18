@@ -61,10 +61,10 @@ struct PillBadge: View {
             .foregroundStyle(style == .link ? AppTheme.foregroundSecondary : AppTheme.badgeWarnText)
             .padding(.horizontal, 10)
             .padding(.vertical, 3)
-            .background(style == .link ? AppTheme.surface : AppTheme.warnTint, in: Capsule())
+            .background(style == .link ? AppTheme.surface : AppTheme.warnTint, in: Rectangle())
             .overlay {
                 if style == .link {
-                    Capsule().stroke(AppTheme.borderSoft, lineWidth: 1)
+                    Rectangle().stroke(AppTheme.borderSoft, lineWidth: 1)
                 }
             }
             .lineLimit(1)
@@ -85,8 +85,8 @@ struct AgentChipLarge: View {
         .padding(.leading, 5)
         .padding(.trailing, 12)
         .padding(.vertical, 4)
-        .background(AppTheme.surface, in: Capsule())
-        .overlay(Capsule().stroke(AppTheme.borderSoft, lineWidth: 1))
+        .background(AppTheme.surface, in: Rectangle())
+        .overlay(Rectangle().stroke(AppTheme.borderSoft, lineWidth: 1))
         .lineLimit(1)
     }
 }
@@ -171,17 +171,25 @@ struct ActionButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(AppTheme.body(13, weight: .medium))
+            .font(AppTheme.body(13, weight: .bold))
             .foregroundStyle(foreground)
-            .frame(height: 32)
-            .padding(.horizontal, 14)
-            .background(background(isPressed: configuration.isPressed), in: RoundedRectangle(cornerRadius: 8))
+            .frame(height: 36)
+            .padding(.horizontal, 16)
+            .background(
+                background(isPressed: configuration.isPressed)
+                    .hardShadow(.rest)
+            )
             .overlay {
                 if role == .secondary {
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(AppTheme.border, lineWidth: 1)
+                    Rectangle().stroke(AppTheme.borderInteractive, lineWidth: 1)
                 }
             }
+            // `.btn` presses translate toward the shadow (+1,+1) and lift
+            // on hover (-1,-1), exactly like the CSS transform rules.
+            .offset(
+                x: configuration.isPressed ? 1 : (isHovering ? -1 : 0),
+                y: configuration.isPressed ? 1 : (isHovering ? -1 : 0)
+            )
             .onHover { hovering in
                 isHovering = hovering
             }
@@ -190,9 +198,10 @@ struct ActionButtonStyle: ButtonStyle {
 
     private var foreground: Color {
         switch role {
-        case .secondary, .primary: role == .primary ? .white : AppTheme.foreground
+        case .secondary: AppTheme.foreground
+        case .primary: AppTheme.accentForeground
         case .destructive: AppTheme.danger
-        case .dangerSolid: .white
+        case .dangerSolid: AppTheme.dangerForeground
         }
     }
 
@@ -244,6 +253,93 @@ func actionButton(
     .accessibilityLabel(title)
 }
 
+/// catalog.html's heavy ink button (`h-9`/`h-10 border-2 border-ring …
+/// shadow-sm`): 14 pt bold label on a card or primary fill behind a
+/// constant 2 px ink stroke. Hover lifts (-1,-1) and grows the shadow to
+/// `md`; pressing sinks (+1,+1) and drops the shadow — the CSS `active`
+/// rules verbatim.
+struct InkButtonStyle: ButtonStyle {
+    /// Control height: 36 (`h-9`, toolbar row) or 40 (`h-10`, detail actions).
+    var height: CGFloat = 36
+    /// Horizontal padding: 12 (`px-3`) in the toolbar, 16 (`px-4`) on detail.
+    var horizontalPadding: CGFloat = 12
+    /// `bg-primary text-primary-foreground` variant (导入市场/复制安装命令).
+    var isPrimary = false
+    @State private var isHovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        let base = configuration.label
+            .font(AppTheme.body(14, weight: .bold))
+            .foregroundStyle(isPrimary ? AppTheme.primaryButtonForeground : AppTheme.foreground)
+            .frame(height: height)
+            .padding(.horizontal, horizontalPadding)
+            .background(isPrimary ? AppTheme.primaryButtonBackground : AppTheme.surface)
+            .overlay {
+                Rectangle().stroke(AppTheme.ink, lineWidth: 2)
+            }
+        return Group {
+            if configuration.isPressed {
+                // `active:shadow-none` — the button sinks flat into the surface.
+                base
+            } else {
+                base.hardShadow(isHovering ? .raised : .rest)
+            }
+        }
+        // `.btn` presses translate toward the shadow (+1,+1) and lift on
+        // hover (-1,-1), exactly like the CSS transform rules.
+        .offset(
+            x: configuration.isPressed ? 1 : (isHovering ? -1 : 0),
+            y: configuration.isPressed ? 1 : (isHovering ? -1 : 0)
+        )
+        .onHover { hovering in
+            isHovering = hovering
+        }
+        .contentShape(Rectangle())
+    }
+}
+
+/// rules.html's ink chip (`h-6 border border-ring bg-secondary px-2
+/// text-xs text-secondary-foreground`): 24 pt tall agent tag, near-black
+/// fill with a white label in light mode; the `+N` overflow variant uses
+/// the muted fill with a muted label.
+struct InkChip: View {
+    let text: String
+    var muted = false
+
+    var body: some View {
+        Text(verbatim: text)
+            .font(AppTheme.body(12))
+            .foregroundStyle(muted ? AppTheme.muted : AppTheme.secondaryForeground)
+            .padding(.horizontal, 8)
+            .frame(height: 24)
+            .background(muted ? AppTheme.surfaceMuted : AppTheme.secondary)
+            .overlay(Rectangle().stroke(AppTheme.ink, lineWidth: 1))
+            .lineLimit(1)
+    }
+}
+
+/// catalog.html's rectangular badge (`border-2 border-ring
+/// bg-sidebar-accent px-1.5 py-0.5 text-[11px] font-bold`): count chips
+/// and status badges with heavy ink chrome.
+struct InkBadge: View {
+    let text: String
+    var backgroundColor: Color = AppTheme.sidebarAccent
+    var foregroundColor: Color = AppTheme.sidebarAccentForeground
+
+    var body: some View {
+        Text(verbatim: text)
+            .font(AppTheme.body(11, weight: .bold))
+            .foregroundStyle(foregroundColor)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(backgroundColor)
+            .overlay {
+                Rectangle().stroke(AppTheme.ink, lineWidth: 2)
+            }
+            .lineLimit(1)
+    }
+}
+
 /// `.switch`: 42×25 pill that fills success green when on. Backed by a
 /// real Button so keyboard users (Space/Return once focused) and
 /// VoiceOver (action on the element) can operate it — the old
@@ -263,9 +359,9 @@ struct ThemeSwitch: View {
                     .fill(isOn ? AppTheme.success : AppTheme.border)
                     .frame(width: 42, height: 25)
                 Circle()
-                    .fill(.white)
+                    .fill(AppTheme.accentForeground)
                     .frame(width: 21, height: 21)
-                    .shadow(color: .black.opacity(0.22), radius: 2, y: 1)
+                    .shadow(color: AppTheme.shadowColor.opacity(0.22), radius: 2, y: 1)
                     .padding(2)
             }
             .contentShape(Capsule())
@@ -276,12 +372,54 @@ struct ThemeSwitch: View {
     }
 }
 
+/// The modal-card footer buttons shared by the diagnostics viewer and the
+/// agent editor: 取消/关闭 is a 36 pt bordered tool button on the muted
+/// fill; 保存/导出 is the primary ink pair. Both lift on hover and sink
+/// on press (`transition-all` rules verbatim).
+struct ModalToolButtonStyle: ButtonStyle {
+    enum Kind {
+        case secondary
+        case primary
+    }
+
+    let kind: Kind
+    @State private var isHovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(AppTheme.body(13))
+            .foregroundStyle(kind == .primary
+                ? AppTheme.primaryButtonForeground
+                : AppTheme.foreground)
+            .padding(.horizontal, 16)
+            .frame(height: 36)
+            .background(kind == .primary
+                ? AppTheme.primaryButtonBackground
+                : AppTheme.surfaceMuted)
+            .overlay {
+                if kind == .secondary {
+                    Rectangle().stroke(AppTheme.ink, lineWidth: 1)
+                }
+            }
+            .contentShape(Rectangle())
+            .hardShadow(.rest, isActive: !configuration.isPressed)
+            .offset(
+                x: configuration.isPressed ? 1 : (isHovering ? -1 : 0),
+                y: configuration.isPressed ? 1 : (isHovering ? -1 : 0)
+            )
+            .onHover { isHovering = $0 }
+    }
+}
+
 /// Column separator, always visible (same language as the sidebar's trailing
 /// divider) so the list column reads against the detail pane in both light
 /// and dark appearances; the line brightens on hover to hint at dragging.
 struct ColumnResizer: View {
     @Binding var width: CGFloat
     let range: ClosedRange<CGFloat>
+    /// Marketplace chrome (catalog.html): the list↔detail divider is a
+    /// constant full-height 2 px ink rule instead of the hairline track.
+    var isHeavyInk = false
     @State private var dragStart: CGFloat?
     @State private var showingHandle = false
 
@@ -292,9 +430,13 @@ struct ColumnResizer: View {
             .frame(width: 6)
             .overlay(alignment: .center) {
                 Rectangle()
-                    .fill(showingHandle ? AppTheme.border : AppTheme.borderSoft)
-                    .frame(width: 1)
-                    .padding(.vertical, 6)
+                    .fill(
+                        showingHandle
+                            ? AppTheme.border
+                            : (isHeavyInk ? AppTheme.ink : AppTheme.borderSoft)
+                    )
+                    .frame(width: isHeavyInk ? 2 : 1)
+                    .padding(.vertical, isHeavyInk ? 0 : 6)
             }
             .onHover { hovering in
                 guard hovering != showingHandle else { return }
@@ -320,14 +462,32 @@ struct ColumnResizer: View {
 }
 
 
-/// Shared in-column search field (marketplace, skills, duplicates, MCP,
-/// rules, links): magnifier, rounded surface field whose placeholder
-/// states the search scope, and a clear button once text is present.
-/// It owns its own focus so ⌘F (`.focusSearchField`) lands the caret in
-/// whichever list column is currently visible.
+/// `.search`: shared in-column search field (marketplace, skills,
+/// duplicates, MCP, rules, links) — magnifier, 40 pt flat surface with a
+/// hard shadow, plus a clear button once text is present. It owns its own
+/// focus so ⌘F (`.focusSearchField`) lands the caret in whichever list
+/// column is currently visible.
 struct ListSearchBar: View {
+    /// Chrome levels, one per design page: `.standard` is main.html's
+    /// `.search` — input fill, white hairline stroke, hard shadow, accent
+    /// focus ring; `.ink` is catalog.html's field — constant 2 px ink
+    /// border on the card fill, no shadow; `.card` is mcp.html's field —
+    /// 1 px ink border on the card fill, no shadow; `.inputInk` is
+    /// rules.html's field — 2 px ink border on the input fill, no shadow.
+    /// All four carry the funnel icon the pages share.
+    enum Style {
+        case standard
+        case ink
+        case card
+        case inputInk
+    }
+
     let placeholderKey: String
     @Binding var text: String
+    var style: Style = .standard
+    /// rules.html sets the field `h-9` beside its 2xl heading; every other
+    /// page uses 40 pt.
+    var height: CGFloat = 40
     /// True while background indexing runs — shows a small accent dot on
     /// the right (spec §5.9 "background indexing" / §06 "body search
     /// ready"), meaning search already works and hit counts will refresh
@@ -336,56 +496,73 @@ struct ListSearchBar: View {
     @FocusState private var searchFocused: Bool
 
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 11))
-                .foregroundStyle(AppTheme.muted)
-            TextField(L10n.string(placeholderKey), text: $text)
-                .textFieldStyle(.plain)
-                .font(AppTheme.body(13))
-                .focused($searchFocused)
-                .accessibilityLabel(L10n.string(placeholderKey))
-                // Escape clears the term in every list's search bar (when
-                // the field is focused), matching NSSearchField behavior.
-                .onExitCommand {
-                    guard !text.isEmpty else { return }
-                    text = ""
+        Group {
+            HStack(spacing: 8) {
+                Image(systemName: "line.3.horizontal.decrease")
+                    .font(.system(size: style == .standard ? 12 : 14, weight: .medium))
+                    .foregroundStyle(AppTheme.foregroundSecondary)
+                TextField(L10n.string(placeholderKey), text: $text)
+                    .textFieldStyle(.plain)
+                    .font(AppTheme.body(13))
+                    .focused($searchFocused)
+                    .accessibilityLabel(L10n.string(placeholderKey))
+                    // Escape clears the term in every list's search bar (when
+                    // the field is focused), matching NSSearchField behavior.
+                    .onExitCommand {
+                        guard !text.isEmpty else { return }
+                        text = ""
+                    }
+                if isIndexing {
+                    // Background index in progress: search already works, hits
+                    // will refresh when it lands (spec §5.9 / §06).
+                    Circle()
+                        .fill(AppTheme.accent)
+                        .frame(width: 6, height: 6)
+                        .help(L10n.string("Indexing"))
+                        .accessibilityLabel(L10n.string("Indexing"))
                 }
-            if isIndexing {
-                // Background index in progress: search already works, hits
-                // will refresh when it lands (spec §5.9 / §06).
-                Circle()
-                    .fill(AppTheme.accent)
-                    .frame(width: 6, height: 6)
-                    .help(L10n.string("Indexing"))
-                    .accessibilityLabel(L10n.string("Indexing"))
+                if !text.isEmpty {
+                    Button {
+                        text = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(AppTheme.muted)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.string("Clear Search"))
+                } else if !searchFocused {
+                    // Empty-and-idle hint for the ⌘F shortcut (HIG: discoverable
+                    // but unobtrusive); it disappears as soon as the caret lands.
+                    Text("⌘F")
+                        .font(AppTheme.body(11, weight: .medium))
+                        .foregroundStyle(AppTheme.meta)
+                        .padding(.trailing, 4)
+                        .accessibilityHidden(true)
+                }
             }
-            if !text.isEmpty {
-                Button {
-                    text = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 11))
-                        .foregroundStyle(AppTheme.muted)
-                        .contentShape(Rectangle())
+            .padding(.horizontal, 12)
+            .frame(height: height)
+            .background(style == .standard || style == .inputInk ? AppTheme.inputBackground : AppTheme.surface)
+            .overlay {
+                switch style {
+                case .ink:
+                    Rectangle().stroke(AppTheme.ink, lineWidth: 2)
+                case .inputInk:
+                    Rectangle()
+                        .stroke(searchFocused ? AppTheme.accent : AppTheme.ink, lineWidth: searchFocused ? 3 : 2)
+                case .card:
+                    Rectangle()
+                        .stroke(searchFocused ? AppTheme.accent : AppTheme.ink, lineWidth: searchFocused ? 2 : 1)
+                case .standard:
+                    Rectangle()
+                        .stroke(searchFocused ? AppTheme.accent : AppTheme.border, lineWidth: searchFocused ? 2 : 1)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(L10n.string("Clear Search"))
-            } else if !searchFocused {
-                // Empty-and-idle hint for the ⌘F shortcut (HIG: discoverable
-                // but unobtrusive); it disappears as soon as the caret lands.
-                Text("⌘F")
-                    .font(AppTheme.body(11, weight: .medium))
-                    .foregroundStyle(AppTheme.meta)
-                    .padding(.trailing, 4)
-                    .accessibilityHidden(true)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(AppTheme.surfaceWarm, in: RoundedRectangle(cornerRadius: 8))
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        // main.html gives the field `shadow-sm`; mcp/catalog leave it flat.
+        .hardShadow(.rest, isActive: style == .standard)
         .onReceive(NotificationCenter.default.publisher(for: .focusSearchField)) { _ in
             searchFocused = true
         }
@@ -451,8 +628,7 @@ private struct EmptyStateActionStyle: ButtonStyle {
         configuration.label
             .background {
                 if isHovering && !configuration.isPressed {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(AppTheme.accentTintFaint)
+                    Rectangle().fill(AppTheme.accentTintFaint)
                 }
             }
             .onHover { hovering in
@@ -515,16 +691,14 @@ private struct ShimmerHighlight: View {
 /// One rounded placeholder bar with the shimmer sweep. Sized by the
 /// caller; used only inside loading skeletons.
 struct SkeletonBlock: View {
-    var cornerRadius: CGFloat = 6
     var width: CGFloat? = nil
     var height: CGFloat = 12
 
     var body: some View {
-        RoundedRectangle(cornerRadius: cornerRadius)
+        Rectangle()
             .fill(AppTheme.surface)
             .frame(width: width, height: height)
             .overlay(ShimmerHighlight())
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
     }
 }
 
@@ -537,13 +711,13 @@ struct MarketplaceSkeleton: View {
         VStack(spacing: 0) {
             ForEach(0..<3, id: \.self) { _ in
                 HStack(spacing: 10) {
-                    SkeletonBlock(cornerRadius: 9, width: 34, height: 34)
+                    SkeletonBlock(width: 34, height: 34)
                     VStack(alignment: .leading, spacing: 7) {
                         SkeletonBlock(width: 150, height: 13)
                         SkeletonBlock(width: 230, height: 11)
                     }
                     Spacer(minLength: 0)
-                    SkeletonBlock(cornerRadius: 8, width: 64, height: 18)
+                    SkeletonBlock(width: 64, height: 18)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
@@ -581,8 +755,9 @@ struct Banner: View {
                 .font(.system(size: 13))
                 .foregroundStyle(tint)
             Text(verbatim: text)
-                .font(AppTheme.body(13))
-                .foregroundStyle(AppTheme.foreground)
+                .font(AppTheme.body(13, weight: .bold))
+                .foregroundStyle(tint)
+                .lineLimit(1)
             Spacer(minLength: 12)
             if let actionTitle, let action {
                 Button(actionTitle, action: action)
@@ -593,8 +768,8 @@ struct Banner: View {
                 Button(action: onDismiss) {
                     Image(systemName: "xmark")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(AppTheme.muted)
-                        .frame(width: 28, height: 28)
+                        .foregroundStyle(AppTheme.foregroundSecondary)
+                        .frame(width: 24, height: 24)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -602,12 +777,18 @@ struct Banner: View {
                 .accessibilityLabel(L10n.string("Dismiss"))
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(backgroundTint)
+        .padding(.leading, 12)
+        .padding(.trailing, 16)
+        .padding(.vertical, 8)
+        .background(AppTheme.surfaceMuted)
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .fill(barColor)
+                .frame(width: 3)
+        }
         .overlay(alignment: .bottom) {
             Rectangle()
-                .fill(AppTheme.borderSoft)
+                .fill(AppTheme.border)
                 .frame(height: 1)
         }
     }
@@ -620,11 +801,11 @@ struct Banner: View {
         }
     }
 
-    private var backgroundTint: Color {
+    private var barColor: Color {
         switch tone {
-        case .warning: AppTheme.warn.opacity(0.12)
-        case .info: AppTheme.accent.opacity(0.10)
-        case .success: AppTheme.success.opacity(0.12)
+        case .warning: AppTheme.warn
+        case .info: AppTheme.chart1
+        case .success: AppTheme.chart3
         }
     }
 }

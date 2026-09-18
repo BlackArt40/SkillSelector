@@ -39,14 +39,12 @@ struct SkillListView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // `.list-head` (grid gap 12, padding 16): title row + search on
+            // the panel surface with a hairline bottom border. The search
+            // stays always visible so ⌘F (`.focusSearchField`) has a target
+            // even when the list is empty — a hidden field would swallow
+            // the shortcut with no visible effect.
             header
-            Rectangle()
-                .fill(AppTheme.borderSoft)
-                .frame(height: 1)
-            // Always visible so ⌘F (`.focusSearchField`) has a target even
-            // when the list is empty — a hidden field would swallow the
-            // shortcut with no visible effect.
-            searchBar
             content
         }
         .background(AppTheme.background)
@@ -65,28 +63,40 @@ struct SkillListView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .center, spacing: 8) {
-            Text(verbatim: title)
-                .font(AppTheme.display(17, weight: .semibold))
-                .foregroundStyle(AppTheme.foreground)
-                .lineLimit(1)
-            Text(verbatim: String.localizedStringWithFormat(
-                L10n.string("Skill List Count"), skills.count
-            ))
-            .font(AppTheme.body(12))
-            .foregroundStyle(AppTheme.muted)
-            Spacer(minLength: 8)
-            sortMenu
+        VStack(spacing: 12) {
+            HStack(alignment: .center, spacing: 8) {
+                Text(verbatim: title)
+                    .font(AppTheme.display(18, weight: .bold))
+                    .kerning(-0.9)
+                    .foregroundStyle(AppTheme.foreground)
+                    .lineLimit(1)
+                Text(verbatim: "\(skills.count)")
+                    .font(AppTheme.body(11, weight: .bold))
+                    .foregroundStyle(AppTheme.foreground)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background(AppTheme.surfaceMuted)
+                    .overlay(Rectangle().stroke(AppTheme.border, lineWidth: 1))
+                    .accessibilityLabel(String.localizedStringWithFormat(
+                        L10n.string("Skill List Count"), skills.count
+                    ))
+                Spacer(minLength: 8)
+                sortMenu
+            }
+            searchBar
         }
-        .padding(.leading, 16)
-        .padding(.trailing, 8)
-        .frame(height: 46)
-        .background(AppTheme.background)
+        .padding(16)
+        .background(AppTheme.surface)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(AppTheme.border)
+                .frame(height: 1)
+        }
     }
 
-    /// `.sortBtn` (design tool button): 30×30 with a border-soft hover
-    /// fill. The menu lists the three orders directly — no intermediate
-    /// submenu — with a checkmark on the active one.
+    /// `.sort-btn`: 30×30, surface-muted fill, hairline border, hard
+    /// shadow, lifting (-1,-1) on hover. The menu lists the three orders
+    /// directly — no intermediate submenu — with a checkmark on the active one.
     private var sortMenu: some View {
         Menu {
             sortOption(L10n.string("Default Order"), value: .default)
@@ -94,15 +104,13 @@ struct SkillListView: View {
             sortOption(L10n.string("Path"), value: .path)
         } label: {
             Image(systemName: "arrow.up.arrow.down")
-                .font(.system(size: 14))
+                .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(AppTheme.foregroundSecondary)
                 .frame(width: 30, height: 30)
-                .background {
-                    if sortHovering {
-                        RoundedRectangle(cornerRadius: 7)
-                            .fill(AppTheme.borderSoft)
-                    }
-                }
+                .background(AppTheme.surfaceMuted)
+                .overlay(Rectangle().stroke(AppTheme.border, lineWidth: 1))
+                .hardShadow(.rest)
+                .offset(x: sortHovering ? -1 : 0, y: sortHovering ? -1 : 0)
                 .contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)
@@ -280,8 +288,7 @@ private struct HoverTextButtonStyle: ButtonStyle {
         configuration.label
             .background {
                 if isHovering && !configuration.isPressed {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(AppTheme.accentTintFaint)
+                    Rectangle().fill(AppTheme.accentTintFaint)
                 }
             }
             .onHover { hovering in

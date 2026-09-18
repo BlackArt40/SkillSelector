@@ -83,6 +83,13 @@
 "No Projects" = "暂无项目";
 "Reveal in Finder" = "在 Finder 中显示";
 "Skill List Count" = "%d 个";
+"MCP List Count" = "%d 个 MCP 服务器";
+"Rules List Count" = "%d 个规则文件";
+"Copy %@ Badge" = "副本 %@";
+"Mode Exact Short" = "完全相同";
+"Mode Near Short" = "近似重复";
+"Custom Agent Entry Meta" = "入口 %@ · 全局自定义 Agent 目录";
+"Custom Agent Rescan Hint" = "修改后需重新扫描才会生效。";
 "Core Role" = "核心作用";
 "Associated Agents" = "关联 Agents";
 "Level" = "层级";
@@ -194,6 +201,9 @@
 "Diagnostics Roots Count" = "%d / %d 个授权目录可用";
 "Diagnostics Unavailable Roots" = "部分授权目录当前不可用。";
 "Diagnostics Events" = "最近事件";
+"Diagnostics System Info" = "系统信息";
+"Diagnostics Authorized Roots" = "授权目录";
+"Version" = "版本";
 "Diagnostics Empty" = "暂无诊断记录。";
 "Close" = "关闭";
 
@@ -472,3 +482,8 @@
 "Translation Error Unexpected" = "翻译服务返回了无法解析的响应。";
 "Open DeepL API Keys" = "打开密钥管理页";
 "Description" = "简介";
+"Toolbar Refresh" = "刷新";
+"Toolbar History" = "历史";
+"Toolbar Light" = "浅色";
+"Toolbar Dark" = "深色";
+"Toolbar Settings" = "设置";

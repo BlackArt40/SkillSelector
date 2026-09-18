@@ -11,6 +11,10 @@ enum Brand {
 
 /// The three stacked skill sheets from design/assets/logo.svg.
 /// `size` is the front sheet's edge length (46 in the source SVG).
+///
+/// The sheet grays, brand blues, and the white checkmark are the logo's
+/// fixed SVG artwork — intentionally *not* theme tokens, so the mark stays
+/// identical in both appearances.
 struct LogoGlyph: View {
     var size: CGFloat = 46
 
@@ -108,35 +112,40 @@ struct AppIconView: View {
     }
 }
 
-/// Gradient square tile showing the Skill's first letter
-/// (`.skill-tile` / `.detail-tile` in the design).
+/// Flat square tile showing the Skill's first letter (`.avatar` /
+/// `.avatar-lg` in the design): muted fill, hairline border, bold letter.
 struct SkillTileView: View {
     let title: String
-    var size: CGFloat = 34
-    var cornerRadius: CGFloat = 9
+    var size: CGFloat = 32
     var active = false
     /// Symlink affordance: a small triangle in the avatar's top-right
     /// corner (spec §5.2 — "link 9pt Symbol"; the visual baseline uses
     /// an upward-right triangle, matching the design's "linked" cue).
     var symbolLink: Bool = false
+    /// Marketplace avatar chrome (catalog.html): a constant 2 px `--ring`
+    /// stroke on the sidebar-accent fill with a bold sidebar-accent label —
+    /// heavier than the browser lists' hairline tile.
+    var inkBorder: Bool = false
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            RoundedRectangle(cornerRadius: cornerRadius)
-                .fill(
-                    LinearGradient(
-                        colors: active
-                            ? [AppTheme.tileActiveTop, AppTheme.tileActiveBottom]
-                            : [AppTheme.tileTop, AppTheme.tileBottom],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+            Rectangle()
+                .fill(inkBorder ? AppTheme.sidebarAccent : (active ? AppTheme.tileActiveTop : AppTheme.surfaceMuted))
                 .frame(width: size, height: size)
                 .overlay {
+                    Rectangle().stroke(
+                        inkBorder ? AppTheme.ink : AppTheme.border,
+                        lineWidth: inkBorder ? 2 : 1
+                    )
+                }
+                .overlay {
                     Text(verbatim: title)
-                        .font(AppTheme.display(size * 0.42, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .font(AppTheme.display(size * 0.42, weight: inkBorder ? .bold : .semibold))
+                        .foregroundStyle(
+                            inkBorder
+                                ? AppTheme.sidebarAccentForeground
+                                : (active ? AppTheme.accentForeground : AppTheme.foreground)
+                        )
                 }
                 .accessibilityHidden(true)
             if symbolLink {
@@ -144,10 +153,10 @@ struct SkillTileView: View {
                 // touches the avatar's edge for a crisp "chip" feel.
                 Image(systemName: "arrow.up.right")
                     .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(AppTheme.accentForeground)
                     .padding(2)
                     .background(
-                        Circle().fill(AppTheme.accentChipText).frame(width: 14, height: 14),
+                        Rectangle().fill(AppTheme.accentChipText).frame(width: 14, height: 14),
                         alignment: .topTrailing
                     )
                     .offset(x: 4, y: -4)
@@ -163,7 +172,7 @@ struct AgentMonoView: View {
     var size: CGFloat = 18
 
     var body: some View {
-        RoundedRectangle(cornerRadius: size * 5 / 18)
+        Rectangle()
             .fill(AppTheme.foreground)
             .frame(width: size, height: size)
             .overlay {

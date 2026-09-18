@@ -80,12 +80,6 @@ struct DuplicateGroupsView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Rectangle()
-                .fill(AppTheme.borderSoft)
-                .frame(height: 1)
-            if !groups.isEmpty || !nearGroups.isEmpty {
-                searchBar
-            }
             content
         }
         .background(AppTheme.background)
@@ -102,39 +96,80 @@ struct DuplicateGroupsView: View {
         }
     }
 
-    /// In-column search field — same design as the marketplace's; a group
-    /// stays visible when any member's name contains the term.
-    private var searchBar: some View {
-        ListSearchBar(placeholderKey: "Search Skills", text: $searchText)
+    /// duplicates.html's `.list-head`: title + count badge + the mode
+    /// switch, then the search field — one block on the panel surface
+    /// above a white hairline, like the main list column's.
+    private var header: some View {
+        VStack(spacing: 12) {
+            HStack(alignment: .center, spacing: 8) {
+                Text(verbatim: L10n.string("Duplicate Skills"))
+                    .font(AppTheme.display(18, weight: .bold))
+                    .kerning(-0.9)
+                    .foregroundStyle(AppTheme.foreground)
+                    .lineLimit(1)
+                Text(verbatim: String.localizedStringWithFormat(
+                    L10n.string("Duplicate Groups Count"),
+                    mode == .exact ? displayedExactGroups.count : displayedNearGroups.count
+                ))
+                .font(AppTheme.body(11, weight: .bold))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 2)
+                .background(AppTheme.surfaceMuted)
+                .overlay(Rectangle().stroke(AppTheme.border, lineWidth: 1))
+                Spacer(minLength: 8)
+                if !groups.isEmpty || !nearGroups.isEmpty {
+                    modeSwitch
+                }
+            }
+            if !groups.isEmpty || !nearGroups.isEmpty {
+                ListSearchBar(placeholderKey: "Search Skills", text: $searchText)
+            }
+        }
+        .padding(16)
+        .background(AppTheme.surface)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(AppTheme.border)
+                .frame(height: 1)
+        }
     }
 
-    private var header: some View {
-        HStack(alignment: .center, spacing: 8) {
-            Text(verbatim: L10n.string("Duplicate Skills"))
-                .font(AppTheme.display(17, weight: .semibold))
-                .foregroundStyle(AppTheme.foreground)
-                .lineLimit(1)
-            Text(verbatim: String.localizedStringWithFormat(
-                L10n.string("Duplicate Groups Count"),
-                mode == .exact ? displayedExactGroups.count : displayedNearGroups.count
-            ))
-            .font(AppTheme.body(12))
-            .foregroundStyle(AppTheme.muted)
-            Spacer(minLength: 8)
-            Picker(L10n.string("Duplicate Mode"), selection: $mode) {
-                Label(L10n.string("Exact Duplicates"), systemImage: "doc.on.doc.fill")
-                    .tag(Mode.exact)
-                Label(L10n.string("Near Duplicates"), systemImage: "arrow.left.arrow.right")
-                    .tag(Mode.near)
-            }
-            .pickerStyle(.segmented)
-            .frame(width: 232)
-            .accessibilityLabel(L10n.string("Duplicate Mode"))
+    /// duplicates.html's `.mode-switch`: two 30 pt mode buttons; the active
+    /// one inverts to the primary ink pair, the inactive ones sit on the
+    /// muted surface with the hairline border. The page's visible
+    /// "duplicate mode" label becomes the group's accessibility label —
+    /// the header row has no room for it beside the English title.
+    private var modeSwitch: some View {
+        HStack(spacing: 4) {
+            modeButton(.exact, title: L10n.string("Mode Exact Short"))
+            modeButton(.near, title: L10n.string("Mode Near Short"))
         }
-        .padding(.leading, 16)
-        .padding(.trailing, 8)
-        .frame(height: 46)
-        .background(AppTheme.background)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(L10n.string("Duplicate Mode"))
+    }
+
+    private func modeButton(_ value: Mode, title: String) -> some View {
+        let isActive = mode == value
+        return Button {
+            mode = value
+        } label: {
+            Text(verbatim: title)
+                .font(AppTheme.body(12, weight: .bold))
+                .foregroundStyle(isActive ? AppTheme.primaryButtonForeground : AppTheme.foreground)
+                .padding(.horizontal, 12)
+                .frame(height: 30)
+                .fixedSize()
+                .background(isActive ? AppTheme.primaryButtonBackground : AppTheme.surfaceMuted)
+                .overlay {
+                    if !isActive {
+                        Rectangle().stroke(AppTheme.border, lineWidth: 1)
+                    }
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(ModeButtonStyle(isActive: isActive))
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 
     @ViewBuilder
@@ -161,7 +196,7 @@ struct DuplicateGroupsView: View {
                 }
             } else {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 14) {
+                    LazyVStack(alignment: .leading, spacing: 16) {
                         ForEach(displayedExactGroups) { group in
                             DuplicateGroupSection(
                                 group: group,
@@ -177,8 +212,7 @@ struct DuplicateGroupsView: View {
                         }
                         ignoredGroupsSection(ignoredExactGroups, restore: onRestoreGroup)
                     }
-                    .padding(.vertical, 8)
-                    .padding(.horizontal, 8)
+                    .padding(16)
                 }
             }
         case .near:
@@ -202,7 +236,7 @@ struct DuplicateGroupsView: View {
                 }
             } else {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 14) {
+                    LazyVStack(alignment: .leading, spacing: 16) {
                         ForEach(displayedNearGroups) { group in
                             NearDuplicateGroupSection(
                                 group: group,
@@ -221,8 +255,7 @@ struct DuplicateGroupsView: View {
                         }
                         ignoredGroupsSection(ignoredNearGroups, restore: onRestoreNearGroup)
                     }
-                    .padding(.vertical, 8)
-                    .padding(.horizontal, 8)
+                    .padding(16)
                 }
             }
         }
@@ -270,18 +303,19 @@ struct DuplicateGroupsView: View {
                                     .font(AppTheme.body(11, weight: .medium))
                             }
                             .buttonStyle(.plain)
-                            .foregroundStyle(AppTheme.muted)
-                            .padding(.horizontal, 6)
+                            .foregroundStyle(AppTheme.foregroundSecondary)
+                            .padding(.horizontal, 8)
                             .padding(.vertical, 2)
-                            .background(AppTheme.surface, in: Capsule())
-                            .overlay(Capsule().stroke(AppTheme.borderSoft, lineWidth: 1))
+                            .background(AppTheme.surfaceMuted)
+                            .overlay(Rectangle().stroke(AppTheme.border, lineWidth: 1))
                             .help(L10n.string("Restore Ignored Group"))
                         }
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 7))
+                    .background(AppTheme.surface)
+                    .overlay(Rectangle().stroke(AppTheme.border, lineWidth: 1))
                 }
             }
             .padding(.top, 6)
@@ -302,43 +336,109 @@ struct DuplicateGroupsView: View {
     }
 }
 
-/// Shared header row for one group: icon, group name, member count, and
-/// the ignore / compare actions.
+/// Shared header row for one group: icon, group name/meta, and the
+/// compare / ignore tool buttons.
 private struct GroupHeaderActions: View {
+    let groupName: String
+    let meta: String
+    let icon: String
+    let iconColor: Color
     let ignoreHelp: String
     let onIgnore: () -> Void
     let onCompare: () -> Void
 
     var body: some View {
-        HStack(spacing: 6) {
-            Button {
-                onCompare()
-            } label: {
-                Label(L10n.string("Compare"), systemImage: "rectangle.split.2x1")
-                    .font(AppTheme.body(11, weight: .medium))
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 14))
+                .foregroundStyle(iconColor)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: groupName)
+                    .font(AppTheme.body(13, weight: .bold))
+                    .foregroundStyle(AppTheme.foreground)
+                    .lineLimit(1)
+                Text(verbatim: meta)
+                    .font(AppTheme.body(11))
+                    .foregroundStyle(AppTheme.foregroundSecondary)
+                    .lineLimit(1)
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(AppTheme.muted)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(AppTheme.surface, in: Capsule())
-            .overlay(Capsule().stroke(AppTheme.borderSoft, lineWidth: 1))
-            .help(L10n.string("Compare Duplicate Group"))
-
-            Button {
-                onIgnore()
-            } label: {
-                Label(L10n.string("Ignore"), systemImage: "eye.slash")
-                    .font(AppTheme.body(11, weight: .medium))
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(AppTheme.muted)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(AppTheme.surface, in: Capsule())
-            .overlay(Capsule().stroke(AppTheme.borderSoft, lineWidth: 1))
-            .help(ignoreHelp)
+            Spacer(minLength: 8)
+            GroupHeaderToolButton(
+                title: L10n.string("Compare"),
+                icon: "rectangle.split.2x1",
+                help: L10n.string("Compare Duplicate Group"),
+                action: onCompare
+            )
+            GroupHeaderToolButton(
+                title: L10n.string("Ignore"),
+                icon: "eye.slash",
+                help: ignoreHelp,
+                action: onIgnore
+            )
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+}
+
+/// duplicates.html's `.tool-btn` at group level: 30 pt, muted surface,
+/// hairline border, hard shadow, hover lift / press sink.
+private struct GroupHeaderToolButton: View {
+    let title: String
+    let icon: String
+    let help: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 11))
+                Text(verbatim: title)
+            }
+            .font(AppTheme.body(11, weight: .bold))
+            .foregroundStyle(AppTheme.foreground)
+            .padding(.horizontal, 10)
+            .frame(height: 30)
+            .background(AppTheme.surfaceMuted)
+            .overlay(Rectangle().stroke(AppTheme.border, lineWidth: 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(ToolPressButtonStyle())
+        .help(help)
+        .accessibilityLabel(help)
+    }
+}
+
+/// Hover lift / press sink shared by the duplicates page's bordered
+/// buttons (duplicates.html's shared transition rules).
+struct ToolPressButtonStyle: ButtonStyle {
+    @State private var isHovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .hardShadow(.rest, isActive: !configuration.isPressed)
+            .offset(
+                x: configuration.isPressed ? 1 : (isHovering ? -1 : 0),
+                y: configuration.isPressed ? 1 : (isHovering ? -1 : 0)
+            )
+            .onHover { isHovering = $0 }
+    }
+}
+
+/// The duplicates page's mode-switch buttons (30 pt; active one inverts).
+private struct ModeButtonStyle: ButtonStyle {
+    let isActive: Bool
+    @State private var isHovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .hardShadow(.rest, isActive: !isActive && !configuration.isPressed)
+            .offset(
+                x: configuration.isPressed ? 1 : (isHovering && !isActive ? -1 : 0),
+                y: configuration.isPressed ? 1 : (isHovering && !isActive ? -1 : 0)
+            )
+            .onHover { isHovering = $0 }
     }
 }
 
@@ -355,42 +455,29 @@ private struct DuplicateGroupSection: View {
     let onSelect: (String) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Image(systemName: "doc.on.doc.fill")
-                    .font(.system(size: 12))
-                    .foregroundStyle(AppTheme.success)
-                HighlightedText(
-                    text: groupName,
-                    query: highlightQuery,
-                    font: AppTheme.body(12, weight: .semibold),
-                    baseColor: AppTheme.muted
-                )
-                .lineLimit(1)
-                .truncationMode(.tail)
-                Text(verbatim: String.localizedStringWithFormat(
+        // duplicates.html `.dup-group`: one bordered panel card with the
+        // header, then member rows separated by white hairlines.
+        VStack(alignment: .leading, spacing: 0) {
+            GroupHeaderActions(
+                groupName: groupName,
+                meta: String.localizedStringWithFormat(
                     L10n.string("Duplicate Members Count"), group.members.count
-                ))
-                .font(AppTheme.body(11))
-                .foregroundStyle(AppTheme.meta)
-                .fixedSize()
-                Spacer(minLength: 8)
-                GroupHeaderActions(
-                    ignoreHelp: L10n.string("Ignore Duplicate Group"),
-                    onIgnore: { onIgnoreGroup?(group.fingerprint) },
-                    onCompare: onCompare
-                )
-            }
-            .padding(.horizontal, 8)
-            .padding(.top, 4)
-
-            VStack(spacing: 2) {
-                ForEach(group.members) { skill in
-                    SkillRow(
+                ),
+                icon: "doc.on.doc.fill",
+                iconColor: AppTheme.success,
+                ignoreHelp: L10n.string("Ignore Duplicate Group"),
+                onIgnore: { onIgnoreGroup?(group.fingerprint) },
+                onCompare: onCompare
+            )
+            VStack(spacing: 0) {
+                ForEach(Array(group.members.enumerated()), id: \.element) { index, skill in
+                    DupMemberRow(
                         skill: skill,
                         agentNamesByID: agentNamesByID,
                         isActive: selection?.path == skill.path,
                         highlightQuery: highlightQuery,
+                        badge: copyBadge(index),
+                        badgeHelp: nil,
                         onSelect: { onSelect(skill.path) },
                         onRevealInFinder: onRevealInFinder,
                         onOpenInEditor: onOpenInEditor
@@ -398,10 +485,21 @@ private struct DuplicateGroupSection: View {
                 }
             }
         }
+        .background(AppTheme.surface)
+        .overlay(Rectangle().stroke(AppTheme.border, lineWidth: 1))
+        .hardShadow(.rest)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var groupName: String {
         group.members.map(\.name).min() ?? group.fingerprint
+    }
+
+    /// 副本 A/B/C — the design's dashed copy tag distinguishes the
+    /// identical members the list groups together.
+    private func copyBadge(_ index: Int) -> String {
+        let letter = Character(UnicodeScalar(65 + min(index, 25)) ?? "?")
+        return String.localizedStringWithFormat(L10n.string("Copy %@ Badge"), String(letter))
     }
 }
 
@@ -424,57 +522,37 @@ private struct NearDuplicateGroupSection: View {
     @State private var hasLoadedDiffs = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Image(systemName: "doc.on.doc")
-                    .font(.system(size: 12))
-                    .foregroundStyle(AppTheme.accent)
-                HighlightedText(
-                    text: groupName,
-                    query: highlightQuery,
-                    font: AppTheme.body(12, weight: .semibold),
-                    baseColor: AppTheme.muted
-                )
-                .lineLimit(1)
-                .truncationMode(.tail)
-                Text(verbatim: String.localizedStringWithFormat(
-                    L10n.string("Near Members Count"), group.members.count
-                ))
-                .font(AppTheme.body(11))
-                .foregroundStyle(AppTheme.meta)
-                .fixedSize()
-                if !similarityRangeLabel.isEmpty {
-                    Text(verbatim: similarityRangeLabel)
-                        .font(AppTheme.body(11))
-                        .foregroundStyle(AppTheme.meta)
-                }
-                Spacer(minLength: 8)
-                GroupHeaderActions(
-                    ignoreHelp: L10n.string("Ignore Near Duplicate Group"),
-                    onIgnore: { onIgnoreGroup?(group) },
-                    onCompare: onCompare
-                )
-            }
-            .padding(.horizontal, 8)
-            .padding(.top, 4)
-
-            VStack(spacing: 2) {
+        VStack(alignment: .leading, spacing: 0) {
+            GroupHeaderActions(
+                groupName: groupName,
+                meta: groupMeta,
+                icon: "doc.on.doc",
+                iconColor: AppTheme.accent,
+                ignoreHelp: L10n.string("Ignore Near Duplicate Group"),
+                onIgnore: { onIgnoreGroup?(group) },
+                onCompare: onCompare
+            )
+            VStack(spacing: 0) {
                 ForEach(group.members) { member in
-                    SkillRow(
+                    DupMemberRow(
                         skill: member.snapshot,
                         agentNamesByID: agentNamesByID,
                         isActive: selection?.path == member.snapshot.path,
                         highlightQuery: highlightQuery,
+                        badge: "≈\(member.similarityPercent)%",
+                        badgeHelp: L10n.string("Similarity Estimate Help"),
+                        trailingBadge: diffSummaryText(member),
                         onSelect: { onSelect(member.snapshot.path) },
                         onRevealInFinder: onRevealInFinder,
                         onOpenInEditor: onOpenInEditor
                     )
-                    .overlay(alignment: .topTrailing) {
-                        memberBadges(member)
-                    }
                 }
             }
         }
+        .background(AppTheme.surface)
+        .overlay(Rectangle().stroke(AppTheme.border, lineWidth: 1))
+        .hardShadow(.rest)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .task(id: group.fingerprint) {
             guard let onLoadDiffs, !hasLoadedDiffs else { return }
             diffs = await onLoadDiffs(group)
@@ -482,47 +560,20 @@ private struct NearDuplicateGroupSection: View {
         }
     }
 
-    @ViewBuilder
-    private func memberBadges(_ member: NearDuplicateMember) -> some View {
-        VStack(alignment: .trailing, spacing: 4) {
-            Text(verbatim: "≈\(member.similarityPercent)%")
-                .font(AppTheme.body(10.5, weight: .medium))
-                .foregroundStyle(
-                    member.similarityPercent >= 90
-                        ? AppTheme.accentActive
-                        : AppTheme.muted
-                )
-                .padding(.horizontal, 7)
-                .padding(.vertical, 1)
-                .background(
-                    member.similarityPercent >= 90
-                        ? AppTheme.accentTint
-                        : AppTheme.surface,
-                    in: Capsule()
-                )
-                .overlay {
-                    Capsule().stroke(AppTheme.borderSoft, lineWidth: 1)
-                }
-                .help(L10n.string("Similarity Estimate Help"))
-            if let summary = diffs[member.snapshot.path], !summary.isEmpty {
-                Text(verbatim: "+\(summary.added) −\(summary.removed)")
-                    .font(AppTheme.body(10.5, weight: .medium))
-                    .foregroundStyle(AppTheme.muted)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 1)
-                    .background(AppTheme.surface, in: Capsule())
-                    .overlay {
-                        Capsule().stroke(AppTheme.borderSoft, lineWidth: 1)
-                    }
-                    .help(L10n.string("Diff Lines Help"))
-            }
-        }
-        .padding(.top, 8)
-        .padding(.trailing, 8)
-    }
-
     private var groupName: String {
         group.members.map(\.snapshot.name).min() ?? group.fingerprint
+    }
+
+    private var groupMeta: String {
+        let count = String.localizedStringWithFormat(
+            L10n.string("Near Members Count"), group.members.count
+        )
+        guard !similarityRangeLabel.isEmpty else { return count }
+        return "\(count) · \(similarityRangeLabel)"
+    }
+
+    private func diffSummaryText(_ member: NearDuplicateMember) -> String? {
+        diffs[member.snapshot.path].map { "+\($0.added) −\($0.removed)" }
     }
 
     private var similarityRangeLabel: String {
@@ -533,5 +584,119 @@ private struct NearDuplicateGroupSection: View {
         return String.localizedStringWithFormat(
             L10n.string("Similarity Range"), minimum, maximum
         )
+    }
+}
+
+/// One duplicates.html `.dup-row`: avatar, name + description, the dashed
+/// copy/similarity tag, and agent chips — flat rows over white hairlines,
+/// selected with the muted fill and a 2 px accent bar on the leading edge.
+private struct DupMemberRow: View {
+    let skill: SkillSnapshot
+    let agentNamesByID: [String: String]
+    let isActive: Bool
+    var highlightQuery: String = ""
+    /// The dashed tag before the chips: 副本 A/B or the similarity percent.
+    var badge: String? = nil
+    var badgeHelp: String? = nil
+    /// A second dashed tag after the chips (the near-mode diff counts).
+    var trailingBadge: String? = nil
+    var onSelect: (() -> Void)?
+    var onRevealInFinder: ((SkillSnapshot) -> Void)?
+    var onOpenInEditor: ((SkillSnapshot) -> Void)?
+
+    @State private var isHovering = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            SkillTileView(
+                title: skillTileLetter(for: skill.name),
+                size: 32,
+                active: isActive
+            )
+            VStack(alignment: .leading, spacing: 2) {
+                HighlightedText(
+                    text: skill.name,
+                    query: highlightQuery,
+                    font: AppTheme.body(13, weight: .bold),
+                    baseColor: AppTheme.foreground
+                )
+                .lineLimit(1)
+                if let localDescription = skill.localDescription {
+                    HighlightedText(
+                        text: localDescription,
+                        query: highlightQuery,
+                        font: AppTheme.body(12),
+                        baseColor: AppTheme.foregroundSecondary
+                    )
+                    .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 8)
+            if let badge {
+                dashedTag(badge)
+                    .help(badgeHelp ?? badge)
+            }
+            ForEach(skill.agentIDs.prefix(3), id: \.self) { agentID in
+                if let name = agentNamesByID[agentID] {
+                    AgentChip(text: name, onActiveRow: isActive)
+                }
+            }
+            if let trailingBadge {
+                dashedTag(trailingBadge)
+                    .help(L10n.string("Diff Lines Help"))
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .frame(minHeight: 56, alignment: .center)
+        .background {
+            if isActive || isHovering {
+                AppTheme.surfaceMuted
+            }
+        }
+        .overlay(alignment: .leading) {
+            if isActive {
+                Rectangle()
+                    .fill(AppTheme.accent)
+                    .frame(width: 2)
+            }
+        }
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(AppTheme.border)
+                .frame(height: 1)
+        }
+        .contentShape(Rectangle())
+        .onHover { isHovering = $0 }
+        .onTapGesture {
+            onSelect?()
+        }
+        .contextMenu {
+            Button {
+                onRevealInFinder?(skill)
+            } label: {
+                Label(L10n.string("Reveal in Finder"), systemImage: "folder")
+            }
+            Button {
+                onOpenInEditor?(skill)
+            } label: {
+                Label(L10n.string("Open in Default Editor"), systemImage: "chevron.left.forwardslash.chevron.right")
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(isActive ? .isSelected : [])
+    }
+
+    /// `.copy-badge`: mono 10 pt, dashed hairline, secondary text.
+    private func dashedTag(_ text: String) -> some View {
+        Text(verbatim: text)
+            .font(AppTheme.mono(10))
+            .foregroundStyle(AppTheme.foregroundSecondary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .overlay {
+                Rectangle()
+                    .stroke(AppTheme.border, style: StrokeStyle(lineWidth: 1, dash: [3]))
+            }
     }
 }

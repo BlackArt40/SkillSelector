@@ -27,64 +27,51 @@ struct RulesDetailView: View {
     var body: some View {
         if let file {
             ScrollView {
-                VStack(alignment: .leading, spacing: 32) {
+                VStack(alignment: .leading, spacing: 16) {
                     hero(file)
                     actionBar(file)
                     contentSection(file)
                     comparisonSection(file)
                     metadataSection(file)
                 }
-                .padding(.horizontal, 32)
-                .padding(.top, 32)
-                .padding(.bottom, 48)
+                .padding(16)
                 .frame(maxWidth: 720, alignment: .leading)
                 .frame(maxWidth: .infinity)
             }
-            .background(AppTheme.background)
+            // rules.html's detail pane carries the card fill — its content
+            // blocks sit on the page tone for the inverted contrast.
+            .background(AppTheme.surface)
             .navigationTitle(file.filename)
             .task(id: file.id) {
                 await load(file)
             }
         } else {
             emptyState
-                .background(AppTheme.background)
+                .background(AppTheme.surface)
         }
     }
 
     // MARK: Hero
 
     private func hero(_ file: RulesFileDescriptor) -> some View {
-        HStack(alignment: .top, spacing: 20) {
+        HStack(alignment: .top, spacing: 12) {
             SkillTileView(
                 title: skillTileLetter(for: file.filename),
-                size: 72,
-                cornerRadius: 18,
-                active: false
+                size: 40,
+                inkBorder: true
             )
-            .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(verbatim: file.filename)
-                    .font(AppTheme.display(28, weight: .semibold))
+                    .font(AppTheme.mono(16, weight: .bold))
                     .foregroundStyle(AppTheme.foreground)
                     .lineLimit(1)
                     .textSelection(.enabled)
                 Text(verbatim: file.path)
                     .font(AppTheme.mono(12))
                     .foregroundStyle(AppTheme.muted)
-                    .lineLimit(2)
+                    .lineLimit(1)
                     .truncationMode(.middle)
                     .textSelection(.enabled)
-                    .padding(.top, 3)
-                HStack(spacing: 8) {
-                    ForEach(agentNames.prefix(5), id: \.self) { name in
-                        PillBadge(text: name, style: .link)
-                    }
-                    if agentNames.count > 5 {
-                        PillBadge(text: "+\(agentNames.count - 5)", style: .link)
-                    }
-                    PillBadge(text: scopeLabel(file), style: .link)
-                }
-                .padding(.top, 12)
             }
         }
     }
@@ -103,20 +90,30 @@ struct RulesDetailView: View {
 
     private func actionBar(_ file: RulesFileDescriptor) -> some View {
         HStack(spacing: 8) {
-            actionButton(
-                icon: Image(systemName: "folder"),
-                title: L10n.string("Reveal in Finder"),
-                role: .secondary
-            ) {
+            Button {
                 onReveal?(file)
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "folder")
+                        .font(.system(size: 12))
+                    Text(verbatim: L10n.string("Reveal in Finder"))
+                }
             }
-            actionButton(
-                icon: nil,
-                title: L10n.string("Open in Default Editor"),
-                role: .secondary
-            ) {
+            .buttonStyle(CompactInkButtonStyle())
+            .help(L10n.string("Reveal in Finder"))
+            .accessibilityLabel(L10n.string("Reveal in Finder"))
+            Button {
                 onOpen?(file)
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "pencil.line")
+                        .font(.system(size: 12))
+                    Text(verbatim: L10n.string("Open in Default Editor"))
+                }
             }
+            .buttonStyle(CompactInkButtonStyle())
+            .help(L10n.string("Open in Default Editor"))
+            .accessibilityLabel(L10n.string("Open in Default Editor"))
             Spacer(minLength: 8)
         }
         .frame(maxWidth: .infinity)
@@ -126,7 +123,7 @@ struct RulesDetailView: View {
 
     @ViewBuilder
     private func contentSection(_ file: RulesFileDescriptor) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             DetailViewSupport.sectionHeading(L10n.string("Rules Content"))
             if let actionError {
                 DetailViewSupport.errorShell(title: L10n.string("Unable to Open Skill Document"), detail: actionError)
@@ -140,77 +137,84 @@ struct RulesDetailView: View {
                         .foregroundStyle(AppTheme.muted)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(20)
-                .background(AppTheme.surfaceWarm, in: RoundedRectangle(cornerRadius: 12))
+                .inkContentBlock
             case .rendered(let text):
                 MarkdownBodyView(text: text)
-                    .padding(20)
-                    .background(AppTheme.surfaceWarm, in: RoundedRectangle(cornerRadius: 12))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(AppTheme.borderSoft, lineWidth: 1)
-                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .inkContentBlock
             case .raw(let source):
                 Text(verbatim: source)
-                    .font(AppTheme.mono(12))
-                    .foregroundStyle(AppTheme.foregroundSecondary)
+                    .font(AppTheme.mono(11))
+                    .foregroundStyle(AppTheme.foreground)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .textSelection(.enabled)
-                    .padding(20)
-                    .background(AppTheme.surfaceWarm, in: RoundedRectangle(cornerRadius: 12))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(AppTheme.borderSoft, lineWidth: 1)
-                    }
+                    .inkContentBlock
             case .tooLarge:
                 DetailViewSupport.messageShell(
                     title: L10n.string("Document Too Large to Render"),
                     detail: L10n.string("Documents larger than 1 MiB can be opened in the default editor.")
                 )
-                .padding(20)
-                .background(AppTheme.surfaceWarm, in: RoundedRectangle(cornerRadius: 12))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .inkContentBlock
             case .failed(let detail):
                 DetailViewSupport.errorShell(title: L10n.string("Unable to Load Skill Document"), detail: detail)
-                    .padding(20)
-                    .background(AppTheme.surfaceWarm, in: RoundedRectangle(cornerRadius: 12))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .inkContentBlock
             }
         }
     }
 
     // MARK: Metadata
 
+    /// rules.html's `#config-table`: a 2 px ink-bordered definition list on
+    /// the page tone, muted key left, mono value right.
     private func metadataSection(_ file: RulesFileDescriptor) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             DetailViewSupport.sectionHeading(L10n.string("Configuration"))
-            VStack(alignment: .leading, spacing: 10) {
-                DetailViewSupport.keyValueRow(L10n.string("Level"), value: scopeLabel(file), monospaced: false)
-                DetailViewSupport.keyValueRow(
+            VStack(alignment: .leading, spacing: 6) {
+                configRow(L10n.string("Level"), value: scopeLabel(file))
+                configRow(
                     L10n.string("Agent"),
                     value: agentNames.isEmpty
                         ? L10n.string("None")
-                        : agentNames.joined(separator: ", "),
-                    monospaced: false
+                        : agentNames.joined(separator: ", ")
                 )
-                DetailViewSupport.keyValueRow(L10n.string("Path"), value: file.path, monospaced: true)
+                configRow(L10n.string("Path"), value: file.path)
                 if let fileSize = file.fileSize {
-                    DetailViewSupport.keyValueRow(
+                    configRow(
                         L10n.string("Size"),
                         value: ByteCountFormatter.string(
                             fromByteCount: Int64(fileSize),
                             countStyle: .file
-                        ),
-                        monospaced: false
+                        )
                     )
                 }
                 if let date = file.modificationDate {
-                    DetailViewSupport.keyValueRow(
+                    configRow(
                         L10n.string("Modified"),
-                        value: date.formatted(date: .abbreviated, time: .shortened),
-                        monospaced: false
+                        value: date.formatted(date: .abbreviated, time: .shortened)
                     )
                 }
             }
+            .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .overlay(Rectangle().stroke(AppTheme.ink, lineWidth: 2))
+        }
+    }
+
+    private func configRow(_ label: String, value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(verbatim: label)
+                .font(AppTheme.body(12))
+                .foregroundStyle(AppTheme.muted)
+            Spacer(minLength: 8)
+            Text(verbatim: value)
+                .font(AppTheme.mono(12))
+                .foregroundStyle(AppTheme.foreground)
+                .textSelection(.enabled)
+                .lineLimit(2)
+                .truncationMode(.middle)
+                .multilineTextAlignment(.trailing)
         }
     }
 
@@ -278,21 +282,92 @@ struct RulesDetailView: View {
 
     // MARK: Empty state
 
+    /// Same treatment as the MCP detail's empty state: the design shows the
+    /// rules pane only with a selection, so the placeholder borrows
+    /// mcp.html's ink-bordered glyph box.
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            AppIconView(size: 96)
-                .opacity(0.9)
-            Text(verbatim: L10n.string("Select a Rules File"))
-                .font(AppTheme.display(28, weight: .semibold))
-                .foregroundStyle(AppTheme.foreground)
-            Text(verbatim: L10n.string("Select a Rules File Description"))
-                .font(AppTheme.body(14))
-                .foregroundStyle(AppTheme.muted)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 340)
+        VStack(spacing: 20) {
+            Rectangle()
+                .fill(AppTheme.surface)
+                .frame(width: 96, height: 96)
+                .overlay {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 40))
+                        .foregroundStyle(AppTheme.foregroundSecondary)
+                }
+                .overlay(Rectangle().stroke(AppTheme.ink, lineWidth: 2))
+                .hardShadow(.rest)
+            VStack(spacing: 8) {
+                Text(verbatim: L10n.string("Select a Rules File"))
+                    .font(AppTheme.body(14, weight: .bold))
+                    .foregroundStyle(AppTheme.foreground)
+                Text(verbatim: L10n.string("Select a Rules File Description"))
+                    .font(AppTheme.body(12))
+                    .foregroundStyle(AppTheme.muted)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 240)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// rules.html's detail action buttons: 32 pt tall, 2 px ink border on the
+/// page-tone fill, small bold label, hard shadow, hover lift / press sink.
+private struct CompactInkButtonStyle: ButtonStyle {
+    @State private var isHovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(AppTheme.body(12, weight: .bold))
+            .foregroundStyle(AppTheme.foreground)
+            .padding(.horizontal, 12)
+            .frame(height: 32)
+            .background(AppTheme.background)
+            .overlay(Rectangle().stroke(AppTheme.ink, lineWidth: 2))
+            .contentShape(Rectangle())
+            .modifier(CompactInkChrome(isPressed: configuration.isPressed, isHovering: isHovering))
+            .onHover { isHovering = $0 }
+    }
+}
+
+private struct CompactInkChrome: ViewModifier {
+    let isPressed: Bool
+    let isHovering: Bool
+
+    func body(content: Content) -> some View {
+        Group {
+            if isPressed {
+                content
+            } else {
+                content
+                    .hardShadow(isHovering ? .raised : .rest)
+            }
+        }
+        .offset(
+            x: isPressed ? 1 : (isHovering ? -1 : 0),
+            y: isPressed ? 1 : (isHovering ? -1 : 0)
+        )
+    }
+}
+
+/// rules.html content blocks: 2 px ink border on the page-tone fill with
+/// 12 pt padding (`border-2 border-ring bg-background p-3`).
+private struct InkContentBlock: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(AppTheme.background)
+            .overlay(Rectangle().stroke(AppTheme.ink, lineWidth: 2))
+    }
+}
+
+private extension View {
+    var inkContentBlock: some View {
+        modifier(InkContentBlock())
     }
 }
 
@@ -315,7 +390,7 @@ private struct RuleFileDiffCard: View {
                         .font(.system(size: 12))
                         .foregroundStyle(AppTheme.accent)
                     Text(verbatim: counterpart.path)
-                        .font(AppTheme.mono(11.5))
+                        .font(AppTheme.mono(12))
                         .foregroundStyle(AppTheme.foregroundSecondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -334,8 +409,8 @@ private struct RuleFileDiffCard: View {
                 }
             }
             .buttonStyle(.plain)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 8)
 
             if isExpanded {
                 if let diff {
@@ -352,17 +427,16 @@ private struct RuleFileDiffCard: View {
                             LineDiffView(diff: diff)
                         }
                     }
-                    .padding(12)
+                    .padding(8)
                 }
                 Rectangle()
-                    .fill(AppTheme.borderSoft)
+                    .fill(AppTheme.ink)
                     .frame(height: 1)
             }
         }
-        .background(AppTheme.surfaceWarm, in: RoundedRectangle(cornerRadius: 10))
+        .background(AppTheme.background)
         .overlay {
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(AppTheme.borderSoft, lineWidth: 1)
+            Rectangle().stroke(AppTheme.ink, lineWidth: 1)
         }
         .task(id: counterpart.id) {
             guard let result = await model.rules.bodyComparison(file, counterpart) else { return }
@@ -426,38 +500,22 @@ private struct RuleFileDiffCard: View {
     private static let maximumListedDivergences = 8
 
     private var scopeBadge: some View {
-        PillBadge(
+        InkChip(
             text: counterpart.projectRootID != nil
                 ? L10n.string("Project")
                 : L10n.string("Global"),
-            style: .link
+            muted: true
         )
     }
 
+    /// rules.html's verdict chip on each comparison row: the ink chip for
+    /// a real difference, the muted chip for "identical".
     @ViewBuilder
     private func summaryBadge(_ diff: LineDiff) -> some View {
         if diff.rows.allSatisfy({ $0.kind == .same }) {
-            Text(verbatim: L10n.string("Identical Content"))
-                .font(AppTheme.body(11, weight: .medium))
-                .foregroundStyle(AppTheme.muted)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 1)
-                .background(AppTheme.surface, in: Capsule())
-                .overlay {
-                    Capsule().stroke(AppTheme.borderSoft, lineWidth: 1)
-                }
+            InkChip(text: L10n.string("Identical Content"), muted: true)
         } else {
-            Text(verbatim: "+\(diff.addedCount) −\(diff.removedCount)")
-                .font(AppTheme.body(11, weight: .medium))
-                .foregroundStyle(
-                    diff.addedCount > 0 ? AppTheme.success : AppTheme.warn
-                )
-                .padding(.horizontal, 7)
-                .padding(.vertical, 1)
-                .background(AppTheme.surface, in: Capsule())
-                .overlay {
-                    Capsule().stroke(AppTheme.borderSoft, lineWidth: 1)
-                }
+            InkChip(text: "+\(diff.addedCount) −\(diff.removedCount)")
         }
     }
 }

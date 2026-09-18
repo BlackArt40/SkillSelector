@@ -59,11 +59,9 @@ struct SkillDetailView: View {
         HStack(alignment: .top, spacing: 20) {
             SkillTileView(
                 title: skillTileLetter(for: skill.name),
-                size: 72,
-                cornerRadius: 18,
+                size: 40,
                 active: false
             )
-            .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
             VStack(alignment: .leading, spacing: 0) {
                 Text(verbatim: skill.name)
                     .font(AppTheme.display(heroTitleSize, weight: .semibold))

@@ -67,13 +67,14 @@ struct DuplicateCompareSheet: View {
     private var header: some View {
         HStack(spacing: 8) {
             Text(verbatim: L10n.string("Compare Copies"))
-                .font(AppTheme.display(17, weight: .semibold))
+                .font(AppTheme.display(18, weight: .bold))
+                .kerning(-0.9)
                 .foregroundStyle(AppTheme.foreground)
             Spacer(minLength: 8)
             Button(L10n.string("Close")) {
                 dismiss()
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(ToolPressButtonStyle())
             .keyboardShortcut(.defaultAction)
         }
         .padding(.horizontal, 16)
@@ -172,10 +173,9 @@ struct DuplicateCompareSheet: View {
                         frontmatterRow(field, isLast: index == comparison.frontmatter.count - 1)
                     }
                 }
-                .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 10))
+                .background(AppTheme.surface)
                 .overlay {
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(AppTheme.borderSoft, lineWidth: 1)
+                    Rectangle().stroke(AppTheme.border, lineWidth: 1)
                 }
             }
         }
@@ -270,16 +270,16 @@ struct DuplicateCompareSheet: View {
             Text(verbatim: fileDifferenceLabel(entry.difference))
                 .font(AppTheme.body(11, weight: .medium))
                 .foregroundStyle(fileDifferenceColor(entry.difference))
-                .padding(.horizontal, 7)
-                .padding(.vertical, 1)
-                .background(AppTheme.surface, in: Capsule())
+                .padding(.horizontal, 8)
+                .padding(.vertical, 2)
+                .background(AppTheme.surfaceMuted)
                 .overlay {
-                    Capsule().stroke(AppTheme.borderSoft, lineWidth: 1)
+                    Rectangle().stroke(AppTheme.border, lineWidth: 1)
                 }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
-        .background(AppTheme.surface.opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
+        .background(AppTheme.surface)
     }
 
     private func fileDifferenceLabel(_ difference: SkillComparison.FileDifference) -> String {
@@ -319,7 +319,7 @@ struct DuplicateCompareSheet: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 10))
+            .background(AppTheme.surface)
     }
 
     private func reload() async {

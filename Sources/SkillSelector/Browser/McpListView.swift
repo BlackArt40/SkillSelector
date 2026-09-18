@@ -44,14 +44,8 @@ struct McpListView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Rectangle()
-                .fill(AppTheme.borderSoft)
-                .frame(height: 1)
             if !servers.isEmpty && !scanIssues.isEmpty {
                 issueBanner
-            }
-            if !servers.isEmpty {
-                ListSearchBar(placeholderKey: "Search Mcp Placeholder", text: $searchText)
             }
             content
         }
@@ -59,43 +53,69 @@ struct McpListView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
+    /// mcp.html's `#mcp-toolbar`: title + count badge row, then the probe
+    /// action beside the search field, all above a 1 px ink hairline.
     private var header: some View {
-        HStack(alignment: .center, spacing: 8) {
-            Text(verbatim: "MCP")
-                .font(AppTheme.display(17, weight: .semibold))
-                .foregroundStyle(AppTheme.foreground)
-                .lineLimit(1)
-            Text(verbatim: "\(displayedServers.count)")
-                .font(AppTheme.body(12))
-                .foregroundStyle(AppTheme.muted)
-            Spacer(minLength: 8)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Text(verbatim: "MCP")
+                    .font(AppTheme.body(13, weight: .bold))
+                    .foregroundStyle(AppTheme.foreground)
+                Text(verbatim: "\(displayedServers.count)")
+                    .font(AppTheme.body(12))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(AppTheme.surface)
+                    .overlay(Rectangle().stroke(AppTheme.ink, lineWidth: 1))
+                    .accessibilityLabel(String.localizedStringWithFormat(
+                        L10n.string("MCP List Count"), displayedServers.count
+                    ))
+            }
             if !servers.isEmpty {
-                Button {
-                    onProbeAll?()
-                } label: {
-                    HStack(spacing: 4) {
-                        if isProbing {
-                            ProgressView()
-                                .controlSize(.small)
-                        }
-                        Text(verbatim: L10n.string("Probe All MCP"))
-                    }
-                    .font(AppTheme.body(12, weight: .medium))
-                    .foregroundStyle(AppTheme.accentActive)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .contentShape(Rectangle())
+                HStack(spacing: 8) {
+                    probeAllButton
+                    ListSearchBar(placeholderKey: "Search Mcp Placeholder", text: $searchText, style: .card)
                 }
-                .buttonStyle(.plain)
-                .disabled(isProbing)
-                .help(L10n.string("Probe All MCP"))
-                .accessibilityLabel(L10n.string("Probe All MCP"))
             }
         }
-        .padding(.leading, 16)
-        .padding(.trailing, 8)
-        .frame(height: 46)
+        .padding(16)
         .background(AppTheme.background)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(AppTheme.ink)
+                .frame(height: 1)
+        }
+    }
+
+    /// mcp.html's `#mcp-check-all`: 36 pt card button with a 1 px ink
+    /// border and the hard offset shadow, lifting on hover and sinking on
+    /// press; the icon becomes a spinner while a probe runs.
+    private var probeAllButton: some View {
+        Button {
+            onProbeAll?()
+        } label: {
+            HStack(spacing: 6) {
+                if isProbing {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Image(systemName: "play.circle")
+                        .font(.system(size: 13))
+                }
+                Text(verbatim: L10n.string("Probe All MCP"))
+            }
+            .font(AppTheme.body(13))
+            .foregroundStyle(AppTheme.foreground)
+            .padding(.horizontal, 12)
+            .frame(height: 36)
+            .background(AppTheme.surface)
+            .overlay(Rectangle().stroke(AppTheme.ink, lineWidth: 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(ProbeButtonStyle())
+        .disabled(isProbing)
+        .help(L10n.string("Probe All MCP"))
+        .accessibilityLabel(L10n.string("Probe All MCP"))
     }
 
     @ViewBuilder
@@ -111,7 +131,9 @@ struct McpListView: View {
             NoResultsView()
         } else {
             ScrollView {
-                LazyVStack(spacing: 2) {
+                // mcp.html `#mcp-list`: flat full-bleed rows separated by
+                // the white hairline, no inter-row gaps.
+                VStack(spacing: 0) {
                     ForEach(displayedServers) { server in
                         McpServerRow(
                             server: server,
@@ -123,10 +145,8 @@ struct McpListView: View {
                             onSelect: { onSelect?(server) },
                             onRevealConfig: { onRevealConfig?(server) }
                         )
-                        .padding(.horizontal, 8)
                     }
                 }
-                .padding(.vertical, 8)
             }
         }
     }
@@ -216,8 +236,10 @@ struct McpListView: View {
     }
 }
 
-/// One `.skill-row`-like row for an MCP server: name, transport/launch line,
-/// probe status dot, and a reveal-config action.
+/// One mcp.html row (`article`): probe-tinted transport icon, bold name,
+/// agent chip, launch line, and a bordered reveal-config button — a flat
+/// full-bleed row over the white bottom hairline, selected with the
+/// sidebar-accent fill and a 2 px accent bar on the leading edge.
 struct McpServerRow: View {
     let server: McpServerDescriptor
     let status: McpProbeStatus
@@ -231,86 +253,141 @@ struct McpServerRow: View {
     var onSelect: (() -> Void)?
     var onRevealConfig: (() -> Void)?
 
+    @State private var isHovering = false
+
     var body: some View {
-        HStack(spacing: 8) {
-            statusBadge
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    HighlightedText(
-                        text: server.name,
-                        query: highlightQuery,
-                        font: AppTheme.body(13, weight: .medium),
-                        baseColor: isActive ? AppTheme.accentActive : AppTheme.foreground
-                    )
-                    .lineLimit(1)
-                    if isConflicted {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 9))
-                            .foregroundStyle(AppTheme.warn)
-                            .help(L10n.string("MCP Scope Conflict"))
-                            .accessibilityLabel(L10n.string("MCP Scope Conflict"))
-                    }
-                    if let agentName = agentNamesByID[server.agentID ?? ""] {
-                        Text(verbatim: agentName)
-                            .font(AppTheme.body(11))
-                            .foregroundStyle(AppTheme.muted)
-                            .lineLimit(1)
-                    }
-                }
-                HighlightedText(
-                    text: server.launchSummary,
-                    query: highlightQuery,
-                    font: AppTheme.mono(11),
-                    baseColor: AppTheme.muted
-                )
-                .lineLimit(1)
-                .truncationMode(.middle)
+        HStack(spacing: 12) {
+            statusIcon
+                .frame(width: 16)
+            HighlightedText(
+                text: server.name,
+                query: highlightQuery,
+                font: AppTheme.body(13, weight: .bold),
+                baseColor: AppTheme.foreground
+            )
+            .lineLimit(1)
+            if isConflicted {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(AppTheme.warn)
+                    .help(L10n.string("MCP Scope Conflict"))
+                    .accessibilityLabel(L10n.string("MCP Scope Conflict"))
             }
-            Spacer(minLength: 4)
+            if let agentName = agentNamesByID[server.agentID ?? ""] {
+                AgentChip(text: agentName, onActiveRow: isActive)
+            }
+            HighlightedText(
+                text: server.launchSummary,
+                query: highlightQuery,
+                font: AppTheme.mono(12),
+                baseColor: AppTheme.muted
+            )
+            .lineLimit(1)
+            .truncationMode(.middle)
+            .frame(maxWidth: .infinity, alignment: .leading)
             Button {
                 onRevealConfig?()
             } label: {
                 Image(systemName: "doc")
-                    .font(.system(size: 12))
-                    .foregroundStyle(AppTheme.muted)
-                    .frame(width: 22, height: 22)
+                    .font(.system(size: 13))
+                    .foregroundStyle(AppTheme.accent)
+                    .frame(width: 32, height: 32)
+                    .background(AppTheme.surface)
+                    .overlay(Rectangle().stroke(AppTheme.ink, lineWidth: 1))
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(RowIconButtonStyle())
             .help(L10n.string("Reveal MCP Config"))
             .accessibilityLabel(L10n.string("Reveal MCP Config"))
         }
-        .padding(.horizontal, 10)
-        .frame(minHeight: 46)
-        .background(isActive ? AppTheme.accentTint : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background {
+            if isActive || isHovering {
+                AppTheme.sidebarAccent
+            }
+        }
+        .overlay(alignment: .leading) {
+            if isActive {
+                Rectangle()
+                    .fill(AppTheme.accent)
+                    .frame(width: 2)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(AppTheme.border)
+                .frame(height: 1)
+        }
         .contentShape(Rectangle())
+        .onHover { isHovering = $0 }
         .onTapGesture {
             onSelect?()
         }
     }
 
+    /// The design's muted transport glyph doubles as the probe indicator:
+    /// the color only speaks once a probe has run, otherwise it stays
+    /// muted exactly like the page.
     @ViewBuilder
-    private var statusBadge: some View {
+    private var statusIcon: some View {
         switch status {
         case .running:
-            statusCircle(color: AppTheme.success)
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 13))
+                .foregroundStyle(AppTheme.success)
         case .notRunning:
-            statusCircle(color: AppTheme.meta)
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 13))
+                .foregroundStyle(AppTheme.meta)
         case .failed:
-            statusCircle(color: AppTheme.danger)
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 13))
+                .foregroundStyle(AppTheme.danger)
         case .probing:
             ProgressView()
                 .controlSize(.mini)
-                .frame(width: 14, height: 14)
+                .frame(width: 16, height: 16)
         case .unknown:
-            statusCircle(color: AppTheme.border)
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 13))
+                .foregroundStyle(AppTheme.foregroundSecondary)
         }
     }
+}
 
-    private func statusCircle(color: Color) -> some View {
-        Circle()
-            .fill(color)
-            .frame(width: 8, height: 8)
-            .padding(.horizontal, 3)
+/// Hover lift / press sink shared by the row's bordered icon button
+/// (mcp.html's inline `transition-all` rules).
+private struct RowIconButtonStyle: ButtonStyle {
+    @State private var isHovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .offset(
+                x: configuration.isPressed ? 1 : (isHovering ? -1 : 0),
+                y: configuration.isPressed ? 1 : (isHovering ? -1 : 0)
+            )
+            .onHover { isHovering = $0 }
+    }
+}
+
+/// The toolbar probe button's hover/press transform: shadow rides only
+/// while resting, press sinks flat (mcp.html's `transition-all` rules).
+private struct ProbeButtonStyle: ButtonStyle {
+    @State private var isHovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        Group {
+            if configuration.isPressed {
+                configuration.label
+            } else {
+                configuration.label.hardShadow(.rest)
+            }
+        }
+        .offset(
+            x: configuration.isPressed ? 1 : (isHovering ? -1 : 0),
+            y: configuration.isPressed ? 1 : (isHovering ? -1 : 0)
+        )
+        .onHover { isHovering = $0 }
     }
 }

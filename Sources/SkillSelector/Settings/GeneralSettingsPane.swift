@@ -156,10 +156,10 @@ struct GeneralSettingsPane: View {
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 6)
             .padding(.vertical, 7)
-            .background(isSelected ? AppTheme.accentTint : Color.clear, in: RoundedRectangle(cornerRadius: 7))
+            .background(isSelected ? AppTheme.surfaceMuted : Color.clear)
             .overlay {
-                RoundedRectangle(cornerRadius: 7)
-                    .stroke(isSelected ? AppTheme.accentTintBorder : AppTheme.borderSoft, lineWidth: 1)
+                Rectangle()
+                    .stroke(isSelected ? AppTheme.accentTintBorder : AppTheme.border, lineWidth: 1)
             }
             .contentShape(Rectangle())
         }

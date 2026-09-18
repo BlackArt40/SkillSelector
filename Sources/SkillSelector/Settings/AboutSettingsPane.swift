@@ -7,7 +7,7 @@ struct AboutSettingsPane: View {
     var body: some View {
         VStack(alignment: .center, spacing: 0) {
             AppIconView(size: 128)
-                .shadow(color: .black.opacity(0.18), radius: 24, y: 12)
+                .shadow(color: AppTheme.shadowColor.opacity(0.18), radius: 24, y: 12)
             LogoView(height: 40)
                 .padding(.top, 16)
             Text(verbatim: L10n.string("Version Line", appVersion))

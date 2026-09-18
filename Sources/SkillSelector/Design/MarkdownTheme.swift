@@ -104,7 +104,7 @@ extension Theme {
         }
         .blockquote { configuration in
             HStack(spacing: 0) {
-                RoundedRectangle(cornerRadius: 4)
+                Rectangle()
                     .fill(AppTheme.border)
                     .frame(width: 3)
                 configuration.label
@@ -128,7 +128,7 @@ extension Theme {
                     .padding(12)
             }
             .background(AppTheme.codeBlockBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .clipShape(Rectangle())
             .markdownMargin(top: 0, bottom: 12)
         }
         .listItem { configuration in

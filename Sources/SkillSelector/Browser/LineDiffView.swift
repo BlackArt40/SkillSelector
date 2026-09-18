@@ -62,12 +62,11 @@ struct LineDiffView: View {
                 rowView(row)
             }
         }
-        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 10))
+        .background(AppTheme.surface)
         .overlay {
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(AppTheme.borderSoft, lineWidth: 1)
+            Rectangle().stroke(AppTheme.border, lineWidth: 1)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .clipShape(Rectangle())
     }
 
     private func rowView(_ row: Row) -> some View {

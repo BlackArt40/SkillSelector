@@ -79,7 +79,11 @@ struct SkillSelectorApp: App {
     private let instanceLock: SingleInstanceLock?
 
     init() {
-        if CommandLine.arguments.contains("--verify-localization-resource") {
+        // ProcessInfo.arguments is thread-safe and avoids the Swift-6
+        // concurrency warning that `CommandLine.arguments` (a shared mutable
+        // static) triggers at every nonisolated use site.
+        let launchArguments = ProcessInfo.processInfo.arguments
+        if launchArguments.contains("--verify-localization-resource") {
             print(L10n.string("SkillSelector"))
             Darwin.exit(EXIT_SUCCESS)
         }

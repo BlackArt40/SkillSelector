@@ -39,38 +39,35 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            tabBar
-            Rectangle()
-                .fill(AppTheme.borderSoft)
-                .frame(height: 1)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    switch activeTab {
-                    case .general:
-                        GeneralSettingsPane(
-                            translationAPIKeyInput: $translationAPIKeyInput,
-                            settingsError: $settingsError,
-                            exportStatus: $exportStatus,
-                            showDiagnosticsViewer: $showDiagnosticsViewer,
-                            editingCatalogSource: $editingCatalogSource,
-                            showingAddCatalogSource: $showingAddCatalogSource
-                        )
-                    case .directories:
-                        DirectoriesSettingsPane(
-                            settingsError: $settingsError,
-                            customAgentSheetRequest: $customAgentSheetRequest
-                        )
-                    case .about:
-                        AboutSettingsPane()
-                    }
+        ScrollView {
+            // settings.html: the centered segmented tabs sit inside the
+            // scroll flow, 48 px above the first section.
+            VStack(spacing: 0) {
+                tabBar
+                switch activeTab {
+                case .general:
+                    GeneralSettingsPane(
+                        translationAPIKeyInput: $translationAPIKeyInput,
+                        settingsError: $settingsError,
+                        exportStatus: $exportStatus,
+                        showDiagnosticsViewer: $showDiagnosticsViewer,
+                        editingCatalogSource: $editingCatalogSource,
+                        showingAddCatalogSource: $showingAddCatalogSource
+                    )
+                case .directories:
+                    DirectoriesSettingsPane(
+                        settingsError: $settingsError,
+                        customAgentSheetRequest: $customAgentSheetRequest
+                    )
+                case .about:
+                    AboutSettingsPane()
                 }
-                .frame(maxWidth: 520)
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 32)
-                .padding(.top, 24)
-                .padding(.bottom, 48)
             }
+            .frame(maxWidth: 640)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 24)
+            .padding(.top, 64)
+            .padding(.bottom, 64)
         }
         .frame(width: 720, height: 780)
         .background(AppTheme.background)
@@ -137,37 +134,45 @@ struct SettingsView: View {
 
     // MARK: Tab bar
 
+    /// settings.html's `#settings-tabs`: a centered segmented control —
+    /// 44 pt tall behind a 2 px ink border, hairline separators between
+    /// segments, the active one filled with the primary ink pair.
     private var tabBar: some View {
-        HStack(spacing: 2) {
-            tabButton(.general, title: L10n.string("General"), icon: "gearshape")
+        HStack(spacing: 0) {
+            tabButton(.general, title: L10n.string("General"), icon: "person")
+            Rectangle()
+                .fill(AppTheme.ink)
+                .frame(width: 1)
             tabButton(.directories, title: L10n.string("Directory Authorization"), icon: "folder")
-            tabButton(.about, title: L10n.string("About"), icon: "info.circle")
+            Rectangle()
+                .fill(AppTheme.ink)
+                .frame(width: 1)
+            tabButton(.about, title: L10n.string("About"), icon: "questionmark.circle")
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity)
-        .background(AppTheme.surfaceWarm)
+        .overlay(Rectangle().stroke(AppTheme.ink, lineWidth: 2))
+        .padding(.bottom, 48)
     }
 
     private func tabButton(_ tab: SettingsTab, title: String, icon: String) -> some View {
-        Button {
+        let isActive = activeTab == tab
+        return Button {
             activeTab = tab
         } label: {
-            VStack(spacing: 4) {
+            HStack(spacing: 8) {
                 Image(systemName: icon)
-                    .font(.system(size: 19))
+                    .font(.system(size: 13))
                 Text(verbatim: title)
-                    .font(AppTheme.body(11))
+                    .font(AppTheme.body(13))
                     .lineLimit(1)
             }
-            .foregroundStyle(activeTab == tab ? AppTheme.accentActive : AppTheme.foregroundSecondary)
-            .frame(width: 76)
-            .padding(.vertical, 7)
-            .background(activeTab == tab ? AppTheme.accentTint : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+            .foregroundStyle(isActive ? AppTheme.primaryButtonForeground : AppTheme.foreground)
+            .padding(.horizontal, 20)
+            .frame(height: 40)
+            .background(isActive ? AppTheme.primaryButtonBackground : Color.clear)
             .contentShape(Rectangle())
         }
-        .buttonStyle(SettingsTabHoverStyle(isActive: activeTab == tab))
-        .accessibilityAddTraits(activeTab == tab ? .isSelected : [])
+        .buttonStyle(SettingsTabHoverStyle(isActive: isActive))
+        .accessibilityAddTraits(isActive ? .isSelected : [])
         .accessibilityLabel(title)
     }
 
@@ -191,7 +196,8 @@ struct SettingsView: View {
     }
 }
 
-/// `.tab:hover:not(.active)` — soft fill on hover.
+/// `.tab:hover:not(.active)` — the page's hover lift + shadow on the
+/// inactive segments.
 private struct SettingsTabHoverStyle: ButtonStyle {
     let isActive: Bool
     @State private var isHovering = false
@@ -200,8 +206,7 @@ private struct SettingsTabHoverStyle: ButtonStyle {
         configuration.label
             .background {
                 if isHovering && !isActive && !configuration.isPressed {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(AppTheme.borderSoft)
+                    Rectangle().fill(AppTheme.surfaceMuted)
                 }
             }
             .onHover { hovering in

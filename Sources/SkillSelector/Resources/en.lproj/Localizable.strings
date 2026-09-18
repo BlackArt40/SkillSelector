@@ -83,6 +83,13 @@
 "No Projects" = "No Projects";
 "Reveal in Finder" = "Reveal in Finder";
 "Skill List Count" = "%d Skills";
+"MCP List Count" = "%d MCP servers";
+"Rules List Count" = "%d rules files";
+"Copy %@ Badge" = "Copy %@";
+"Mode Exact Short" = "Exact";
+"Mode Near Short" = "Near";
+"Custom Agent Entry Meta" = "Entry %@ · Global custom agent directory";
+"Custom Agent Rescan Hint" = "Changes take effect after the next scan.";
 "Core Role" = "Core Role";
 "Associated Agents" = "Associated Agents";
 "Level" = "Level";
@@ -194,6 +201,9 @@
 "Diagnostics Roots Count" = "%d of %d authorized directories available";
 "Diagnostics Unavailable Roots" = "Some authorized directories are unavailable.";
 "Diagnostics Events" = "Recent Events";
+"Diagnostics System Info" = "System Info";
+"Diagnostics Authorized Roots" = "Authorized Directories";
+"Version" = "Version";
 "Diagnostics Empty" = "No diagnostics recorded yet.";
 "Close" = "Close";
 
@@ -470,3 +480,8 @@
 "Translation Error Unexpected" = "The translation service returned an unreadable response.";
 "Open DeepL API Keys" = "Open API Keys Page";
 "Description" = "Description";
+"Toolbar Refresh" = "Refresh";
+"Toolbar History" = "History";
+"Toolbar Light" = "Light";
+"Toolbar Dark" = "Dark";
+"Toolbar Settings" = "Settings";

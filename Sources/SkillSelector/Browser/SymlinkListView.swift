@@ -176,9 +176,9 @@ private struct SymlinkRow: View {
             }
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(rowBackground, in: RoundedRectangle(cornerRadius: 10))
+            .background(rowBackground)
             .overlay {
-                RoundedRectangle(cornerRadius: 10)
+                Rectangle()
                     .stroke(isActive ? AppTheme.accentTintBorder : Color.clear, lineWidth: 1)
             }
             .contentShape(Rectangle())
@@ -210,8 +210,7 @@ private struct SymlinkRowHoverStyle: ButtonStyle {
         configuration.label
             .background {
                 if isHovering && !configuration.isPressed {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(AppTheme.surface)
+                    Rectangle().fill(AppTheme.surfaceMuted)
                 }
             }
             .onHover { hovering in

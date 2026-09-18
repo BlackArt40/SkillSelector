@@ -22,7 +22,6 @@ struct CatalogDetailView: View {
     }
 
     @State private var contentState: ContentState = .loading
-    @State private var copied: FieldCopy?
     /// Remote SKILL.md body (frontmatter stripped), kept alongside the
     /// rendered state for the 「对照本地」version-difference comparison.
     @State private var remoteBody: String?
@@ -36,8 +35,9 @@ struct CatalogDetailView: View {
     var body: some View {
         if let skill {
             ScrollView {
-                VStack(alignment: .leading, spacing: 32) {
+                VStack(alignment: .leading, spacing: 20) {
                     hero(skill)
+                    badgesRow(skill)
                     actionBar(skill)
                     descriptionSection(skill)
                     repositorySection(skill)
@@ -45,9 +45,7 @@ struct CatalogDetailView: View {
                     contentSection(skill)
                     metadataSection(skill)
                 }
-                .padding(.horizontal, 32)
-                .padding(.top, 32)
-                .padding(.bottom, 48)
+                .padding(24)
                 .frame(maxWidth: 720, alignment: .leading)
                 .frame(maxWidth: .infinity)
             }
@@ -75,7 +73,7 @@ struct CatalogDetailView: View {
     private func descriptionSection(_ skill: CatalogSkill) -> some View {
         if let description = remoteDescription,
            !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
+            detailCard(contentSpacing: 8) {
                 HStack(alignment: .center, spacing: 8) {
                     DetailViewSupport.sectionHeading(L10n.string("Description"))
                     Spacer(minLength: 8)
@@ -92,7 +90,7 @@ struct CatalogDetailView: View {
                 }
                 Text(verbatim: translator.displayedText(original: description))
                     .font(AppTheme.body(14))
-                    .foregroundStyle(AppTheme.foregroundSecondary)
+                    .foregroundStyle(AppTheme.foreground)
                     .lineSpacing(4)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
@@ -106,17 +104,16 @@ struct CatalogDetailView: View {
     // MARK: Hero
 
     private func hero(_ skill: CatalogSkill) -> some View {
-        HStack(alignment: .top, spacing: 20) {
+        HStack(alignment: .top, spacing: 16) {
             SkillTileView(
                 title: skill.name.prefix(1).uppercased(),
-                size: 72,
-                cornerRadius: 18,
-                active: false
+                size: 48,
+                inkBorder: true
             )
-            .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
             VStack(alignment: .leading, spacing: 0) {
                 Text(verbatim: skill.name)
-                    .font(AppTheme.display(28, weight: .semibold))
+                    .font(AppTheme.display(20, weight: .bold))
+                    .kerning(-1)
                     .foregroundStyle(AppTheme.foreground)
                     .lineLimit(1)
                     .textSelection(.enabled)
@@ -126,90 +123,87 @@ struct CatalogDetailView: View {
                     .lineLimit(2)
                     .truncationMode(.middle)
                     .textSelection(.enabled)
-                    .padding(.top, 3)
-                HStack(spacing: 8) {
-                    PillBadge(
-                        text: sourceNamesByID[skill.sourceID] ?? skill.sourceID,
-                        style: .link
-                    )
-                    PillBadge(text: L10n.string("Marketplace Remote Badge"), style: .link)
-                }
-                .padding(.top, 12)
+                    .padding(.top, 4)
             }
+        }
+    }
+
+    /// catalog.html's badge row under the hero: source chip on
+    /// `bg-sidebar-accent`, the remote chip on `bg-card`.
+    private func badgesRow(_ skill: CatalogSkill) -> some View {
+        HStack(spacing: 8) {
+            InkBadge(text: sourceNamesByID[skill.sourceID] ?? skill.sourceID)
+            InkBadge(
+                text: L10n.string("Marketplace Remote Badge"),
+                backgroundColor: AppTheme.surfaceWarm,
+                foregroundColor: AppTheme.foreground
+            )
         }
     }
 
     // MARK: Action bar
 
     private func actionBar(_ skill: CatalogSkill) -> some View {
-        HStack(spacing: 8) {
-            actionButton(
-                icon: Image(systemName: "safari"),
-                title: L10n.string("Open in GitHub"),
-                isActive: copied == .link
-            ) {
+        HStack(spacing: 12) {
+            Button {
                 NSWorkspace.shared.open(skill.githubURL)
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.up.right.square")
+                        .font(.system(size: 13))
+                    Text(verbatim: L10n.string("Open in GitHub"))
+                }
             }
-            actionButton(
-                icon: nil,
-                title: L10n.string("Copy Link"),
-                isActive: copied == .link
-            ) {
-                copy(skill.githubURL.absoluteString, field: .link)
+            .buttonStyle(InkButtonStyle(height: 40, horizontalPadding: 16))
+            .help(L10n.string("Open in GitHub"))
+            .accessibilityLabel(L10n.string("Open in GitHub"))
+            Button {
+                copy(skill.githubURL.absoluteString)
+            } label: {
+                Text(verbatim: L10n.string("Copy Link"))
             }
-            actionButton(
-                icon: Image(systemName: "terminal"),
-                title: L10n.string("Copy Install Command"),
-                isActive: copied == .installCommand
-            ) {
-                copy(skill.installCommand, field: .installCommand)
+            .buttonStyle(InkButtonStyle(height: 40, horizontalPadding: 16))
+            .help(L10n.string("Copy Link"))
+            .accessibilityLabel(L10n.string("Copy Link"))
+            Button {
+                copy(skill.installCommand)
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "paperplane")
+                        .font(.system(size: 13))
+                    Text(verbatim: L10n.string("Copy Install Command"))
+                }
             }
+            .buttonStyle(InkButtonStyle(height: 40, horizontalPadding: 16, isPrimary: true))
+            .help(L10n.string("Copy Install Command"))
+            .accessibilityLabel(L10n.string("Copy Install Command"))
             Spacer(minLength: 8)
         }
         .frame(maxWidth: .infinity)
     }
 
-    private enum FieldCopy {
-        case link
-        case installCommand
-    }
-
-    private func copy(_ value: String, field: FieldCopy) {
+    private func copy(_ value: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(value, forType: .string)
-        copied = field
-        Task {
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-            copied = nil
-        }
     }
 
-    private func actionButton(
-        icon: Image?,
-        title: String,
-        isActive: Bool,
-        action: @escaping () -> Void
+    /// catalog.html's detail `article` card — `border-2 border-ring
+    /// bg-card p-4 shadow-sm` chrome with a 2 px ink stroke and the hard
+    /// offset shadow; every catalog detail section lives in one.
+    private func detailCard<Content: View>(
+        contentSpacing: CGFloat = 12,
+        @ViewBuilder content: () -> Content
     ) -> some View {
-        Button {
-            action()
-        } label: {
-            HStack(spacing: 6) {
-                icon?
-                    .font(.system(size: 12))
-                Text(verbatim: title)
-                    .font(AppTheme.body(13, weight: .medium))
-                    .foregroundStyle(isActive ? AppTheme.accentActive : AppTheme.foreground)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(
-                isActive ? AppTheme.accentTint : AppTheme.surfaceWarm,
-                in: RoundedRectangle(cornerRadius: 8)
-            )
+        VStack(alignment: .leading, spacing: contentSpacing) {
+            content()
         }
-        .buttonStyle(.plain)
-        .help(title)
-        .accessibilityLabel(title)
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.surfaceWarm)
+        .overlay {
+            Rectangle().stroke(AppTheme.ink, lineWidth: 2)
+        }
+        .hardShadow(.rest)
     }
 
     // MARK: Local installation (对照本地)
@@ -220,14 +214,14 @@ struct CatalogDetailView: View {
     /// the section reads `model.snapshots` directly, so it updates as the
     /// index refreshes.
     private func localSection(_ skill: CatalogSkill) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let matches = LocalInstallationMatcher.localInstallations(
+            of: skill,
+            in: model.snapshots
+        )
+        return detailCard {
             DetailViewSupport.sectionHeading(L10n.string("Compare with Local"))
-            let matches = LocalInstallationMatcher.localInstallations(
-                of: skill,
-                in: model.snapshots
-            )
             if matches.isEmpty {
-                notInstalledCard
+                notInstalledContent
             } else {
                 VStack(spacing: 10) {
                     ForEach(matches) { match in
@@ -236,8 +230,8 @@ struct CatalogDetailView: View {
                 }
             }
             Text(verbatim: L10n.string("Compare with Local Hint"))
-                .font(AppTheme.body(11.5))
-                .foregroundStyle(AppTheme.meta)
+                .font(AppTheme.body(12))
+                .foregroundStyle(AppTheme.muted)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -253,11 +247,15 @@ struct CatalogDetailView: View {
                     .font(.system(size: 14))
                     .foregroundStyle(AppTheme.success)
                 Text(verbatim: L10n.string("Installed Locally"))
-                    .font(AppTheme.body(13, weight: .semibold))
+                    .font(AppTheme.body(14, weight: .bold))
                     .foregroundStyle(AppTheme.foreground)
                 Spacer(minLength: 8)
                 if match.resolvedTarget != nil {
-                    PillBadge(text: L10n.string("Symbolic Link Pill"), style: .link)
+                    InkBadge(
+                        text: L10n.string("Symbolic Link Pill"),
+                        backgroundColor: AppTheme.surfaceWarm,
+                        foregroundColor: AppTheme.foreground
+                    )
                 }
             }
             let names = match.agentDisplayNames(by: agentNamesByID)
@@ -283,24 +281,22 @@ struct CatalogDetailView: View {
                 sourceID: sourceID
             )
         }
-        .padding(16)
+        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.surfaceWarm, in: RoundedRectangle(cornerRadius: 12))
-        .overlay {
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(AppTheme.borderSoft, lineWidth: 1)
-        }
+        .background(AppTheme.sidebarBackground)
     }
 
-    private var notInstalledCard: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "circle.dashed")
+    /// The 对照本地 card's not-installed row — catalog.html's
+    /// `text-sm font-bold` verdict line with warning icon and muted hint.
+    private var notInstalledContent: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.circle")
                 .font(.system(size: 14))
-                .foregroundStyle(AppTheme.muted)
+                .foregroundStyle(AppTheme.warn)
                 .padding(.top, 2)
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(verbatim: L10n.string("Not Installed Locally"))
-                    .font(AppTheme.body(13, weight: .semibold))
+                    .font(AppTheme.body(14, weight: .bold))
                     .foregroundStyle(AppTheme.foreground)
                 Text(verbatim: L10n.string("Not Installed Locally Hint"))
                     .font(AppTheme.body(12))
@@ -308,60 +304,44 @@ struct CatalogDetailView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.surfaceWarm, in: RoundedRectangle(cornerRadius: 12))
-        .overlay {
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(AppTheme.borderSoft, lineWidth: 1)
-        }
     }
 
     // MARK: Content
 
     @ViewBuilder
     private func contentSection(_ skill: CatalogSkill) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        detailCard {
             DetailViewSupport.sectionHeading(L10n.string("Marketplace Document Section"))
-            switch contentState {
-            case .loading:
-                HStack(spacing: 8) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text(verbatim: L10n.string("Marketplace Document Loading"))
-                        .foregroundStyle(AppTheme.muted)
+            Group {
+                switch contentState {
+                case .loading:
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text(verbatim: L10n.string("Marketplace Document Loading"))
+                            .font(AppTheme.body(12))
+                            .foregroundStyle(AppTheme.muted)
+                    }
+                case .rendered(let text):
+                    MarkdownBodyView(text: text)
+                case .raw(let source):
+                    Text(verbatim: source)
+                        .font(AppTheme.mono(12))
+                        .foregroundStyle(AppTheme.foreground)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                case .failed(let failure):
+                    DetailViewSupport.errorShell(
+                        title: L10n.string("Marketplace Document Failed"),
+                        detail: CatalogFailureMessage.text(for: failure)
+                    )
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(20)
-                .background(AppTheme.surfaceWarm, in: RoundedRectangle(cornerRadius: 12))
-            case .rendered(let text):
-                MarkdownBodyView(text: text)
-                    .padding(20)
-                    .background(AppTheme.surfaceWarm, in: RoundedRectangle(cornerRadius: 12))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(AppTheme.borderSoft, lineWidth: 1)
-                    }
-            case .raw(let source):
-                Text(verbatim: source)
-                    .font(AppTheme.mono(12))
-                    .foregroundStyle(AppTheme.foregroundSecondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .textSelection(.enabled)
-                    .padding(20)
-                    .background(AppTheme.surfaceWarm, in: RoundedRectangle(cornerRadius: 12))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(AppTheme.borderSoft, lineWidth: 1)
-                    }
-            case .failed(let failure):
-                DetailViewSupport.errorShell(
-                    title: L10n.string("Marketplace Document Failed"),
-                    detail: CatalogFailureMessage.text(for: failure)
-                )
-                .padding(20)
-                .background(AppTheme.surfaceWarm, in: RoundedRectangle(cornerRadius: 12))
             }
+            // The Skill-doc pre block: `bg-sidebar p-4 text-xs
+            // leading-relaxed`, flat on the sidebar fill.
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(AppTheme.sidebarBackground)
         }
     }
 

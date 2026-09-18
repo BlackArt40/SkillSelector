@@ -31,34 +31,37 @@ struct RulesListView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Rectangle()
-                .fill(AppTheme.borderSoft)
-                .frame(height: 1)
-            if !files.isEmpty {
-                ListSearchBar(placeholderKey: "Search Paths Filenames Placeholder", text: $searchText)
+        ScrollView {
+            // rules.html `#list-pane`: one padded column — heading row,
+            // search field, then the bordered file cards — no toolbar
+            // hairline between them.
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(verbatim: L10n.string("Rules"))
+                        .font(AppTheme.display(24, weight: .bold))
+                        .kerning(-1.2)
+                        .foregroundStyle(AppTheme.foreground)
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                    Text(verbatim: "\(displayedFiles.count)")
+                        .font(AppTheme.mono(13))
+                        .foregroundStyle(AppTheme.muted)
+                        .accessibilityLabel(String.localizedStringWithFormat(
+                            L10n.string("Rules List Count"), displayedFiles.count
+                        ))
+                }
+                if !files.isEmpty {
+                    ListSearchBar(
+                        placeholderKey: "Search Paths Filenames Placeholder",
+                        text: $searchText,
+                        style: .inputInk,
+                        height: 36
+                    )
+                }
+                content
             }
-            content
+            .padding(16)
         }
-        .background(AppTheme.background)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-    }
-
-    private var header: some View {
-        HStack(alignment: .center, spacing: 8) {
-            Text(verbatim: L10n.string("Rules"))
-                .font(AppTheme.display(17, weight: .semibold))
-                .foregroundStyle(AppTheme.foreground)
-                .lineLimit(1)
-            Text(verbatim: "\(files.count)")
-                .font(AppTheme.body(12))
-                .foregroundStyle(AppTheme.muted)
-            Spacer(minLength: 8)
-        }
-        .padding(.leading, 16)
-        .padding(.trailing, 8)
-        .frame(height: 46)
         .background(AppTheme.background)
     }
 
@@ -69,22 +72,20 @@ struct RulesListView: View {
         } else if displayedFiles.isEmpty {
             NoResultsView()
         } else {
-            ScrollView {
-                LazyVStack(spacing: 2) {
-                    ForEach(displayedFiles) { file in
-                        RulesFileRow(
-                            file: file,
-                            agentNamesByID: agentNamesByID,
-                            isActive: selection == file.id,
-                            highlightQuery: searchText,
-                            onSelect: { onSelect?(file) },
-                            onReveal: { onReveal?(file) },
-                            onOpen: { onOpen?(file) }
-                        )
-                        .padding(.horizontal, 8)
-                    }
+            // rules.html `#file-list`: 2 px ink-bordered cards with 8 px
+            // gaps; the selected card swaps its card fill for the muted one.
+            VStack(spacing: 8) {
+                ForEach(displayedFiles) { file in
+                    RulesFileRow(
+                        file: file,
+                        agentNamesByID: agentNamesByID,
+                        isActive: selection == file.id,
+                        highlightQuery: searchText,
+                        onSelect: { onSelect?(file) },
+                        onReveal: { onReveal?(file) },
+                        onOpen: { onOpen?(file) }
+                    )
                 }
-                .padding(.vertical, 8)
             }
         }
     }
@@ -98,8 +99,9 @@ struct RulesListView: View {
     }
 }
 
-/// One `.skill-row`-like row for a rules file: filename, agent badge,
-/// path, size, and a reveal action.
+/// One rules.html card (`article`): the mono filename with the byte count
+/// on the baseline row, then the wrapped agent chips — a 2 px ink-bordered
+/// card panel, selected with the muted fill.
 struct RulesFileRow: View {
     let file: RulesFileDescriptor
     var agentNamesByID: [String: String] = [:]
@@ -117,66 +119,41 @@ struct RulesFileRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "doc.text")
-                .font(.system(size: 13))
-                .foregroundStyle(isActive ? AppTheme.accentActive : AppTheme.muted)
-                .frame(width: 18)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    HighlightedText(
-                        text: file.filename,
-                        query: highlightQuery,
-                        font: AppTheme.body(13, weight: .medium),
-                        baseColor: isActive ? AppTheme.accentActive : AppTheme.foreground
-                    )
-                    .lineLimit(1)
-                    if !agentNames.isEmpty {
-                        ForEach(agentNames.prefix(3), id: \.self) { name in
-                            AgentChip(text: name, onActiveRow: isActive)
-                        }
-                        if agentNames.count > 3 {
-                            AgentChip(
-                                text: "+\(agentNames.count - 3)",
-                                onActiveRow: isActive
-                            )
-                        }
-                    }
-                }
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
                 HighlightedText(
-                    text: file.path,
+                    text: file.filename,
                     query: highlightQuery,
-                    font: AppTheme.mono(11),
-                    baseColor: AppTheme.muted
+                    font: AppTheme.mono(13, weight: .bold),
+                    baseColor: AppTheme.foreground
                 )
                 .lineLimit(1)
-                .truncationMode(.middle)
-            }
-            Spacer(minLength: 4)
-            if let fileSize = file.fileSize {
-                Text(verbatim: ByteCountFormatter.string(
-                    fromByteCount: Int64(fileSize),
-                    countStyle: .file
-                ))
-                .font(AppTheme.body(11))
-                .foregroundStyle(AppTheme.meta)
-            }
-            Button {
-                onReveal?()
-            } label: {
-                Image(systemName: "folder")
-                    .font(.system(size: 12))
+                Spacer(minLength: 8)
+                if let fileSize = file.fileSize {
+                    Text(verbatim: ByteCountFormatter.string(
+                        fromByteCount: Int64(fileSize),
+                        countStyle: .file
+                    ))
+                    .font(AppTheme.mono(12))
                     .foregroundStyle(AppTheme.muted)
-                    .frame(width: 22, height: 22)
-                    .contentShape(Rectangle())
+                }
             }
-            .buttonStyle(.plain)
-            .help(L10n.string("Reveal in Finder"))
-            .accessibilityLabel(L10n.string("Reveal in Finder"))
+            if !agentNames.isEmpty {
+                HStack(spacing: 6) {
+                    ForEach(agentNames.prefix(3), id: \.self) { name in
+                        InkChip(text: name)
+                    }
+                    if agentNames.count > 3 {
+                        InkChip(text: "+\(agentNames.count - 3)", muted: true)
+                    }
+                }
+            }
         }
-        .padding(.horizontal, 10)
-        .frame(minHeight: 46)
-        .background(isActive ? AppTheme.accentTint : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(isActive ? AppTheme.surfaceMuted : AppTheme.surface)
+        .overlay(Rectangle().stroke(AppTheme.ink, lineWidth: 2))
+        .hardShadow(.rest)
         .contentShape(Rectangle())
         .onTapGesture {
             onSelect?()
@@ -193,5 +170,7 @@ struct RulesFileRow: View {
                 Label(L10n.string("Open in Default Editor"), systemImage: "chevron.left.forwardslash.chevron.right")
             }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 }

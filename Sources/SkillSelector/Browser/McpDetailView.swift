@@ -50,10 +50,8 @@ struct McpDetailView: View {
             SkillTileView(
                 title: skillTileLetter(for: server.name),
                 size: 72,
-                cornerRadius: 18,
                 active: false
             )
-            .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
             VStack(alignment: .leading, spacing: 0) {
                 Text(verbatim: server.name)
                     .font(AppTheme.display(28, weight: .semibold))
@@ -264,18 +262,31 @@ struct McpDetailView: View {
 
     // MARK: Empty state
 
+    /// mcp.html's `#mcp-empty-state`: a 96 pt ink-bordered glyph box over
+    /// the card fill with the hard shadow, bold title, and muted hint.
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            AppIconView(size: 96)
-                .opacity(0.9)
-            Text(verbatim: L10n.string("Select an MCP Server"))
-                .font(AppTheme.display(28, weight: .semibold))
-                .foregroundStyle(AppTheme.foreground)
-            Text(verbatim: L10n.string("Select an MCP Server Description"))
-                .font(AppTheme.body(14))
-                .foregroundStyle(AppTheme.muted)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 340)
+        VStack(spacing: 20) {
+            Rectangle()
+                .fill(AppTheme.surface)
+                .frame(width: 96, height: 96)
+                .overlay {
+                    Image(systemName: "bubble.left.and.bubble.right")
+                        .font(.system(size: 40))
+                        .foregroundStyle(AppTheme.foregroundSecondary)
+                }
+                .overlay(Rectangle().stroke(AppTheme.ink, lineWidth: 2))
+                .hardShadow(.rest)
+            VStack(spacing: 8) {
+                Text(verbatim: L10n.string("Select an MCP Server"))
+                    .font(AppTheme.body(14, weight: .bold))
+                    .foregroundStyle(AppTheme.foreground)
+                Text(verbatim: L10n.string("Select an MCP Server Description"))
+                    .font(AppTheme.body(12))
+                    .foregroundStyle(AppTheme.muted)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 240)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityElement(children: .combine)

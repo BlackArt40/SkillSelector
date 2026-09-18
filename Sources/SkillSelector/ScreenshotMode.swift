@@ -34,7 +34,9 @@ enum ScreenshotMode {
 
     @discardableResult
     static func configureFromCommandLine() -> Bool {
-        let arguments = CommandLine.arguments
+        // ProcessInfo.arguments avoids the Swift-6 shared-mutable-state
+        // warning `CommandLine.arguments` triggers (see SkillSelectorApp).
+        let arguments = ProcessInfo.processInfo.arguments
         guard let flag = arguments.firstIndex(of: "--screenshots"),
               arguments.indices.contains(flag + 1) else {
             return false

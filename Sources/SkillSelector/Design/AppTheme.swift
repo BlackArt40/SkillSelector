@@ -1,117 +1,155 @@
 import AppKit
 import SwiftUI
 
-/// Apple design tokens bound verbatim from design/screens/browser.html and
-/// design/screens/settings.html. Every color maps to the HTML `:root` and
-/// `:root[data-theme="dark"]` variable of the same role, and adapts
-/// automatically to the effective light/dark appearance.
+/// Design tokens bound verbatim from `design-redesign/pages/*.html`
+/// (brutalist redesign). Every color maps to the `<style id="theme-vars">`
+/// `:root` and `.dark` variables of the same role — identical across all
+/// eight pages — and adapts automatically to the effective light/dark
+/// appearance. Visual language: zero corner radius, `2px 2px 0 0` hard
+/// offset shadows, white strokes with black ink details in light mode,
+/// monospace type throughout.
 enum AppTheme {
     // MARK: Colors
 
-    /// Scheme A — Cool Indigo: cool blue-gray neutrals with an indigo accent
-    /// (light #F6F7FB / dark #171A21 base).
-    nonisolated(unsafe) static let background = adaptive(light: 0xF6F7FB, dark: 0x171A21)
-    nonisolated(unsafe) static let surface = adaptive(light: 0xEEF0F6, dark: 0x1E222C)
-    nonisolated(unsafe) static let surfaceWarm = adaptive(light: 0xFAFBFE, dark: 0x232836)
-    nonisolated(unsafe) static let foreground = adaptive(light: 0x1B1D24, dark: 0xEAECF4)
-    nonisolated(unsafe) static let foregroundSecondary = adaptive(light: 0x3F4352, dark: 0xC2C7D6)
-    nonisolated(unsafe) static let muted = adaptive(light: 0x71758A, dark: 0x9AA0B5)
-    nonisolated(unsafe) static let meta = adaptive(light: 0x8E93A8, dark: 0x8E94A8)
-    nonisolated(unsafe) static let border = adaptive(light: 0xD5D8E4, dark: 0x3A4054)
-    nonisolated(unsafe) static let borderSoft = adaptive(light: 0xE7E9F1, dark: 0x2C3243)
-    nonisolated(unsafe) static let accent = adaptive(light: 0x4F5BD5, dark: 0x7B86F0)
-    nonisolated(unsafe) static let accentHover = adaptive(light: 0x5663DE, dark: 0x8E99F3)
-    nonisolated(unsafe) static let accentActive = adaptive(light: 0x3F4BC0, dark: 0x9AA3F5)
+    // Surfaces — --background / --card / --popover.
+    nonisolated(unsafe) static let background = adaptive(light: 0xC5C9C9, dark: 0x0A0A0A)
+    nonisolated(unsafe) static let surface = adaptive(light: 0xD8DADA, dark: 0x1A1A1A)
+    nonisolated(unsafe) static let surfaceWarm = adaptive(light: 0xD8DADA, dark: 0x1A1A1A)
+
+    /// `--muted` as a *surface* (not text): selected rows, banners, chips,
+    /// secondary buttons, avatars (`--semantic-surface-muted`).
+    nonisolated(unsafe) static let surfaceMuted = adaptive(light: 0xD8DADA, dark: 0x333333)
+
+    // Text — --foreground / --muted-foreground (the design has a single
+    // secondary text tone shared by all three legacy roles).
+    nonisolated(unsafe) static let foreground = adaptive(light: 0x111111, dark: 0xFFFFFF)
+    nonisolated(unsafe) static let foregroundSecondary = adaptive(light: 0x888888, dark: 0xAAAAAA)
+    nonisolated(unsafe) static let muted = adaptive(light: 0x888888, dark: 0xAAAAAA)
+    nonisolated(unsafe) static let meta = adaptive(light: 0x888888, dark: 0xAAAAAA)
+
+    // Borders — `--border` (white strokes in light mode per the redesign);
+    // hairlines share the same tone. `ink` is `--ring`, which the design
+    // reuses as the strong-border / focus / ink-detail color
+    // (`--semantic-border-strong`, `--semantic-brand-focus`).
+    nonisolated(unsafe) static let border = adaptive(light: 0xFFFFFF, dark: 0x333333)
+    nonisolated(unsafe) static let borderSoft = adaptive(light: 0xFFFFFF, dark: 0x333333)
+    nonisolated(unsafe) static let ink = adaptive(light: 0x000000, dark: 0x333333)
+
+    /// `--semantic-border-interactive` == `--input` — secondary buttons and
+    /// search fields stroke this tone (distinct from `--border` in dark).
+    nonisolated(unsafe) static let borderInteractive = adaptive(light: 0xFFFFFF, dark: 0x1A1A1A)
+
+    /// `--semantic-input-background` == `--input` — search field fill.
+    nonisolated(unsafe) static let inputBackground = adaptive(light: 0xFFFFFF, dark: 0x1A1A1A)
+
+    // Sidebar family — `--sidebar`, `--sidebar-border`, `--sidebar-accent`,
+    // `--sidebar-accent-foreground`: the sidebar carries its own surface and
+    // accent pair (cooler panel + black/white label) distinct from `--muted`.
+    nonisolated(unsafe) static let sidebarBackground = adaptive(light: 0xD8DADA, dark: 0x0A0A0A)
+    nonisolated(unsafe) static let sidebarBorder = adaptive(light: 0xFFFFFF, dark: 0x333333)
+    nonisolated(unsafe) static let sidebarAccent = adaptive(light: 0xC5C9C9, dark: 0x212121)
+    nonisolated(unsafe) static let sidebarAccentForeground = adaptive(light: 0x000000, dark: 0xFFFFFF)
+
+    // Brand — `--accent` (saturated cobalt blue in light; the design keeps
+    // dark mode monochrome) and `--primary` (inverted black/white control
+    // pair driving active states and primary buttons).
+    nonisolated(unsafe) static let accent = adaptive(light: 0x0040FF, dark: 0x212121)
+    nonisolated(unsafe) static let accentHover = adaptive(light: 0x111111, dark: 0xFFFFFF)
+    nonisolated(unsafe) static let accentActive = adaptive(light: 0x111111, dark: 0xFFFFFF)
+
+    /// `--secondary` / `--secondary-foreground` — the rules.html chip pair:
+    /// near-black fill with a white label in light mode, mid-gray in dark.
+    nonisolated(unsafe) static let secondary = adaptive(light: 0x111111, dark: 0x333333)
+    nonisolated(unsafe) static let secondaryForeground = adaptive(light: 0xFFFFFF, dark: 0xFFFFFF)
+
+    /// Label on the accent surface (`--accent-foreground`, oklch(1 0 0)):
+    /// pure white in both appearances — marketplace selected rows set it.
+    nonisolated(unsafe) static let accentForeground = adaptive(light: 0xFFFFFF, dark: 0xFFFFFF)
+
+    // Status — the redesign only defines destructive; success/warn keep the
+    // previous palette until a page specifies them (HANDOFF §3.1).
     nonisolated(unsafe) static let success = adaptive(light: 0x12A26D, dark: 0x34D399)
     nonisolated(unsafe) static let warn = adaptive(light: 0xD99A0B, dark: 0xFBBF24)
-    nonisolated(unsafe) static let danger = adaptive(light: 0xD64545, dark: 0xF87171)
-    nonisolated(unsafe) static let dangerHover = adaptive(light: 0xC81E1E, dark: 0xE05B5B)
+    nonisolated(unsafe) static let danger = adaptive(light: 0xD73333, dark: 0xEF4444)
+    /// `--destructive-foreground` (oklch(1 0 0)): white in both appearances.
+    nonisolated(unsafe) static let dangerForeground = adaptive(light: 0xFFFFFF, dark: 0xFFFFFF)
+    nonisolated(unsafe) static let dangerHover = adaptive(
+        light: blend(0x000000, over: 0xD73333, alpha: 0.15),
+        dark: blend(0x000000, over: 0xEF4444, alpha: 0.15)
+    )
     nonisolated(unsafe) static let badgeWarnText = adaptive(light: 0x9A6A00, dark: 0xF0A24D)
 
-    /// color-mix(in oklab, var(--accent), transparent 88%) — active row /
-    /// selected item background.
-    nonisolated(unsafe) static let accentTint = adaptive(
-        light: blend(0x4F5BD5, over: 0xF6F7FB, alpha: 0.12),
-        dark: blend(0x7B86F0, over: 0x171A21, alpha: 0.12)
-    )
+    /// Selection surfaces: the design marks selection with the muted panel
+    /// tone + strong (ink) border + accent inset bar, not an accent wash.
+    nonisolated(unsafe) static let accentTint = adaptive(light: 0xD8DADA, dark: 0x333333)
 
-    /// color-mix(in oklab, var(--accent), transparent 70%) — active row
-    /// border / selected segment border.
-    nonisolated(unsafe) static let accentTintBorder = adaptive(
-        light: blend(0x4F5BD5, over: 0xF6F7FB, alpha: 0.30),
-        dark: blend(0x7B86F0, over: 0x171A21, alpha: 0.30)
-    )
+    /// Selected segment / active row border — `--semantic-border-strong`.
+    nonisolated(unsafe) static let accentTintBorder = adaptive(light: 0x000000, dark: 0x333333)
 
-    /// rgba(255,255,255,.7) — agent chip on an active skill row.
-    nonisolated(unsafe) static let accentChip: Color = {
-        let lightTint = blend(0x4F5BD5, over: 0xF6F7FB, alpha: 0.12)
-        let darkTint = blend(0x7B86F0, over: 0x171A21, alpha: 0.12)
-        return adaptive(
-            light: blend(0xFFFFFF, over: lightTint, alpha: 0.70),
-            dark: blend(0xFFFFFF, over: darkTint, alpha: 0.70)
-        )
-    }()
+    /// Hover surface for accent text buttons — the muted panel tone.
+    nonisolated(unsafe) static let accentTintFaint = adaptive(light: 0xD8DADA, dark: 0x333333)
 
-    /// Agent chip label on an active row. The chip background is light in
-    /// both appearances, so the label stays the light-mode foreground in
-    /// both — using the adaptive secondary foreground made the label
-    /// near-invisible in dark mode (light-on-light).
-    nonisolated(unsafe) static let accentChipText = Color(hex: 0x3F4352)
+    /// Chip surface on selected rows (muted tone, distinguished by stroke).
+    nonisolated(unsafe) static let accentChip = adaptive(light: 0xD8DADA, dark: 0x333333)
 
-    /// Skill tile gradients (160deg) from the design — cool neutral in both
-    /// appearances.
-    nonisolated(unsafe) static let tileTop = adaptive(light: 0x3A3F4E, dark: 0x3A3F4E)
-    nonisolated(unsafe) static let tileBottom = adaptive(light: 0x1B1D24, dark: 0x1B1D24)
-    nonisolated(unsafe) static let tileActiveTop = adaptive(light: 0x7B86F0, dark: 0x7B86F0)
-    nonisolated(unsafe) static let tileActiveBottom = adaptive(light: 0x4F5BD5, dark: 0x4F5BD5)
+    /// Chip label on a muted chip surface.
+    nonisolated(unsafe) static let accentChipText = adaptive(light: 0x111111, dark: 0xFFFFFF)
 
-    /// Focus ring: color-mix(in oklab, var(--accent), transparent 65%).
-    nonisolated(unsafe) static let focusRing = adaptive(
-        light: blend(0x4F5BD5, over: 0xF6F7FB, alpha: 0.35),
-        dark: blend(0x7B86F0, over: 0x171A21, alpha: 0.28)
-    )
+    /// Brand tiles (empty-state art) — flat panels in the redesign.
+    nonisolated(unsafe) static let tileTop = adaptive(light: 0xD8DADA, dark: 0x1A1A1A)
+    nonisolated(unsafe) static let tileBottom = adaptive(light: 0xC5C9C9, dark: 0x0A0A0A)
+    nonisolated(unsafe) static let tileActiveTop = adaptive(light: 0x000000, dark: 0x333333)
+    nonisolated(unsafe) static let tileActiveBottom = adaptive(light: 0x0040FF, dark: 0x212121)
 
-    /// Toast: rgba(29,29,31,.94) pill with #f5f5f7 text.
+    /// Focus ring — `--semantic-brand-focus` (== `--ring`).
+    nonisolated(unsafe) static let focusRing = adaptive(light: 0x000000, dark: 0x333333)
+
+    /// Toast pill background (dark in both appearances).
     nonisolated(unsafe) static let toastBackground = Color.black.opacity(0.86)
 
-    /// Hover tint for destructive text buttons:
-    /// color-mix(in oklab, var(--danger), transparent 92%).
+    /// Hover tint for destructive text buttons.
     nonisolated(unsafe) static let dangerTint = adaptive(
-        light: blend(0xD64545, over: 0xF6F7FB, alpha: 0.08),
-        dark: blend(0xF87171, over: 0x171A21, alpha: 0.12)
+        light: blend(0xD73333, over: 0xC5C9C9, alpha: 0.08),
+        dark: blend(0xEF4444, over: 0x0A0A0A, alpha: 0.12)
     )
 
-    /// Hover tint for accent text buttons:
-    /// color-mix(in oklab, var(--accent), transparent 92%).
-    nonisolated(unsafe) static let accentTintFaint = adaptive(
-        light: blend(0x4F5BD5, over: 0xF6F7FB, alpha: 0.08),
-        dark: blend(0x7B86F0, over: 0x171A21, alpha: 0.12)
-    )
-
-    /// Pill warning background: color-mix(in oklab, var(--warn), transparent 85%).
+    /// Pill warning background.
     nonisolated(unsafe) static let warnTint = adaptive(
-        light: blend(0xD99A0B, over: 0xF6F7FB, alpha: 0.15),
-        dark: blend(0xFBBF24, over: 0x171A21, alpha: 0.15)
+        light: blend(0xD99A0B, over: 0xC5C9C9, alpha: 0.15),
+        dark: blend(0xFBBF24, over: 0x0A0A0A, alpha: 0.15)
     )
 
-    /// Markdown element accents (amber on light, amber-300 on dark).
-    nonisolated(unsafe) static let codeInline = adaptive(light: 0xA16207, dark: 0xFBBF24)
+    // Markdown element accents — neutral ink on muted code panels.
+    nonisolated(unsafe) static let codeInline = adaptive(light: 0x111111, dark: 0xFFFFFF)
+    nonisolated(unsafe) static let blockquote = adaptive(light: 0x888888, dark: 0xAAAAAA)
+    nonisolated(unsafe) static let codeBlockBackground = adaptive(light: 0xC5C9C9, dark: 0x0A0A0A)
 
-    /// Markdown blockquote tint (violet-700 / violet-300).
-    nonisolated(unsafe) static let blockquote = adaptive(light: 0x6D28D9, dark: 0xA78BFA)
+    // Data visualization — `--chart-1`…`--chart-5` (the design's only
+    // saturated colors in dark mode; `chart-3` doubles as the positive
+    // banner marker, cf. main.html `.banner`).
+    nonisolated(unsafe) static let chart1 = adaptive(light: 0x0140FF, dark: 0x60A5FA)
+    nonisolated(unsafe) static let chart2 = adaptive(light: 0x386AFF, dark: 0xF472B6)
+    nonisolated(unsafe) static let chart3 = adaptive(light: 0x6B90FF, dark: 0x34D399)
+    nonisolated(unsafe) static let chart4 = adaptive(light: 0x94AFFF, dark: 0xFBBF24)
+    nonisolated(unsafe) static let chart5 = adaptive(light: 0xBDCDFF, dark: 0x818CF8)
 
-    /// Fenced code block background — clearly darker/lighter than the warm
-    /// card surface so blocks read as distinct panels.
-    nonisolated(unsafe) static let codeBlockBackground = adaptive(light: 0xE8EAF2, dark: 0x10141A)
+    // Primary button pair — `--primary` / `--primary-foreground`.
+    nonisolated(unsafe) static let primaryButtonBackground = adaptive(light: 0x111111, dark: 0xFFFFFF)
+    nonisolated(unsafe) static let primaryButtonForeground = adaptive(light: 0xFFFFFF, dark: 0x000000)
+
+    /// Hard shadow base color — `--shadow-color` is pure black in both themes.
+    nonisolated(unsafe) static let shadowColor = Color.black
 
     // MARK: Fonts
 
+    /// The redesign sets `--font-sans` and `--font-mono` to Geist Mono;
+    /// use the system monospaced design (SF Mono) as the fallback stack.
     static func display(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: weight)
+        .system(size: size, weight: weight, design: .monospaced)
     }
 
     static func body(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: weight)
+        .system(size: size, weight: weight, design: .monospaced)
     }
 
     static func mono(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
@@ -120,9 +158,41 @@ enum AppTheme {
 
     // MARK: Radii
 
-    static let radiusSmall: CGFloat = 8
-    static let radiusMedium: CGFloat = 12
-    static let radiusLarge: CGFloat = 18
+    /// `--radius: 0rem` — the brutalist redesign has zero corner radius.
+    static let radiusSmall: CGFloat = 0
+    static let radiusMedium: CGFloat = 0
+    static let radiusLarge: CGFloat = 0
+
+    // MARK: Hard shadow
+
+    /// Shadow elevation matching `--shadow-2xs` / `--shadow-sm` / `--shadow-md`.
+    enum ShadowLevel {
+        case flat
+        case rest
+        case raised
+    }
+
+    /// Brutalist hard offset shadow: `2px 2px 0 0` pure black; `rest` and
+    /// `raised` add the faint soft secondary shadow from `--shadow-sm` /
+    /// `--shadow-md`.
+    struct HardShadow: ViewModifier {
+        var level: ShadowLevel = .rest
+
+        func body(content: Content) -> some View {
+            switch level {
+            case .flat:
+                content.shadow(color: AppTheme.shadowColor.opacity(0.5), radius: 0, x: 2, y: 2)
+            case .rest:
+                content
+                    .shadow(color: AppTheme.shadowColor, radius: 0, x: 2, y: 2)
+                    .shadow(color: AppTheme.shadowColor.opacity(0.55), radius: 2, x: 2, y: 1)
+            case .raised:
+                content
+                    .shadow(color: AppTheme.shadowColor, radius: 0, x: 2, y: 2)
+                    .shadow(color: AppTheme.shadowColor.opacity(0.55), radius: 4, x: 2, y: 2)
+            }
+        }
+    }
 
     // MARK: Helpers
 
@@ -171,7 +241,7 @@ extension Color {
 
 /// Light/dark appearance persistence shared by the browser toolbar toggle
 /// and the settings window. `light`/`dark` override the system; `system`
-/// follows the OS — matching the HTML `ss.theme` behavior.
+/// follows the OS — matching the HTML `data-theme` behavior.
 enum ThemePreference {
     static let storageKey = "SkillSelector.themeMode"
 
@@ -211,5 +281,22 @@ struct ThemeAppearance: ViewModifier {
 extension View {
     func themedAppearance() -> some View {
         modifier(ThemeAppearance())
+    }
+
+    /// Brutalist hard offset shadow (`2px 2px 0 0` black). See
+    /// `AppTheme.HardShadow` for the elevation levels.
+    func hardShadow(_ level: AppTheme.ShadowLevel = .rest) -> some View {
+        modifier(AppTheme.HardShadow(level: level))
+    }
+
+    /// The same shadow, opt-in — for shared components whose design page
+    /// only sometimes carries the elevation.
+    @ViewBuilder
+    func hardShadow(_ level: AppTheme.ShadowLevel, isActive: Bool) -> some View {
+        if isActive {
+            modifier(AppTheme.HardShadow(level: level))
+        } else {
+            self
+        }
     }
 }

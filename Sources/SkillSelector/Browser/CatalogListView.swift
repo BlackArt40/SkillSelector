@@ -19,6 +19,8 @@ struct CatalogListView: View {
     /// Repository filter from the column header; nil shows every source.
     @State private var selectedSourceID: String?
     @State private var showingAddSheet = false
+    /// Lift state for the ink-chrome source pull-down label.
+    @State private var filterHovering = false
     /// Marketplace-local text filter (name + prefetched description).
     @State private var searchText = ""
 
@@ -76,12 +78,6 @@ struct CatalogListView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Rectangle()
-                .fill(AppTheme.borderSoft)
-                .frame(height: 1)
-            if case .loaded = state {
-                searchBar
-            }
             content
         }
         .background(AppTheme.background)
@@ -102,74 +98,116 @@ struct CatalogListView: View {
         }
     }
 
+    /// catalog.html's market toolbar (`space-y-3 border-b-2 border-ring
+    /// p-4`): 18 pt bold title with an ink count badge, the source
+    /// pull-down and 导入市场 ink buttons, then the 2 px ink search field —
+    /// a 16 pt padded block closed by a full-width 2 px ink rule.
     private var header: some View {
-        HStack(alignment: .center, spacing: 8) {
-            Text(verbatim: L10n.string("Marketplace"))
-                .font(AppTheme.display(17, weight: .semibold))
-                .foregroundStyle(AppTheme.foreground)
-                .lineLimit(1)
-            if displayedCount > 0 {
-                Text(verbatim: "\(displayedCount)")
-                    .font(AppTheme.body(12))
-                    .foregroundStyle(AppTheme.muted)
+        VStack(spacing: 12) {
+            HStack(spacing: 8) {
+                Text(verbatim: L10n.string("Marketplace"))
+                    .font(AppTheme.display(18, weight: .bold))
+                    .kerning(-0.9)
+                    .foregroundStyle(AppTheme.foreground)
+                    .lineLimit(1)
+                if displayedCount > 0 {
+                    InkBadge(text: "\(displayedCount)")
+                }
+                Spacer(minLength: 8)
+                sourceFilterPicker
+                addSourceButton
+                refreshButton
             }
-            sourceFilterPicker
-            addSourceButton
-            Spacer(minLength: 8)
-            Button {
-                onRefresh?()
-            } label: {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 12))
-                    .foregroundStyle(AppTheme.muted)
-                    .frame(width: 22, height: 22)
-                    .contentShape(Rectangle())
+            if case .loaded = state {
+                ListSearchBar(
+                    placeholderKey: "Search Names Or Descriptions",
+                    text: $searchText,
+                    style: .ink
+                )
             }
-            .buttonStyle(.plain)
-            .disabled(isLoading)
-            .help(L10n.string("Refresh Marketplace"))
-            .accessibilityLabel(L10n.string("Refresh Marketplace"))
         }
-        .padding(.leading, 16)
-        .padding(.trailing, 8)
-        .frame(height: 46)
+        .padding(16)
+        .background(alignment: .bottom) {
+            Rectangle()
+                .fill(AppTheme.ink)
+                .frame(height: 2)
+        }
         .background(AppTheme.background)
     }
 
     /// Repository category filter: every declared source plus the
-    /// everything option, rendered as a compact pull-down menu.
+    /// everything option, pulled down from an ink button label
+    /// (`border-2 border-ring … chevron-down` in the design).
     private var sourceFilterPicker: some View {
-        Picker("Marketplace Source Filter", selection: $selectedSourceID) {
-            Text(verbatim: L10n.string("All Sources")).tag(String?.none)
-            ForEach(model.catalog.sources) { source in
-                Text(verbatim: source.displayName).tag(Optional(source.id))
+        Menu {
+            Picker("Marketplace Source Filter", selection: $selectedSourceID) {
+                Text(verbatim: L10n.string("All Sources")).tag(String?.none)
+                ForEach(model.catalog.sources) { source in
+                    Text(verbatim: source.displayName).tag(Optional(source.id))
+                }
             }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        } label: {
+            HStack(spacing: 6) {
+                Text(verbatim: sourceFilterTitle)
+                    .font(AppTheme.body(14, weight: .bold))
+                    .foregroundStyle(AppTheme.foreground)
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(AppTheme.muted)
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 36)
+            .background(AppTheme.surface)
+            .overlay {
+                Rectangle().stroke(AppTheme.ink, lineWidth: 2)
+            }
+            .hardShadow(.rest)
+            .offset(x: filterHovering ? -1 : 0, y: filterHovering ? -1 : 0)
+            .onHover { filterHovering = $0 }
+            .contentShape(Rectangle())
         }
-        .pickerStyle(.menu)
-        .labelsHidden()
-        .controlSize(.small)
+        .menuStyle(.borderlessButton)
+        .fixedSize()
         .accessibilityLabel(L10n.string("Marketplace Source Filter"))
     }
 
-    /// 「导入市场」: block button with a label — opens the import sheet
-    /// for a user-declared GitHub source.
+    private var sourceFilterTitle: String {
+        guard let id = selectedSourceID,
+              let source = model.catalog.sources.first(where: { $0.id == id }) else {
+            return L10n.string("All Sources")
+        }
+        return source.displayName
+    }
+
+    /// 「导入市场」: primary ink button — opens the import sheet for a
+    /// user-declared GitHub source.
     private var addSourceButton: some View {
         Button {
             showingAddSheet = true
         } label: {
-            HStack(spacing: 5) {
-                Image(systemName: "plus.circle")
-                    .font(.system(size: 11))
-                Text(verbatim: L10n.string("Import Source"))
-                    .font(AppTheme.body(12, weight: .medium))
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(AppTheme.surfaceWarm, in: RoundedRectangle(cornerRadius: 7))
+            Text(verbatim: L10n.string("Import Source"))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(InkButtonStyle())
         .help(L10n.string("Import Source"))
         .accessibilityLabel(L10n.string("Import Source"))
+    }
+
+    /// Not in catalog.html, but refresh is core catalog functionality —
+    /// rendered as an ink icon button so it matches the toolbar chrome.
+    private var refreshButton: some View {
+        Button {
+            onRefresh?()
+        } label: {
+            Image(systemName: "arrow.clockwise")
+                .font(.system(size: 13, weight: .bold))
+        }
+        .buttonStyle(InkButtonStyle())
+        .disabled(isLoading)
+        .help(L10n.string("Refresh Marketplace"))
+        .accessibilityLabel(L10n.string("Refresh Marketplace"))
     }
 
     private var isLoading: Bool {
@@ -191,7 +229,7 @@ struct CatalogListView: View {
                 noMatchesState
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 2, pinnedViews: [.sectionHeaders]) {
+                    LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
                         if truncated {
                             truncatedBanner
                         }
@@ -213,14 +251,12 @@ struct CatalogListView: View {
                                         highlightQuery: searchText,
                                         onSelect: { onSelect?(skill) }
                                     )
-                                    .padding(.horizontal, 8)
                                 }
                             } header: {
                                 sectionHeader(section)
                             }
                         }
                     }
-                    .padding(.vertical, 8)
                 }
             }
         case .failed(let failure):
@@ -252,15 +288,20 @@ struct CatalogListView: View {
         }
     }
 
+    /// catalog.html's source banner (`text-xs uppercase tracking-wider
+    /// text-muted-foreground`): the per-source sticky header keeps the
+    /// functional remove action and count on the right.
     private func sectionHeader(_ section: CatalogSection) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 8) {
             Text(verbatim: section.source.displayName)
-                .font(AppTheme.display(12, weight: .semibold))
+                .font(AppTheme.body(12, weight: .medium))
+                .textCase(.uppercase)
                 .foregroundStyle(AppTheme.muted)
+                .lineLimit(1)
+            Spacer(minLength: 8)
             Text(verbatim: "\(section.skills.count)")
-                .font(AppTheme.body(11))
-                .foregroundStyle(AppTheme.meta)
-            Spacer(minLength: 0)
+                .font(AppTheme.body(12))
+                .foregroundStyle(AppTheme.muted)
             if section.source.isCustom {
                 Button {
                     model.catalog.removeSource(id: section.source.id)
@@ -305,7 +346,8 @@ struct CatalogListView: View {
                 .font(.system(size: 26))
                 .foregroundStyle(AppTheme.meta)
             Text(verbatim: L10n.string("No Marketplace Matches"))
-                .font(AppTheme.display(17, weight: .semibold))
+                .font(AppTheme.display(18, weight: .bold))
+                .kerning(-0.9)
                 .foregroundStyle(AppTheme.foreground)
             Text(verbatim: L10n.string("No Marketplace Matches Description"))
                 .font(AppTheme.body(13))
@@ -323,8 +365,12 @@ struct CatalogListView: View {
             .foregroundStyle(AppTheme.muted)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(10)
-            .background(AppTheme.surfaceWarm, in: RoundedRectangle(cornerRadius: 8))
-            .padding(.horizontal, 8)
+            .background(AppTheme.surfaceWarm, in: Rectangle())
+            .overlay {
+                Rectangle().stroke(AppTheme.warn, lineWidth: 1)
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 16)
     }
 
     private var partialFailureBanner: some View {
@@ -333,8 +379,12 @@ struct CatalogListView: View {
             .foregroundStyle(AppTheme.muted)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(10)
-            .background(AppTheme.surfaceWarm, in: RoundedRectangle(cornerRadius: 8))
-            .padding(.horizontal, 8)
+            .background(AppTheme.surfaceWarm, in: Rectangle())
+            .overlay {
+                Rectangle().stroke(AppTheme.warn, lineWidth: 1)
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 16)
     }
 
     private func failedState(_ failure: CatalogLoadFailure) -> some View {
@@ -344,7 +394,8 @@ struct CatalogListView: View {
                 .font(.system(size: 26))
                 .foregroundStyle(AppTheme.meta)
             Text(verbatim: L10n.string("Marketplace Failed"))
-                .font(AppTheme.display(17, weight: .semibold))
+                .font(AppTheme.display(18, weight: .bold))
+                .kerning(-0.9)
                 .foregroundStyle(AppTheme.foreground)
             Text(verbatim: CatalogFailureMessage.text(for: failure))
                 .font(AppTheme.body(13))
@@ -354,17 +405,19 @@ struct CatalogListView: View {
             Button(L10n.string("Retry")) {
                 onRefresh?()
             }
-            .controlSize(.small)
+            .buttonStyle(InkButtonStyle())
+            .padding(.top, 4)
             Spacer(minLength: 48)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
-/// One catalog row: skill name, its frontmatter description once the
-/// prefetch lands (path until then), and the source badge. Equatable so
-/// parent invalidations skip re-rendering unchanged realized rows, and
-/// fixed-height so LazyVStack's scroll geometry stays cheap.
+/// One catalog row (catalog.html `h-14 … border-b px-4`): ink-chrome
+/// avatar tile, skill name, its frontmatter description once the
+/// prefetch lands (path until then), and the installed chip. Equatable
+/// so parent invalidations skip re-rendering unchanged realized rows,
+/// and fixed-height so LazyVStack's scroll geometry stays cheap.
 struct CatalogSkillRow: View, Equatable {
     let skill: CatalogSkill
     let sourceName: String
@@ -388,18 +441,15 @@ struct CatalogSkillRow: View, Equatable {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 13))
-                .foregroundStyle(isActive ? AppTheme.accentActive : AppTheme.muted)
-                .frame(width: 18)
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: 12) {
+            SkillTileView(title: skill.name, size: 32, inkBorder: true)
+            VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     HighlightedText(
                         text: skill.name,
                         query: highlightQuery,
-                        font: AppTheme.body(13, weight: .medium),
-                        baseColor: isActive ? AppTheme.accentActive : AppTheme.foreground
+                        font: AppTheme.body(14, weight: .bold),
+                        baseColor: isActive ? AppTheme.accentForeground : AppTheme.foreground
                     )
                     .lineLimit(1)
                     if isInstalled {
@@ -411,38 +461,36 @@ struct CatalogSkillRow: View, Equatable {
                         text: description,
                         query: highlightQuery,
                         font: AppTheme.body(12),
-                        baseColor: AppTheme.muted
+                        baseColor: isActive ? AppTheme.accentForeground.opacity(0.8) : AppTheme.muted
                     )
                     .lineLimit(1)
                 } else {
                     Text(verbatim: skill.skillPath)
                         .font(AppTheme.mono(11))
-                        .foregroundStyle(AppTheme.muted)
+                        .foregroundStyle(isActive ? AppTheme.accentForeground.opacity(0.8) : AppTheme.muted)
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
             }
-            Spacer(minLength: 4)
-            PillBadge(text: sourceName, style: .link)
+            Spacer(minLength: 8)
         }
-        .padding(.horizontal, 10)
-        .frame(height: 46)
-        .background(isActive ? AppTheme.accentTint : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+        .padding(.horizontal, 16)
+        .frame(height: 56)
+        .background(isActive ? AppTheme.accent : Color.clear)
+        .background(alignment: .bottom) {
+            Rectangle().fill(AppTheme.border).frame(height: 1)
+        }
         .contentShape(Rectangle())
         .onTapGesture {
             onSelect?()
         }
     }
 
-    /// Compact「已安装」pill next to the name — shown only when the local
-    /// index has this skill.
+    /// Rectangular「已安装」chip next to the name — catalog.html's
+    /// `border-2 border-ring bg-sidebar-accent … text-[11px] font-bold`
+    /// badge, shown only when the local index has this skill.
     private var installedBadge: some View {
-        Text(verbatim: L10n.string("Installed Locally"))
-            .font(AppTheme.body(10, weight: .medium))
-            .foregroundStyle(AppTheme.success)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 1)
-            .background(AppTheme.success.opacity(0.12), in: Capsule())
+        InkBadge(text: L10n.string("Installed Locally"))
             .lineLimit(1)
             .help(L10n.string("Installed Locally"))
     }

@@ -32,12 +32,11 @@ struct RootRenameSheet: View {
                 TextField(L10n.string("Display Name"), text: $name)
                     .textFieldStyle(.plain)
                     .font(AppTheme.body(13))
-                    .padding(.horizontal, 10)
-                    .frame(height: 32)
-                    .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 8))
+                    .padding(.horizontal, 12)
+                    .frame(height: 40)
+                    .background(AppTheme.inputBackground)
                     .overlay {
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(AppTheme.border, lineWidth: 1)
+                        Rectangle().stroke(AppTheme.ink, lineWidth: 1)
                     }
                 Text(verbatim: L10n.string("Rename Directory Sub"))
                     .font(AppTheme.body(11.5))

@@ -47,7 +47,7 @@ enum BrowserDestination: Hashable {
     }
 }
 
-/// Sidebar mirroring the design's `.sidebar` column: 240 pt, surface
+/// Sidebar mirroring the design's `.sidebar` column: 232 pt, sidebar
 /// background, section headings, icon rows with trailing counts, and a
 /// footer with 设置 / 添加项目 links.
 struct BrowserSidebar: View {
@@ -164,10 +164,10 @@ struct BrowserSidebar: View {
                 scanningFooter
             }
         }
-        .background(AppTheme.surface)
+        .background(AppTheme.sidebarBackground)
         .overlay(alignment: .trailing) {
             Rectangle()
-                .fill(AppTheme.borderSoft)
+                .fill(AppTheme.sidebarBorder)
                 .frame(width: 1)
         }
     }
@@ -196,7 +196,7 @@ struct BrowserSidebar: View {
     }
 
     private var mainSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 4) {
             SidebarItem(
                 title: L10n.string("All Skills"),
                 glyph: Image(systemName: "square.stack.3d.up"),
@@ -275,7 +275,7 @@ struct BrowserSidebar: View {
     private var unhealthySection: some View {
         let unhealthy = roots.filter { unhealthyRootIDs.contains($0.id) }
         if !unhealthy.isEmpty {
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 4) {
                 sideHeading(L10n.string("Needs Re-authorization"))
                 ForEach(unhealthy) { root in
                     SidebarItem(
@@ -315,7 +315,7 @@ struct BrowserSidebar: View {
     @ViewBuilder
     private var systemSection: some View {
         let rows = Self.systemSectionRows(systemRoots)
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 4) {
             sideHeading(L10n.string("System Directories"))
             if let rows {
                 ForEach(rows) { root in
@@ -335,7 +335,7 @@ struct BrowserSidebar: View {
             Image(systemName: AuthorizedRootKind.home.systemImage)
                 .font(.system(size: 13))
                 .foregroundStyle(AppTheme.muted)
-                .frame(width: 18)
+                .frame(width: 20)
             Text(L10n.string(AuthorizedRootKind.home.localizationKey))
                 .font(AppTheme.body(13))
                 .foregroundStyle(AppTheme.muted)
@@ -352,8 +352,8 @@ struct BrowserSidebar: View {
             .help(L10n.string("Import System Directory"))
             .accessibilityLabel(L10n.string("Import System Directory"))
         }
-        .frame(height: 32)
-        .padding(.horizontal, 10)
+        .frame(height: 36)
+        .padding(.horizontal, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -362,7 +362,7 @@ struct BrowserSidebar: View {
     @ViewBuilder
     private var projectsSection: some View {
         let visible = Self.visibleProjectRoots(projects, counts: counts)
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 0) {
                 sideHeading(L10n.string("Projects"))
                 Spacer(minLength: 4)
@@ -394,7 +394,7 @@ struct BrowserSidebar: View {
 
     @ViewBuilder
     private var agentsSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 4) {
             sideHeading(L10n.string("Agents"))
             if agents.isEmpty {
                 Text(verbatim: L10n.string("No Agents Detected"))
@@ -419,11 +419,11 @@ struct BrowserSidebar: View {
 
     private func sideHeading(_ text: String) -> some View {
         Text(verbatim: text)
-            .font(AppTheme.body(11, weight: .semibold))
-            .kerning(0.2)
-            .foregroundStyle(AppTheme.muted)
-            .padding(.horizontal, 10)
-            .padding(.bottom, 2)
+            .font(AppTheme.body(11, weight: .bold))
+            .kerning(-0.55)
+            .foregroundStyle(AppTheme.sidebarAccentForeground)
+            .padding(.horizontal, 8)
+            .padding(.bottom, 4)
     }
 
     // MARK: Root rows
@@ -465,7 +465,7 @@ struct BrowserSidebar: View {
     }
 }
 
-/// A single `.side-item`: 32 pt tall, 13 pt label, 11 pt trailing count.
+/// A single `.side-item`: 36 pt tall, 13 pt bold label, 11 pt trailing count.
 struct SidebarItem: View {
     let title: String
     var subtitle: String? = nil
@@ -495,42 +495,51 @@ struct SidebarItem: View {
             HStack(spacing: 8) {
                 glyph
                     .font(.system(size: 13))
-                    .frame(width: 18)
-                    .foregroundStyle(isActive ? AppTheme.accentActive : AppTheme.muted)
+                    .frame(width: 20)
+                    .foregroundStyle(isActive ? AppTheme.sidebarAccentForeground : AppTheme.foregroundSecondary)
                 if let subtitle {
                     VStack(alignment: .leading, spacing: 0) {
                         Text(verbatim: title)
+                            .kerning(-0.65)
                             .lineLimit(1)
                         Text(verbatim: subtitle)
                             .font(.system(size: 10))
-                            .foregroundStyle(AppTheme.muted)
+                            .foregroundStyle(AppTheme.foregroundSecondary)
                             .lineLimit(1)
                             .truncationMode(.middle)
                     }
                 } else {
                     Text(verbatim: title)
+                        .kerning(-0.65)
                         .lineLimit(1)
                 }
                 Spacer(minLength: 4)
                 if let count {
                     Text(verbatim: "\(count)")
-                        .foregroundStyle(AppTheme.muted)
-                        .font(AppTheme.mono(11, weight: isActive ? .medium : .regular))
+                        .foregroundStyle(isActive ? AppTheme.sidebarAccentForeground : AppTheme.foregroundSecondary)
+                        .font(AppTheme.mono(11))
                 }
             }
-            .font(AppTheme.body(13, weight: isActive ? .medium : .regular))
-            .foregroundStyle(isActive ? AppTheme.accentActive : AppTheme.foreground)
-            .frame(height: 32)
-            .padding(.horizontal, 10)
+            .font(AppTheme.body(13, weight: .bold))
+            .foregroundStyle(AppTheme.sidebarAccentForeground)
+            .frame(height: 36)
+            .padding(.horizontal, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(isActive ? AppTheme.accentTint : Color.clear, in: RoundedRectangle(cornerRadius: 7))
+            .background {
+                if isActive {
+                    Rectangle()
+                        .fill(AppTheme.sidebarAccent)
+                        .hardShadow(.rest)
+                }
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(SidebarButtonStyle())
     }
 }
 
-/// Hover background for `.side-item:hover` (border-soft fill).
+/// Hover + press for `.side-item`: sidebar accent fill, hover lifts one
+/// pixel up-left, press sinks one pixel down-right.
 private struct SidebarButtonStyle: ButtonStyle {
     @State private var isHovering = false
 
@@ -538,13 +547,17 @@ private struct SidebarButtonStyle: ButtonStyle {
         configuration.label
             .background {
                 if isHovering && !configuration.isPressed {
-                    RoundedRectangle(cornerRadius: 7)
-                        .fill(AppTheme.borderSoft)
+                    Rectangle()
+                        .fill(AppTheme.sidebarAccent)
                 }
             }
             .onHover { hovering in
                 isHovering = hovering
             }
+            .offset(
+                x: configuration.isPressed ? 1 : (isHovering ? -1 : 0),
+                y: configuration.isPressed ? 1 : (isHovering ? -1 : 0)
+            )
     }
 }
 

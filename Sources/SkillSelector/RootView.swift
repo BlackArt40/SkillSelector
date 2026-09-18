@@ -148,7 +148,8 @@ struct RootView: View {
                     onReauthorize: { root in reauthorize(root) },
                     onRemoveRoot: { root in removeRoot(root) }
                 )
-                .frame(width: 240)
+                // `.sidebar`: 232 px, hairline right border.
+                .frame(width: 232)
 
                 // Spec §2 motion: switching sidebar destinations cross-fades
                 // the list column over 220 ms (opacity only — no geometry
@@ -158,7 +159,7 @@ struct RootView: View {
                     .id(destination)
                     .transition(.opacity)
 
-                ColumnResizer(width: $listColumnWidth, range: 300...620)
+                ColumnResizer(width: $listColumnWidth, range: 300...620, isHeavyInk: destination == .catalog)
 
                 detailPane
             }

@@ -5,7 +5,8 @@ import SwiftUI
 /// the per-pane files so row/group styling lives in exactly one place.
 
 /// `.group` — a surface card whose rows are separated by hairline borders
-/// (the design removes the border under the last row).
+/// (the design removes the border under the last row). settings.html's
+/// cards are square-cornered with the white hairline stroke.
 struct SettingsGroup<Content: View>: View {
     private let content: Content
 
@@ -17,10 +18,9 @@ struct SettingsGroup<Content: View>: View {
         _VariadicView.Tree(SettingsGroupLayout()) {
             content
         }
-        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+        .background(AppTheme.surface)
         .overlay {
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(AppTheme.borderSoft, lineWidth: 1)
+            Rectangle().stroke(AppTheme.border, lineWidth: 1)
         }
     }
 }
@@ -33,7 +33,7 @@ private struct SettingsGroupLayout: _VariadicView.MultiViewRoot {
                 child
                 if index < views.count - 1 {
                     Rectangle()
-                        .fill(AppTheme.borderSoft)
+                        .fill(AppTheme.border)
                         .frame(height: 1)
                 }
             }
@@ -103,60 +103,87 @@ struct RadioDot: View {
     }
 }
 
-/// `.btn` — 30 pt settings button with an elevation ring.
+/// `.btn` — 32 pt settings button: square, page-tone fill behind a 1 px
+/// ink stroke, lifting on hover and sinking on press.
 struct SettingsButtonStyle: ButtonStyle {
     @State private var isHovering = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(AppTheme.body(12.5, weight: .medium))
+            .font(AppTheme.body(12))
             .foregroundStyle(AppTheme.foreground)
-            .frame(height: 30)
-            .padding(.horizontal, 14)
-            .background(isHovering && !configuration.isPressed ? AppTheme.borderSoft : AppTheme.background, in: RoundedRectangle(cornerRadius: 8))
+            .frame(height: 32)
+            .padding(.horizontal, 12)
+            .background(AppTheme.background)
             .overlay {
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(AppTheme.border, lineWidth: 1)
+                Rectangle().stroke(AppTheme.ink, lineWidth: 1)
             }
+            .contentShape(Rectangle())
+            .hardShadow(.rest, isActive: !configuration.isPressed)
+            .offset(
+                x: configuration.isPressed ? 1 : (isHovering ? -1 : 0),
+                y: configuration.isPressed ? 1 : (isHovering ? -1 : 0)
+            )
             .onHover { hovering in
                 isHovering = hovering
             }
-            .contentShape(Rectangle())
     }
 }
 
-/// `.btn.danger` — bordered-less destructive text button.
+/// settings.html's 移除 button — the destructive action keeps a bordered
+/// 32 pt body with the red label and the trash icon the page shows.
 struct SettingsDangerButtonStyle: ButtonStyle {
     @State private var isHovering = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(AppTheme.body(12.5, weight: .semibold))
+            .font(AppTheme.body(12))
             .foregroundStyle(AppTheme.danger)
-            .frame(height: 30)
-            .padding(.horizontal, 14)
-            .background(isHovering && !configuration.isPressed ? AppTheme.dangerTint : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+            .frame(height: 32)
+            .padding(.horizontal, 12)
+            .background(AppTheme.background)
+            .overlay {
+                Rectangle().stroke(AppTheme.ink, lineWidth: 1)
+            }
+            .contentShape(Rectangle())
+            .hardShadow(.rest, isActive: !configuration.isPressed)
+            .offset(
+                x: configuration.isPressed ? 1 : (isHovering ? -1 : 0),
+                y: configuration.isPressed ? 1 : (isHovering ? -1 : 0)
+            )
             .onHover { hovering in
                 isHovering = hovering
             }
-            .contentShape(Rectangle())
     }
 }
 
-/// The muted section label above a settings group. `spaced` adds the
-/// extra breathing room used when a section follows a non-group row.
+/// The settings section header: `text-base font-bold` plus the optional
+/// count chip (`h-6 border border-ring bg-card …`) the directories page
+/// hangs off 已授权目录 / 自定义 Agent 目录.
 struct SettingsGroupHeading: View {
     let title: String
+    var count: Int? = nil
     var spaced = false
 
     var body: some View {
-        Text(verbatim: title)
-            .font(AppTheme.body(12, weight: .semibold))
-            .kerning(0.1)
-            .foregroundStyle(AppTheme.muted)
-            .padding(.horizontal, 4)
-            .padding(.top, spaced ? 24 : 0)
-            .padding(.bottom, 8)
+        HStack(spacing: 12) {
+            Text(verbatim: title)
+                .font(AppTheme.body(16, weight: .bold))
+                .foregroundStyle(AppTheme.foreground)
+            if let count {
+                Text(verbatim: "\(count)")
+                    .font(AppTheme.body(12, weight: .bold).monospacedDigit())
+                    .foregroundStyle(AppTheme.foreground)
+                    .padding(.horizontal, 6)
+                    .frame(height: 24)
+                    .background(AppTheme.surface)
+                    .overlay(Rectangle().stroke(AppTheme.ink, lineWidth: 1))
+                    .accessibilityHidden(true)
+            }
+        }
+        .padding(.horizontal, 4)
+        .padding(.top, spaced ? 24 : 0)
+        .padding(.bottom, 12)
     }
 }
 

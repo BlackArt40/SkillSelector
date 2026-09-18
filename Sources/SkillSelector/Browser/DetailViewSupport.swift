@@ -13,13 +13,15 @@ enum DetailViewSupport {
         value: String,
         monospaced: Bool
     ) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 16) {
+        // catalog.html's metadata grid (`text-xs`): muted 12 pt key over a
+        // fixed 96 px key column, bold 12 pt value.
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
             Text(verbatim: label)
-                .font(AppTheme.body(13))
+                .font(AppTheme.body(12))
                 .foregroundStyle(AppTheme.muted)
-                .frame(width: 108, alignment: .leading)
+                .frame(width: 96, alignment: .leading)
             Text(verbatim: value)
-                .font(monospaced ? AppTheme.mono(12) : AppTheme.body(13))
+                .font(monospaced ? AppTheme.mono(12, weight: .bold) : AppTheme.body(12, weight: .bold))
                 .foregroundStyle(AppTheme.foreground)
                 .textSelection(.enabled)
                 .lineLimit(3)
@@ -27,7 +29,7 @@ enum DetailViewSupport {
         }
     }
 
-    /// A section heading, optionally with a trailing badge capsule (e.g. a
+    /// A section heading, optionally with a trailing badge tag (e.g. a
     /// source tag). A single-text `HStack` renders identically to a bare
     /// `Text`, so one shape covers both plain and badged headings.
     static func sectionHeading(
@@ -35,17 +37,22 @@ enum DetailViewSupport {
         badge: Text? = nil
     ) -> some View {
         HStack(spacing: 8) {
+            // catalog.html's card headings: `text-xs uppercase
+            // tracking-wider text-muted-foreground` — tracking-wider nets
+            // zero against the design's negative tracking-normal, so no
+            // explicit kerning here.
             Text(verbatim: title)
-                .font(AppTheme.display(14, weight: .semibold))
-                .foregroundStyle(AppTheme.foreground)
+                .font(AppTheme.body(12, weight: .medium))
+                .textCase(.uppercase)
+                .foregroundStyle(AppTheme.muted)
             if let badge {
                 badge
-                    .font(AppTheme.body(10.5, weight: .medium))
-                    .foregroundStyle(AppTheme.muted)
+                    .font(AppTheme.body(11, weight: .bold))
+                    .foregroundStyle(AppTheme.foreground)
                     .padding(.horizontal, 8)
-                    .padding(.vertical, 1)
-                    .background(AppTheme.surface, in: Capsule())
-                    .overlay(Capsule().stroke(AppTheme.borderSoft, lineWidth: 1))
+                    .padding(.vertical, 2)
+                    .background(AppTheme.surfaceMuted)
+                    .overlay(Rectangle().stroke(AppTheme.border, lineWidth: 1))
             }
         }
     }

@@ -5,6 +5,35 @@ import SwiftUI
 /// changes land here instead of the root layout file. State (badge count,
 /// popover presentation, theme preference) stays in RootView and arrives
 /// as bindings/values.
+///
+/// Redesign: the topbar actions are `.tool-btn` text buttons — 30 px tall,
+/// muted surface, hairline border, hard offset shadow, lifting 1 px on
+/// hover and sinking 1 px on press.
+
+/// Shared `.tool-btn` treatment: 30 px tall text button on a muted surface
+/// with a 1 px border and the hard offset shadow. Button labels are `Text`s
+/// carrying the -0.05 em tracking themselves — View-level `.kerning` is
+/// macOS 13.3+ and the deployment target is macOS 12.
+private struct ToolButtonStyle: ButtonStyle {
+    @State private var isHovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(AppTheme.body(12, weight: .bold))
+            .foregroundStyle(AppTheme.foreground)
+            .padding(.horizontal, 12)
+            .frame(height: 30)
+            .background(AppTheme.surfaceMuted)
+            .overlay(Rectangle().stroke(AppTheme.border, lineWidth: 1))
+            .hardShadow(.rest)
+            .offset(
+                x: configuration.isPressed ? 1 : (isHovering ? -1 : 0),
+                y: configuration.isPressed ? 1 : (isHovering ? -1 : 0)
+            )
+            .contentShape(Rectangle())
+            .onHover { isHovering = $0 }
+    }
+}
 
 /// Explicit refresh: rescans every authorized root now. While a refresh
 /// runs the button shows progress and ignores clicks (the in-flight task
@@ -17,18 +46,16 @@ struct RootRefreshButton: View {
         Button {
             onRefresh()
         } label: {
-            if isRunning {
-                ProgressView()
-                    .controlSize(.small)
-                    .frame(width: 30, height: 30)
-            } else {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 14))
-                    .frame(width: 30, height: 30)
-                    .contentShape(Rectangle())
+            HStack(spacing: 6) {
+                if isRunning {
+                    ProgressView()
+                        .controlSize(.mini)
+                }
+                Text(L10n.string("Toolbar Refresh"))
+                    .kerning(-0.6)
             }
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(ToolButtonStyle())
         .disabled(isRunning)
         .help(L10n.string("Refresh Now"))
         .accessibilityLabel(L10n.string("Refresh Now"))
@@ -36,7 +63,9 @@ struct RootRefreshButton: View {
 }
 
 /// Recent refresh changes, anchored to the history button. Opening the
-/// popover clears the badge (spec §4: zeroed once viewed).
+/// popover clears the badge (spec §4: zeroed once viewed). The unread
+/// count is the inline `.tool-badge` — a 16 px brand-primary square right
+/// after the label, matching the HTML prototype's topbar.
 struct RootHistoryButton: View {
     @Binding var unreadChangeCount: Int
     @Binding var isShowingRefreshHistory: Bool
@@ -47,24 +76,22 @@ struct RootHistoryButton: View {
             unreadChangeCount = 0
             isShowingRefreshHistory = true
         } label: {
-            Image(systemName: "clock.arrow.circlepath")
-                .font(.system(size: 14))
-                .frame(width: 30, height: 30)
-                .contentShape(Rectangle())
-                .overlay(alignment: .topTrailing) {
-                    if unreadChangeCount > 0 {
-                        Text(verbatim: "\(min(unreadChangeCount, 99))")
-                            .font(AppTheme.body(9, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(AppTheme.danger, in: Capsule())
-                            .offset(x: 4, y: -4)
-                            .accessibilityHidden(true)
-                    }
+            HStack(spacing: 6) {
+                Text(L10n.string("Toolbar History"))
+                    .kerning(-0.6)
+                if unreadChangeCount > 0 {
+                    Text(verbatim: "\(min(unreadChangeCount, 99))")
+                        .font(AppTheme.body(10, weight: .bold))
+                        .kerning(-0.5)
+                        .foregroundStyle(AppTheme.primaryButtonForeground)
+                        .padding(.horizontal, 4)
+                        .frame(minWidth: 16, minHeight: 16)
+                        .background(AppTheme.primaryButtonBackground)
+                        .accessibilityHidden(true)
                 }
+            }
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(ToolButtonStyle())
         .help(L10n.string("Change History"))
         .accessibilityLabel(
             unreadChangeCount > 0
@@ -77,21 +104,20 @@ struct RootHistoryButton: View {
     }
 }
 
-/// `.themeBtn`: moon in light mode, sun in dark mode; toggles between the
-/// two like the HTML prototype's `ss.theme` flip. Presentation only — the
-/// flip itself is shared with the ⌘⌥T menu item via RootView.
+/// Theme flip as a `.tool-btn` text button: the label names the mode you
+/// would switch to ("Dark" in light mode, "Light" in dark), matching the
+/// HTML prototype's topbar. Presentation only — the flip itself is shared
+/// with the ⌘⌥T menu item via RootView.
 struct RootThemeToggleButton: View {
     let isDark: Bool
     let onToggle: () -> Void
 
     var body: some View {
         Button(action: onToggle) {
-            Image(systemName: isDark ? "sun.max" : "moon")
-                .font(.system(size: 14))
-                .frame(width: 30, height: 30)
-                .contentShape(Rectangle())
+            Text(L10n.string(isDark ? "Toolbar Light" : "Toolbar Dark"))
+                .kerning(-0.6)
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(ToolButtonStyle())
         .help(
             isDark
                 ? L10n.string("Switch to Light Mode")
@@ -105,19 +131,17 @@ struct RootThemeToggleButton: View {
     }
 }
 
-/// Settings entry point in the window toolbar (top-right), replacing the
-/// old sidebar footer link. Icon-only, matching the other toolbar actions.
+/// Settings entry point in the window toolbar (top-right), a `.tool-btn`
+/// text button like the other toolbar actions.
 struct RootSettingsButton: View {
     var body: some View {
         Button {
             NotificationCenter.default.post(name: .openSettingsWindow, object: nil)
         } label: {
-            Image(systemName: "gearshape")
-                .font(.system(size: 14))
-                .frame(width: 30, height: 30)
-                .contentShape(Rectangle())
+            Text(L10n.string("Toolbar Settings"))
+                .kerning(-0.6)
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(ToolButtonStyle())
         .help(L10n.string("Open Settings"))
         .accessibilityLabel(L10n.string("Open Settings"))
     }

@@ -98,8 +98,7 @@ struct SkillRow: View {
     private var skillTile: some View {
         let tile = SkillTileView(
             title: skillTileLetter(for: skill.name),
-            size: 34,
-            cornerRadius: 9,
+            size: 32,
             active: isActive,
             // Symlink hint sits on the avatar's top-right (spec §5.2
             // + visual baseline: a 9 pt triangle, matching the
@@ -115,7 +114,7 @@ struct SkillRow: View {
 
     var body: some View {
         Button(action: onSelect) {
-            HStack(alignment: .top, spacing: 10) {
+            HStack(alignment: .center, spacing: 12) {
                 skillTile
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 6) {
@@ -161,19 +160,26 @@ struct SkillRow: View {
                 }
                 Spacer(minLength: 0)
             }
-            .padding(10)
+            .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(rowBackground, in: RoundedRectangle(cornerRadius: 10))
+            .background(shadowedBackground)
             .overlay {
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(isActive ? AppTheme.accentTintBorder : Color.clear, lineWidth: 1)
+                Rectangle()
+                    .stroke(isActive ? AppTheme.accentTintBorder : AppTheme.border, lineWidth: 1)
+            }
+            .overlay(alignment: .leading) {
+                if isActive {
+                    Rectangle()
+                        .fill(AppTheme.accent)
+                        .frame(width: 2)
+                }
             }
             // Spec §2 motion: the selection background fades in over 120 ms
             // with the system curve — no pop, no easing bounce.
             .animation(.easeInOut(duration: 0.12), value: isActive)
             .contentShape(Rectangle())
         }
-        .buttonStyle(RowHoverStyle())
+        .buttonStyle(RowHoverStyle(isActive: isActive))
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(isActive ? .isSelected : [])
         .contextMenu {
@@ -195,7 +201,18 @@ struct SkillRow: View {
     }
 
     private var rowBackground: Color {
-        isActive ? AppTheme.accentTint : .clear
+        isActive ? AppTheme.surfaceMuted : AppTheme.surface
+    }
+
+    /// `--shadow-md` rides only the selected row; unselected rows are flat
+    /// bordered panels (main.html `.skill-row`).
+    @ViewBuilder
+    private var shadowedBackground: some View {
+        if isActive {
+            rowBackground.hardShadow(.raised)
+        } else {
+            rowBackground
+        }
     }
 }
 
@@ -228,29 +245,28 @@ struct AgentChip: View {
         Text(verbatim: text)
             .font(AppTheme.body(10.5, weight: .medium))
             .foregroundStyle(onActiveRow ? AppTheme.accentChipText : AppTheme.foregroundSecondary)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 1)
-            .background(onActiveRow ? AppTheme.accentChip : AppTheme.surface, in: Capsule())
+            .padding(.horizontal, 8)
+            .padding(.vertical, 2)
+            .background(onActiveRow ? AppTheme.accentChip : AppTheme.surfaceMuted, in: Rectangle())
             .overlay {
-                if !onActiveRow {
-                    Capsule().stroke(AppTheme.borderSoft, lineWidth: 1)
-                }
+                Rectangle().stroke(AppTheme.borderSoft, lineWidth: 1)
             }
             .lineLimit(1)
             .accessibilityHidden(true)
     }
 }
 
-/// `.skill-row:hover:not(.active)` — surface fill on hover.
+/// `.skill-row:hover:not(.active)` — muted fill on hover, skipped entirely
+/// on the selected row (its muted background would swallow the accent bar).
 private struct RowHoverStyle: ButtonStyle {
+    var isActive = false
     @State private var isHovering = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .background {
-                if isHovering && !configuration.isPressed {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(AppTheme.surface)
+                if isHovering && !configuration.isPressed && !isActive {
+                    Rectangle().fill(AppTheme.surfaceMuted)
                 }
             }
             .onHover { hovering in
