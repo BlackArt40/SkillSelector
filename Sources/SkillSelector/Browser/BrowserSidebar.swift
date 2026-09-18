@@ -503,7 +503,7 @@ struct SidebarItem: View {
                             .kerning(-0.65)
                             .lineLimit(1)
                         Text(verbatim: subtitle)
-                            .font(.system(size: 10))
+                            .font(AppTheme.body(10))
                             .foregroundStyle(AppTheme.foregroundSecondary)
                             .lineLimit(1)
                             .truncationMode(.middle)
