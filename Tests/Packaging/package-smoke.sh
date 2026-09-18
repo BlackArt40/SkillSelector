@@ -7,8 +7,8 @@ if (( $# != 1 )); then
 fi
 
 VERSION="$1"
-if [[ ! "$VERSION" =~ '^[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9]+)*$' ]]; then
-    print -u2 "VERSION must use numeric major.minor.patch form"
+if [[ ! "$VERSION" =~ '^[0-9]+\.[0-9]+$' ]]; then
+    print -u2 "VERSION must use numeric major.minor form (e.g. 1.0, 1.01, 1.1)"
     exit 64
 fi
 

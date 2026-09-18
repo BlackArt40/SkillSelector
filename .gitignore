@@ -2,6 +2,7 @@
 
 # Local Agent state and project-level Skill folders
 .agents/
+.claude/
 .codex/
 .opencode/
 .qoder/
