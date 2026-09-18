@@ -442,7 +442,7 @@ struct CatalogSkillRow: View, Equatable {
 
     var body: some View {
         HStack(spacing: 12) {
-            SkillTileView(title: skill.name, size: 32, inkBorder: true)
+            SkillTileView(title: skillTileLetter(for: skill.name), size: 32, inkBorder: true)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     HighlightedText(
