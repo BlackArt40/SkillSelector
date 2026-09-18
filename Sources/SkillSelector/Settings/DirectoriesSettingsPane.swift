@@ -250,12 +250,16 @@ struct DirectoriesSettingsPane: View {
     }
 }
 
-/// Hover lift / press sink for the dashed add rows.
+/// Hover lift / press sink for the dashed add rows. The row has no opaque
+/// fill of its own, so the page tone goes on *before* the hard shadow —
+/// otherwise the shadow projects the text's own silhouette and the label
+/// reads double-struck.
 private struct DashedAddButtonStyle: ButtonStyle {
     @State private var isHovering = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
+            .background(AppTheme.background)
             .overlay {
                 Rectangle()
                     .stroke(AppTheme.ink, style: StrokeStyle(lineWidth: 2, dash: [6]))
