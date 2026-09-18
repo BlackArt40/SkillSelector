@@ -60,6 +60,7 @@ final class SymbolAvailabilityTests: XCTestCase {
         "magnifyingglass",
         "minus.circle",
         "paperplane",
+        "pencil",
         "person",
         "play.circle",
         "plus",
@@ -72,6 +73,7 @@ final class SymbolAvailabilityTests: XCTestCase {
         "square.on.square",
         "square.stack.3d.up",
         "terminal",
+        "trash",
         "xmark",
         "xmark.circle.fill",
     ]
