@@ -209,14 +209,14 @@ struct ActionButtonStyle: ButtonStyle {
         if isPressed {
             switch role {
             case .secondary: AppTheme.border
-            case .primary: AppTheme.accentActive
+            case .primary: AppTheme.accentSurfaceActive
             case .destructive: AppTheme.dangerTint
             case .dangerSolid: AppTheme.danger.opacity(0.85)
             }
         } else if isHovering {
             switch role {
             case .secondary: AppTheme.borderSoft
-            case .primary: AppTheme.accentHover
+            case .primary: AppTheme.accentSurfaceHover
             case .destructive: AppTheme.dangerTint
             case .dangerSolid: AppTheme.dangerHover
             }

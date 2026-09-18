@@ -46,6 +46,14 @@ enum ScreenshotMode {
            arguments.indices.contains(languageIndex + 1) {
             language = arguments[languageIndex + 1]
         }
+        // Appearance for the run: light by default (the README set), dark
+        // for the *-dark.html acceptance previews, or system to follow the
+        // host. The preference is borrowed and restored like the language.
+        var theme = "light"
+        if let themeIndex = arguments.firstIndex(of: "--screenshot-theme"),
+           arguments.indices.contains(themeIndex + 1) {
+            theme = arguments[themeIndex + 1]
+        }
         // L10n, languageReloading, and the theme @AppStorage all read
         // UserDefaults.standard; borrow it for the run, restore after.
         savedLanguage = UserDefaults.standard.string(forKey: "SkillSelector.preferredLanguage")
@@ -57,7 +65,7 @@ enum ScreenshotMode {
         savedMainWindowFrame = UserDefaults.standard.string(forKey: "NSWindow Frame MainWindow")
         UserDefaults.standard.removeObject(forKey: "NSWindow Frame MainWindow")
         UserDefaults.standard.set(language, forKey: "SkillSelector.preferredLanguage")
-        UserDefaults.standard.set("light", forKey: ThemePreference.storageKey)
+        UserDefaults.standard.set(theme, forKey: ThemePreference.storageKey)
         do {
             model = try makeModel()
         } catch {

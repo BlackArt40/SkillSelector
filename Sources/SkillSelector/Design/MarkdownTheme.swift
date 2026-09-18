@@ -30,7 +30,7 @@ extension Theme {
             StrikethroughStyle(.single)
         }
         .link {
-            ForegroundColor(AppTheme.accent)
+            ForegroundColor(AppTheme.markdownAccent)
             UnderlineStyle(.single)
         }
         .heading1 { configuration in
@@ -40,7 +40,7 @@ extension Theme {
                 .markdownTextStyle {
                     FontWeight(.semibold)
                     FontSize(.em(1.55))
-                    ForegroundColor(AppTheme.accent)
+                    ForegroundColor(AppTheme.markdownAccent)
                 }
         }
         .heading2 { configuration in

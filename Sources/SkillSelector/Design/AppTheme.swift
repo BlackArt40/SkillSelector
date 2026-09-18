@@ -47,15 +47,23 @@ enum AppTheme {
     // accent pair (cooler panel + black/white label) distinct from `--muted`.
     nonisolated(unsafe) static let sidebarBackground = adaptive(light: 0xD8DADA, dark: 0x0A0A0A)
     nonisolated(unsafe) static let sidebarBorder = adaptive(light: 0xFFFFFF, dark: 0x333333)
-    nonisolated(unsafe) static let sidebarAccent = adaptive(light: 0xC5C9C9, dark: 0x212121)
+    nonisolated(unsafe) static let sidebarAccent = adaptive(light: 0xC5C9C9, dark: 0x222222)
     nonisolated(unsafe) static let sidebarAccentForeground = adaptive(light: 0x000000, dark: 0xFFFFFF)
 
     // Brand — `--accent` (saturated cobalt blue in light; the design keeps
     // dark mode monochrome) and `--primary` (inverted black/white control
     // pair driving active states and primary buttons).
-    nonisolated(unsafe) static let accent = adaptive(light: 0x0040FF, dark: 0x212121)
+    nonisolated(unsafe) static let accent = adaptive(light: 0x0040FF, dark: 0x222222)
     nonisolated(unsafe) static let accentHover = adaptive(light: 0x111111, dark: 0xFFFFFF)
     nonisolated(unsafe) static let accentActive = adaptive(light: 0x111111, dark: 0xFFFFFF)
+
+    /// Hover/press fill for a button whose *surface* is `accent`. The
+    /// design's only hover fill step is onto the muted panel tone
+    /// (`hover:bg-sidebar-accent`), which in dark is 0x333333 — stepping to
+    /// `accentHover` (white) would bury the white accent-foreground label.
+    /// Light keeps the accepted blue→ink step.
+    nonisolated(unsafe) static let accentSurfaceHover = adaptive(light: 0x111111, dark: 0x333333)
+    nonisolated(unsafe) static let accentSurfaceActive = adaptive(light: 0x111111, dark: 0x333333)
 
     /// `--secondary` / `--secondary-foreground` — the rules.html chip pair:
     /// near-black fill with a white label in light mode, mid-gray in dark.
@@ -99,7 +107,7 @@ enum AppTheme {
     nonisolated(unsafe) static let tileTop = adaptive(light: 0xD8DADA, dark: 0x1A1A1A)
     nonisolated(unsafe) static let tileBottom = adaptive(light: 0xC5C9C9, dark: 0x0A0A0A)
     nonisolated(unsafe) static let tileActiveTop = adaptive(light: 0x000000, dark: 0x333333)
-    nonisolated(unsafe) static let tileActiveBottom = adaptive(light: 0x0040FF, dark: 0x212121)
+    nonisolated(unsafe) static let tileActiveBottom = adaptive(light: 0x0040FF, dark: 0x222222)
 
     /// Focus ring — `--semantic-brand-focus` (== `--ring`).
     nonisolated(unsafe) static let focusRing = adaptive(light: 0x000000, dark: 0x333333)
@@ -123,6 +131,12 @@ enum AppTheme {
     nonisolated(unsafe) static let codeInline = adaptive(light: 0x111111, dark: 0xFFFFFF)
     nonisolated(unsafe) static let blockquote = adaptive(light: 0x888888, dark: 0xAAAAAA)
     nonisolated(unsafe) static let codeBlockBackground = adaptive(light: 0xC5C9C9, dark: 0x0A0A0A)
+
+    /// Markdown h1 + link accent. Light takes `--accent` (cobalt); the
+    /// design inverts `--accent` to monochrome in dark, where it would
+    /// vanish on the card fill, so dark takes `--chart-1` — the design's
+    /// only saturated dark family.
+    nonisolated(unsafe) static let markdownAccent = adaptive(light: 0x0040FF, dark: 0x60A5FA)
 
     // Data visualization — `--chart-1`…`--chart-5` (the design's only
     // saturated colors in dark mode; `chart-3` doubles as the positive
