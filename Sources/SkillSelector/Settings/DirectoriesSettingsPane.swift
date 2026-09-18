@@ -143,7 +143,7 @@ struct DirectoriesSettingsPane: View {
     private func customAgentCard(_ agent: AgentDefinition) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 10) {
-                Image(systemName: "pencil.line")
+                Image(systemName: "pencil")
                     .font(.system(size: 13))
                     .foregroundStyle(AppTheme.foregroundSecondary)
                 Text(verbatim: agent.displayName)

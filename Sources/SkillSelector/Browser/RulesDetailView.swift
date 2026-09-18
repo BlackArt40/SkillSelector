@@ -106,7 +106,7 @@ struct RulesDetailView: View {
                 onOpen?(file)
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: "pencil.line")
+                    Image(systemName: "pencil")
                         .font(.system(size: 12))
                     Text(verbatim: L10n.string("Open in Default Editor"))
                 }

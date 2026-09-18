@@ -73,7 +73,7 @@ struct CustomAgentSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 12) {
-                Image(systemName: "pencil.line")
+                Image(systemName: "pencil")
                     .font(.system(size: 15))
                     .foregroundStyle(AppTheme.foreground)
                 Text(verbatim: L10n.string(editing == nil
