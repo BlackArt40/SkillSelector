@@ -97,7 +97,7 @@ The only third-party dependencies are Yams (frontmatter parsing), GRDB (local in
 
 ## Versioning
 
-`MAJOR.MINOR.PATCH`: small changes bump PATCH (1.0.1 → 1.0.2), substantive features bump MINOR (1.1.0), a redesign bumps MAJOR (2.4.1).
+`MAJOR.MINOR` (e.g. 1.0): small updates bump +0.01 (1.0 → 1.01), substantial features bump +0.1 (1.09 → 1.1), sweeping changes bump +1 (1.1 → 2.0).
 
 ## License
 
