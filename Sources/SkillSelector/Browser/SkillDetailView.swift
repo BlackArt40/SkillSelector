@@ -56,15 +56,19 @@ struct SkillDetailView: View {
     // MARK: Hero
 
     private func hero(_ skill: SkillSnapshot) -> some View {
-        HStack(alignment: .top, spacing: 20) {
+        // Same hero treatment as the catalog detail (catalog.html's
+        // 48 px ink-border tile + 20 px bold title) — one visual language
+        // for the detail-pane hero role.
+        HStack(alignment: .top, spacing: 16) {
             SkillTileView(
                 title: skillTileLetter(for: skill.name),
-                size: 40,
-                active: false
+                size: 48,
+                inkBorder: true
             )
             VStack(alignment: .leading, spacing: 0) {
                 Text(verbatim: skill.name)
-                    .font(AppTheme.display(heroTitleSize, weight: .semibold))
+                    .font(AppTheme.display(20, weight: .bold))
+                    .kerning(-1)
                     .foregroundStyle(AppTheme.foreground)
                     .lineLimit(1)
                     .textSelection(.enabled)
