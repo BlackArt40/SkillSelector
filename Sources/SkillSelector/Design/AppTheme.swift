@@ -109,9 +109,6 @@ enum AppTheme {
     nonisolated(unsafe) static let tileActiveTop = adaptive(light: 0x000000, dark: 0x333333)
     nonisolated(unsafe) static let tileActiveBottom = adaptive(light: 0x0040FF, dark: 0x222222)
 
-    /// Focus ring — `--semantic-brand-focus` (== `--ring`).
-    nonisolated(unsafe) static let focusRing = adaptive(light: 0x000000, dark: 0x333333)
-
     /// Toast pill background (dark in both appearances).
     nonisolated(unsafe) static let toastBackground = Color.black.opacity(0.86)
 
@@ -140,14 +137,11 @@ enum AppTheme {
     /// `accent`, whose white label stays readable on the inverted tone.
     nonisolated(unsafe) static let accentInk = adaptive(light: 0x0040FF, dark: 0x60A5FA)
 
-    // Data visualization — `--chart-1`…`--chart-5` (the design's only
-    // saturated colors in dark mode; `chart-3` doubles as the positive
-    // banner marker, cf. main.html `.banner`).
+    // Data visualization — only the two chart tones still in use:
+    // `--chart-1` as accent-as-ink's dark value (see `accentInk`) and
+    // `--chart-3` as the positive banner marker (cf. main.html `.banner`).
     nonisolated(unsafe) static let chart1 = adaptive(light: 0x0140FF, dark: 0x60A5FA)
-    nonisolated(unsafe) static let chart2 = adaptive(light: 0x386AFF, dark: 0xF472B6)
     nonisolated(unsafe) static let chart3 = adaptive(light: 0x6B90FF, dark: 0x34D399)
-    nonisolated(unsafe) static let chart4 = adaptive(light: 0x94AFFF, dark: 0xFBBF24)
-    nonisolated(unsafe) static let chart5 = adaptive(light: 0xBDCDFF, dark: 0x818CF8)
 
     // Primary button pair — `--primary` / `--primary-foreground`.
     nonisolated(unsafe) static let primaryButtonBackground = adaptive(light: 0x111111, dark: 0xFFFFFF)
@@ -181,9 +175,8 @@ enum AppTheme {
 
     // MARK: Hard shadow
 
-    /// Shadow elevation matching `--shadow-2xs` / `--shadow-sm` / `--shadow-md`.
+    /// Shadow elevation matching `--shadow-sm` / `--shadow-md`.
     enum ShadowLevel {
-        case flat
         case rest
         case raised
     }
@@ -202,10 +195,6 @@ enum AppTheme {
 
         func body(content: Content) -> some View {
             switch level {
-            case .flat:
-                content
-                    .compositingGroup()
-                    .shadow(color: AppTheme.shadowColor.opacity(0.5), radius: 0, x: 2, y: 2)
             case .rest:
                 content
                     .compositingGroup()
