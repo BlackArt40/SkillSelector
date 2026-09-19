@@ -757,7 +757,9 @@ struct Banner: View {
             Text(verbatim: text)
                 .font(AppTheme.body(13, weight: .bold))
                 .foregroundStyle(tint)
-                .lineLimit(1)
+                // Multi-part messages (e.g. the refresh counts) wrap to a
+                // second line in narrow windows instead of truncating.
+                .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 12)
             if let actionTitle, let action {
                 Button(actionTitle, action: action)
