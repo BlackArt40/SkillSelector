@@ -277,19 +277,63 @@ enum ThemePreference {
 }
 
 /// Applies the persisted appearance to any window's content.
+///
+/// The appearance switch happens at the AppKit layer (`NSApp.appearance`):
+/// every AppTheme token is a dynamic NSColor, so AppKit re-resolves them
+/// natively and only repaints layer contents. SwiftUI's
+/// `.preferredColorScheme` was measured (theme-toggle sampling) to instead
+/// invalidate the whole view graph on macOS 12 — a full window re-layout
+/// plus a toolbar-bridge rebuild — costing seconds of main-thread hang
+/// per flip.
 struct ThemeAppearance: ViewModifier {
     @AppStorage(ThemePreference.storageKey) private var mode = "system"
 
     func body(content: Content) -> some View {
-        content.preferredColorScheme(preferredScheme)
+        content
+            .onAppear(perform: apply)
+            .onChangeCompat(of: mode) { _ in apply() }
     }
 
-    private var preferredScheme: ColorScheme? {
-        switch mode {
-        case "light": .light
-        case "dark": .dark
-        default: nil
+    private func apply() {
+        // Window-level appearance, deferred to the next runloop turn:
+        // - `NSApp.appearance` re-themes the Touch Bar function-row
+        //   controller, which posts window layout from inside a display
+        //   cycle on macOS 12 and dies on the posting-disabled guard
+        //   (crash 2026-09-19 19:25: _noteBarsChanged → …UnlessPostingDisabled).
+        // - A synchronous set inside the click's nested event loop dies on
+        //   the same guard via NSHostingView (crash 2026-09-19 19:20).
+        // Per-window appearance still re-resolves every AppTheme token
+        // natively — the cheap native repaint this modifier exists for.
+        DispatchQueue.main.async {
+            let appearance: NSAppearance?
+            switch mode {
+            case "light": appearance = NSAppearance(named: .aqua)
+            case "dark": appearance = NSAppearance(named: .darkAqua)
+            default: appearance = nil
+            }
+            for window in NSApp.windows where window.isVisible || window.isKeyWindow {
+                window.appearance = appearance
+            }
         }
+
+        #if DEBUG
+        // Automated theme-flip soak: SKILLSELECTOR_THEME_FLIP_TEST=<seconds>
+        // rewrites the persisted mode on that cadence, so theme-switch
+        // crashes can be reproduced and verified without a human clicking
+        // the toolbar. Not a feature — a crash-reproduction harness.
+        if let seconds = Double(
+            ProcessInfo.processInfo.environment["SKILLSELECTOR_THEME_FLIP_TEST"] ?? ""
+        ) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
+                let key = ThemePreference.storageKey
+                let current = UserDefaults.standard.string(forKey: key) ?? "system"
+                UserDefaults.standard.set(
+                    current == "dark" ? "light" : "dark",
+                    forKey: key
+                )
+            }
+        }
+        #endif
     }
 }
 
