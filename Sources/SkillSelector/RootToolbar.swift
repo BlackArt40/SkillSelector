@@ -62,14 +62,14 @@ struct RootRefreshButton: View {
     }
 }
 
-/// Recent refresh changes, anchored to the history button. Opening the
-/// popover clears the badge (spec §4: zeroed once viewed). The unread
-/// count is the inline `.tool-badge` — a 16 px brand-primary square right
-/// after the label, matching the HTML prototype's topbar.
+/// The toolbar's history entry point. The popover itself is hosted by
+/// RootView's main content — a popover anchored inside a ToolbarItem does
+/// not present reliably on macOS 12 (binding flips, nothing renders), so
+/// both entry points (this button and the refresh banner) share the one
+/// presentation in the main view hierarchy.
 struct RootHistoryButton: View {
     @Binding var unreadChangeCount: Int
     @Binding var isShowingRefreshHistory: Bool
-    let history: [RefreshChangeEntry]
 
     var body: some View {
         Button {
@@ -98,9 +98,6 @@ struct RootHistoryButton: View {
                 ? L10n.string("Change History") + " \(unreadChangeCount)"
                 : L10n.string("Change History")
         )
-        .popover(isPresented: $isShowingRefreshHistory, arrowEdge: .bottom) {
-            RefreshHistoryPopover(history: history)
-        }
     }
 }
 

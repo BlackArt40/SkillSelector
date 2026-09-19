@@ -108,6 +108,17 @@ struct RootView: View {
             .languageReloading()
             .themedAppearance()
             .toolbar { windowToolbar }
+            // The refresh-history popover lives on the main view hierarchy,
+            // not on the toolbar's history button: a popover anchored inside
+            // a ToolbarItem does not present reliably on macOS 12 (the
+            // binding flips, nothing renders). Anchored here it drops from
+            // the top edge of the window for both entry points.
+            .popover(
+                isPresented: $isShowingRefreshHistory,
+                arrowEdge: .bottom
+            ) {
+                RefreshHistoryPopover(history: model.refreshHistory)
+            }
             .alert(
                 L10n.string("Unable to Open"),
                 isPresented: openErrorBinding
@@ -129,7 +140,12 @@ struct RootView: View {
             if let summary = finishedRefreshSummary, !summary.isEmpty, !dismissedRefreshBanner {
                 RootRefreshCompleteBanner(
                     summary: summary,
-                    onViewChanges: { isShowingRefreshHistory = true },
+                    onViewChanges: {
+                        // Opening the popover clears the badge (spec §4),
+                        // same as the toolbar's history button.
+                        unreadChangeCount = 0
+                        isShowingRefreshHistory = true
+                    },
                     onDismiss: { dismissedRefreshBanner = true }
                 )
             }
@@ -271,8 +287,7 @@ struct RootView: View {
             )
             RootHistoryButton(
                 unreadChangeCount: $unreadChangeCount,
-                isShowingRefreshHistory: $isShowingRefreshHistory,
-                history: model.refreshHistory
+                isShowingRefreshHistory: $isShowingRefreshHistory
             )
             RootThemeToggleButton(
                 isDark: ThemePreference.effectiveDark(mode: themeMode),
