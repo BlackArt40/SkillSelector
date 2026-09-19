@@ -63,10 +63,10 @@ Since the 2.x line, the first launch after upgrading starts fresh (the index reb
 2. Verify integrity (keep both files in the same directory):
 
    ```zsh
-   shasum -a 256 -c SkillSelector-1.0.dmg.sha256
+   shasum -a 256 -c SkillSelector-1.01.dmg.sha256
    ```
 
-   It must print `SkillSelector-1.0.dmg: OK`. If it doesn't, don't install it.
+   It must print `SkillSelector-1.01.dmg: OK`. If it doesn't, don't install it.
 
 3. Mount the `.dmg` and drag `SkillSelector.app` to Applications
 4. Right-click the app → Open → confirm Open
@@ -88,10 +88,10 @@ If that's not acceptable, build from source — it goes through the same packagi
 
 ```zsh
 swift build
-zsh Scripts/package-dmg.sh 1.0
+zsh Scripts/package-dmg.sh 1.01
 ```
 
-Produces `dist/SkillSelector.app` (Universal 2) plus `dist/SkillSelector-arm64.app` and `dist/SkillSelector-x86_64.app`, three DMGs (`SkillSelector.dmg`, `SkillSelector-1.0.dmg`, and the two single-arch ones), and matching `.sha256` files.
+Produces `dist/SkillSelector.app` (Universal 2) plus `dist/SkillSelector-arm64.app` and `dist/SkillSelector-x86_64.app`, three DMGs (`SkillSelector.dmg`, `SkillSelector-1.01.dmg`, and the two single-arch ones), and matching `.sha256` files.
 
 The only third-party dependencies are Yams (frontmatter parsing), GRDB (local index), and MarkdownUI (Markdown rendering). Run the tests with `swift test`; CI runs them on every PR and push.
 
