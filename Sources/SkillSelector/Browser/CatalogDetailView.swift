@@ -22,6 +22,10 @@ struct CatalogDetailView: View {
     }
 
     @State private var contentState: ContentState = .loading
+    /// Which action-bar copy action last succeeded, held for the 2-second
+    /// "Copied" confirmation (the redesign dropped this feedback; restored).
+    @State private var copied: FieldCopy?
+    @State private var copiedRevertTask: Task<Void, Never>?
     /// Remote SKILL.md body (frontmatter stripped), kept alongside the
     /// rendered state for the 「对照本地」version-difference comparison.
     @State private var remoteBody: String?
@@ -158,20 +162,26 @@ struct CatalogDetailView: View {
             .help(L10n.string("Open in GitHub"))
             .accessibilityLabel(L10n.string("Open in GitHub"))
             Button {
-                copy(skill.githubURL.absoluteString)
+                copy(skill.githubURL.absoluteString, field: .link)
             } label: {
-                Text(verbatim: L10n.string("Copy Link"))
+                Text(verbatim: L10n.string(
+                    copied == .link ? "Copied" : "Copy Link"
+                ))
             }
             .buttonStyle(InkButtonStyle(height: 40, horizontalPadding: 16))
             .help(L10n.string("Copy Link"))
-            .accessibilityLabel(L10n.string("Copy Link"))
+            .accessibilityLabel(L10n.string(
+                copied == .link ? "Copied" : "Copy Link"
+            ))
             Button {
-                copy(skill.installCommand)
+                copy(skill.installCommand, field: .installCommand)
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "paperplane")
                         .font(.system(size: 13))
-                    Text(verbatim: L10n.string("Copy Install Command"))
+                    Text(verbatim: L10n.string(
+                        copied == .installCommand ? "Copied" : "Copy Install Command"
+                    ))
                 }
             }
             .buttonStyle(InkButtonStyle(height: 40, horizontalPadding: 16, isPrimary: true))
@@ -182,9 +192,21 @@ struct CatalogDetailView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private func copy(_ value: String) {
+    private enum FieldCopy {
+        case link
+        case installCommand
+    }
+
+    private func copy(_ value: String, field: FieldCopy) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(value, forType: .string)
+        copiedRevertTask?.cancel()
+        copied = field
+        copiedRevertTask = Task {
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            guard !Task.isCancelled else { return }
+            copied = nil
+        }
     }
 
     /// catalog.html's detail `article` card — `border-2 border-ring
