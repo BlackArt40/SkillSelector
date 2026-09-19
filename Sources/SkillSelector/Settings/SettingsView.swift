@@ -39,35 +39,40 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        ScrollView {
-            // settings.html: the centered segmented tabs sit inside the
-            // scroll flow, 48 px above the first section.
-            VStack(spacing: 0) {
-                tabBar
-                switch activeTab {
-                case .general:
-                    GeneralSettingsPane(
-                        translationAPIKeyInput: $translationAPIKeyInput,
-                        settingsError: $settingsError,
-                        exportStatus: $exportStatus,
-                        showDiagnosticsViewer: $showDiagnosticsViewer,
-                        editingCatalogSource: $editingCatalogSource,
-                        showingAddCatalogSource: $showingAddCatalogSource
-                    )
-                case .directories:
-                    DirectoriesSettingsPane(
-                        settingsError: $settingsError,
-                        customAgentSheetRequest: $customAgentSheetRequest
-                    )
-                case .about:
-                    AboutSettingsPane()
+        // The tab bar stays pinned above the scroll view: panes can grow
+        // tall (several authorized-root cards), and the tabs must remain
+        // reachable without scrolling back to the top.
+        VStack(spacing: 0) {
+            tabBar
+                .padding(.horizontal, 24)
+                .padding(.top, 24)
+            ScrollView {
+                VStack(spacing: 0) {
+                    switch activeTab {
+                    case .general:
+                        GeneralSettingsPane(
+                            translationAPIKeyInput: $translationAPIKeyInput,
+                            settingsError: $settingsError,
+                            exportStatus: $exportStatus,
+                            showDiagnosticsViewer: $showDiagnosticsViewer,
+                            editingCatalogSource: $editingCatalogSource,
+                            showingAddCatalogSource: $showingAddCatalogSource
+                        )
+                    case .directories:
+                        DirectoriesSettingsPane(
+                            settingsError: $settingsError,
+                            customAgentSheetRequest: $customAgentSheetRequest
+                        )
+                    case .about:
+                        AboutSettingsPane()
+                    }
                 }
+                .frame(maxWidth: 640)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 24)
+                .padding(.top, 24)
+                .padding(.bottom, 64)
             }
-            .frame(maxWidth: 640)
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 24)
-            .padding(.top, 64)
-            .padding(.bottom, 64)
         }
         .frame(width: 720, height: 780)
         .background(AppTheme.background)
@@ -150,7 +155,12 @@ struct SettingsView: View {
             tabButton(.about, title: L10n.string("About"), icon: "questionmark.circle")
         }
         .overlay(Rectangle().stroke(AppTheme.ink, lineWidth: 2))
-        .padding(.bottom, 48)
+        // Fixed height keeps the flexible Rectangle separators from
+        // absorbing the VStack's leftover height now that the bar sits
+        // outside the scroll view; 640 max width centers it like before.
+        .frame(height: 44)
+        .frame(maxWidth: 640)
+        .frame(maxWidth: .infinity)
     }
 
     private func tabButton(_ tab: SettingsTab, title: String, icon: String) -> some View {
