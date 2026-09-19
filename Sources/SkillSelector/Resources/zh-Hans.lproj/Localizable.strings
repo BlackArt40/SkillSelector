@@ -124,7 +124,6 @@
 "Custom Agent Hint" = "将任意本地 Skill 目录登记为一个自定义 Agent";
 "Add…" = "添加…";
 "Version Line" = "版本 %@ · Universal 2（Apple Silicon + Intel）";
-"Tagline" = "本机 Agent Skill 的只读信息看板：不做复制、移动、删除，不是市场，不是安装器，也不是 AI 工具。";
 "GitHub" = "GitHub";
 "Release Notes" = "版本记录";
 "Apache License" = "Apache 2.0 许可证";
@@ -132,7 +131,7 @@
 "Privacy Sub" = "离线运行 · 无遥测 · 无崩溃报告 · 无文件监视器 · 只读展示，应用内不做任何文件操作";
 "Signature" = "签名";
 "Signature Sub" = "Ad-hoc 签名 · 已启用 App Sandbox · 未经 Apple 公证";
-"About Footer" = "SkillSelector 只读展示已存在的本地 Skill。\n© 2026 SkillSelector Contributors · Apache License 2.0";
+"About Footer" = "© 2026 SkillSelector Contributors · Apache License 2.0";
 "Add" = "添加";
 "Directory Authorization" = "目录授权";
 "About" = "关于";

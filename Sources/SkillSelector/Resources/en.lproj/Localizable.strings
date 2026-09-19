@@ -124,7 +124,6 @@
 "Custom Agent Hint" = "Register any local Skill directory as a custom Agent";
 "Add…" = "Add…";
 "Version Line" = "Version %@ · Universal 2 (Apple Silicon + Intel)";
-"Tagline" = "A read-only dashboard for your local Agent Skills. No copy, move, or delete — not a marketplace, not an installer, and no AI.";
 "GitHub" = "GitHub";
 "Release Notes" = "Release Notes";
 "Apache License" = "Apache 2.0 License";
@@ -132,7 +131,7 @@
 "Privacy Sub" = "Runs offline · no telemetry · no crash reporting · no file watching · read-only, performs no file operations";
 "Signature" = "Signature";
 "Signature Sub" = "Ad-hoc signed · App Sandbox enabled · Not notarized by Apple";
-"About Footer" = "SkillSelector displays existing local Skills read-only.\n© 2026 SkillSelector Contributors · Apache License 2.0";
+"About Footer" = "© 2026 SkillSelector Contributors · Apache License 2.0";
 "Add" = "Add";
 "Directory Authorization" = "Directory Authorization";
 "About" = "About";

@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// The 关于 pane: app icon, version, tagline, links, and the privacy /
+/// The 关于 pane: app icon, version, links, and the privacy /
 /// signature group. Pure presentation — no state, no model access.
 struct AboutSettingsPane: View {
     var body: some View {
@@ -13,11 +13,6 @@ struct AboutSettingsPane: View {
             Text(verbatim: L10n.string("Version Line", appVersion))
                 .font(AppTheme.body(12.5))
                 .foregroundStyle(AppTheme.muted)
-                .padding(.top, 8)
-            Text(verbatim: L10n.string("Tagline"))
-                .font(AppTheme.body(13))
-                .foregroundStyle(AppTheme.foregroundSecondary)
-                .multilineTextAlignment(.center)
                 .padding(.top, 8)
 
             HStack(spacing: 16) {
