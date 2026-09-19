@@ -94,14 +94,64 @@ build_sealed_dmg() {
     mkdir -p "$staging"
     ditto "$app" "$staging/SkillSelector.app"
     ditto "$ROOT_DIR/Sources/SkillSelector/Resources/AppIcon.icns" "$staging/.VolumeIcon.icns"
+    # The mainstream drag-to-install layout: the app on the left and an
+    # Applications shortcut on the right of the same window.
+    ln -s /Applications "$staging/Applications"
     SetFile -a C "$staging"
 
-    hdiutil create \
+    # Two-step seal: a read-write image first, so the icon-view layout
+    # (window bounds, icon positions) can be written into the volume's
+    # .DS_Store via Finder; then compress to the final read-only UDZO.
+    # The volume name carries the version so Finder automation can never
+    # collide with another SkillSelector image the operator has mounted,
+    # and the image mounts at its default /Volumes path — Finder refuses
+    # to persist .DS_Store for volumes mounted at a custom mountpoint.
+    # If Finder automation is unavailable (headless run without Automation
+    # consent), keep going with the default layout rather than failing the
+    # whole package — the DMG stays valid either way.
+    local volname="SkillSelector $VERSION"
+    local mount_dir="/Volumes/$volname"
+    local rw_dmg="$ROOT_DIR/.build/dmg-rw.dmg"
+    rm -rf "$rw_dmg" "$mount_dir"
+
+    hdiutil create -ov \
+        -format UDRW \
+        -volname "$volname" \
+        -srcfolder "$staging" \
+        "$rw_dmg"
+
+    hdiutil attach "$rw_dmg" -nobrowse -quiet
+
+    osascript <<OSA || print -u2 "warning: Finder automation unavailable; shipping the DMG's default window layout"
+tell application "Finder"
+    tell disk "$volname"
+        open
+        set current view of container window to icon view
+        set bounds of container window to {200, 120, 820, 520}
+        set viewOptions to icon view options of container window
+        set arrangement of viewOptions to not arranged
+        set icon size of viewOptions to 96
+        set position of item "SkillSelector.app" of container window to {140, 160}
+        set position of item "Applications" of container window to {480, 160}
+        close
+        open
+        update without registering applications
+    end tell
+end tell
+OSA
+
+    # Finder persists the layout to the volume asynchronously; give it a
+    # moment so the flush lands before the detach.
+    sleep 2
+    sync
+    hdiutil detach "$mount_dir" -quiet
+
+    hdiutil convert "$rw_dmg" -ov \
         -format UDZO \
         -imagekey zlib-level=9 \
-        -volname SkillSelector \
-        -srcfolder "$staging" \
-        "$dmg"
+        -o "$dmg"
+
+    rm -rf "$rw_dmg" "$mount_dir"
 }
 
 build_sealed_dmg \
