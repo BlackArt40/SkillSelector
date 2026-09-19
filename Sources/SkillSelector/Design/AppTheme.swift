@@ -278,63 +278,62 @@ enum ThemePreference {
 
 /// Applies the persisted appearance to any window's content.
 ///
-/// The appearance switch happens at the AppKit layer (`NSApp.appearance`):
-/// every AppTheme token is a dynamic NSColor, so AppKit re-resolves them
-/// natively and only repaints layer contents. SwiftUI's
-/// `.preferredColorScheme` was measured (theme-toggle sampling) to instead
-/// invalidate the whole view graph on macOS 12 — a full window re-layout
-/// plus a toolbar-bridge rebuild — costing seconds of main-thread hang
-/// per flip.
+/// Deliberately `.preferredColorScheme`, slow as it is: on macOS 12 every
+/// NSAppearance-based alternative was measured to crash nondeterministically.
+/// A graph invalidation that lands while a window's constraint posting is
+/// disabled (any layout in flight — e.g. the toggle button's own press
+/// animation) walks `NSHostingView.graphDidChange →
+/// setNeedsUpdateConstraints` into AppKit's re-entrancy guard, and AppKit
+/// deliberately dies. Three variants hit the same guard:
+/// `NSApp.appearance` synchronous (crash 2026-09-19 19:20), deferred to the
+/// next runloop turn (19:25, via the Touch Bar function-row controller),
+/// and per-window `window.appearance` (19:35). When the deployment target
+/// reaches macOS 13, `NSHostingView.sizingOptions` removes the constraint
+/// tracking and the native AppKit-layer switch becomes the fast, safe
+/// path — until then the whole-view-graph invalidation is the price of a
+/// runtime theme flip (measured: ~5 s of main-thread re-layout on an
+/// Intel host, dominated by the toolbar-bridge rebuild).
 struct ThemeAppearance: ViewModifier {
     @AppStorage(ThemePreference.storageKey) private var mode = "system"
 
     func body(content: Content) -> some View {
         content
-            .onAppear(perform: apply)
-            .onChangeCompat(of: mode) { _ in apply() }
+            .preferredColorScheme(preferredScheme)
+            .onAppear(perform: scheduleSoakIfRequested)
     }
 
-    private func apply() {
-        // Window-level appearance, deferred to the next runloop turn:
-        // - `NSApp.appearance` re-themes the Touch Bar function-row
-        //   controller, which posts window layout from inside a display
-        //   cycle on macOS 12 and dies on the posting-disabled guard
-        //   (crash 2026-09-19 19:25: _noteBarsChanged → …UnlessPostingDisabled).
-        // - A synchronous set inside the click's nested event loop dies on
-        //   the same guard via NSHostingView (crash 2026-09-19 19:20).
-        // Per-window appearance still re-resolves every AppTheme token
-        // natively — the cheap native repaint this modifier exists for.
-        DispatchQueue.main.async {
-            let appearance: NSAppearance?
-            switch mode {
-            case "light": appearance = NSAppearance(named: .aqua)
-            case "dark": appearance = NSAppearance(named: .darkAqua)
-            default: appearance = nil
-            }
-            for window in NSApp.windows where window.isVisible || window.isKeyWindow {
-                window.appearance = appearance
-            }
+    private var preferredScheme: ColorScheme? {
+        switch mode {
+        case "light": .light
+        case "dark": .dark
+        default: nil
         }
+    }
 
-        #if DEBUG
-        // Automated theme-flip soak: SKILLSELECTOR_THEME_FLIP_TEST=<seconds>
-        // rewrites the persisted mode on that cadence, so theme-switch
-        // crashes can be reproduced and verified without a human clicking
-        // the toolbar. Not a feature — a crash-reproduction harness.
-        if let seconds = Double(
+    #if DEBUG
+    // Automated theme-flip soak: SKILLSELECTOR_THEME_FLIP_TEST=<seconds>
+    // rewrites the persisted mode on that cadence, so theme-switch crashes
+    // can be reproduced and verified without a human clicking the toolbar.
+    // Not a feature — a crash-reproduction harness.
+    nonisolated(unsafe) static var soakScheduled = false
+
+    private func scheduleSoakIfRequested() {
+        guard !Self.soakScheduled else { return }
+        Self.soakScheduled = true
+        guard let seconds = Double(
             ProcessInfo.processInfo.environment["SKILLSELECTOR_THEME_FLIP_TEST"] ?? ""
-        ) {
-            DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
-                let key = ThemePreference.storageKey
-                let current = UserDefaults.standard.string(forKey: key) ?? "system"
-                UserDefaults.standard.set(
-                    current == "dark" ? "light" : "dark",
-                    forKey: key
-                )
-            }
+        ) else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
+            let key = ThemePreference.storageKey
+            let current = UserDefaults.standard.string(forKey: key) ?? "system"
+            UserDefaults.standard.set(
+                current == "dark" ? "light" : "dark",
+                forKey: key
+            )
+            Self.soakScheduled = false
         }
-        #endif
     }
+    #endif
 }
 
 extension View {
