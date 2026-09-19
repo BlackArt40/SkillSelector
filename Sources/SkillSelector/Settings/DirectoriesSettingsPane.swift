@@ -89,7 +89,7 @@ struct DirectoriesSettingsPane: View {
             }
             HStack(spacing: 12) {
                 HStack(spacing: 8) {
-                    statusDot(color: isHealthy ? AppTheme.ink : AppTheme.border)
+                    statusDot(color: isHealthy ? AppTheme.ink : AppTheme.warn)
                     if !isHome {
                         Text(verbatim: L10n.string("Project"))
                             .font(AppTheme.body(12))
