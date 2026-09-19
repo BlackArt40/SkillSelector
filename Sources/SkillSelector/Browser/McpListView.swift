@@ -112,7 +112,7 @@ struct McpListView: View {
             .overlay(Rectangle().stroke(AppTheme.ink, lineWidth: 1))
             .contentShape(Rectangle())
         }
-        .buttonStyle(ProbeButtonStyle())
+        .buttonStyle(PressLiftButtonStyle())
         .disabled(isProbing)
         .help(L10n.string("Probe All MCP"))
         .accessibilityLabel(L10n.string("Probe All MCP"))
@@ -296,7 +296,7 @@ struct McpServerRow: View {
                     .overlay(Rectangle().stroke(AppTheme.ink, lineWidth: 1))
                     .contentShape(Rectangle())
             }
-            .buttonStyle(RowIconButtonStyle())
+            .buttonStyle(PressLiftButtonStyle(shadow: nil))
             .help(L10n.string("Reveal MCP Config"))
             .accessibilityLabel(L10n.string("Reveal MCP Config"))
         }
@@ -353,41 +353,5 @@ struct McpServerRow: View {
                 .font(.system(size: 13))
                 .foregroundStyle(AppTheme.foregroundSecondary)
         }
-    }
-}
-
-/// Hover lift / press sink shared by the row's bordered icon button
-/// (mcp.html's inline `transition-all` rules).
-private struct RowIconButtonStyle: ButtonStyle {
-    @State private var isHovering = false
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .offset(
-                x: configuration.isPressed ? 1 : (isHovering ? -1 : 0),
-                y: configuration.isPressed ? 1 : (isHovering ? -1 : 0)
-            )
-            .onHover { isHovering = $0 }
-    }
-}
-
-/// The toolbar probe button's hover/press transform: shadow rides only
-/// while resting, press sinks flat (mcp.html's `transition-all` rules).
-private struct ProbeButtonStyle: ButtonStyle {
-    @State private var isHovering = false
-
-    func makeBody(configuration: Configuration) -> some View {
-        Group {
-            if configuration.isPressed {
-                configuration.label
-            } else {
-                configuration.label.hardShadow(.rest)
-            }
-        }
-        .offset(
-            x: configuration.isPressed ? 1 : (isHovering ? -1 : 0),
-            y: configuration.isPressed ? 1 : (isHovering ? -1 : 0)
-        )
-        .onHover { isHovering = $0 }
     }
 }

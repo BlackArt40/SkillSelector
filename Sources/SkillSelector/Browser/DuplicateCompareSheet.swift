@@ -74,7 +74,7 @@ struct DuplicateCompareSheet: View {
             Button(L10n.string("Close")) {
                 dismiss()
             }
-            .buttonStyle(ToolPressButtonStyle())
+            .buttonStyle(PressLiftButtonStyle())
             .keyboardShortcut(.defaultAction)
         }
         .padding(.horizontal, 16)

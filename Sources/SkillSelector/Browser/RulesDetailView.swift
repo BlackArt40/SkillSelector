@@ -315,10 +315,8 @@ struct RulesDetailView: View {
 }
 
 /// rules.html's detail action buttons: 32 pt tall, 2 px ink border on the
-/// page-tone fill, small bold label, hard shadow, hover lift / press sink.
+/// page-tone fill, small bold label, the shared hover lift / press sink.
 private struct CompactInkButtonStyle: ButtonStyle {
-    @State private var isHovering = false
-
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(AppTheme.body(12, weight: .bold))
@@ -328,28 +326,7 @@ private struct CompactInkButtonStyle: ButtonStyle {
             .background(AppTheme.background)
             .overlay(Rectangle().stroke(AppTheme.ink, lineWidth: 2))
             .contentShape(Rectangle())
-            .modifier(CompactInkChrome(isPressed: configuration.isPressed, isHovering: isHovering))
-            .onHover { isHovering = $0 }
-    }
-}
-
-private struct CompactInkChrome: ViewModifier {
-    let isPressed: Bool
-    let isHovering: Bool
-
-    func body(content: Content) -> some View {
-        Group {
-            if isPressed {
-                content
-            } else {
-                content
-                    .hardShadow(isHovering ? .raised : .rest)
-            }
-        }
-        .offset(
-            x: isPressed ? 1 : (isHovering ? -1 : 0),
-            y: isPressed ? 1 : (isHovering ? -1 : 0)
-        )
+            .pressLiftMotion(isPressed: configuration.isPressed)
     }
 }
 

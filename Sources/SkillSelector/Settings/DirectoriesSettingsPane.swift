@@ -255,8 +255,6 @@ struct DirectoriesSettingsPane: View {
 /// otherwise the shadow projects the text's own silhouette and the label
 /// reads double-struck.
 private struct DashedAddButtonStyle: ButtonStyle {
-    @State private var isHovering = false
-
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .background(AppTheme.background)
@@ -264,11 +262,6 @@ private struct DashedAddButtonStyle: ButtonStyle {
                 Rectangle()
                     .stroke(AppTheme.ink, style: StrokeStyle(lineWidth: 2, dash: [6]))
             }
-            .hardShadow(.rest, isActive: !configuration.isPressed)
-            .offset(
-                x: configuration.isPressed ? 1 : (isHovering ? -1 : 0),
-                y: configuration.isPressed ? 1 : (isHovering ? -1 : 0)
-            )
-            .onHover { isHovering = $0 }
+            .pressLiftMotion(isPressed: configuration.isPressed)
     }
 }

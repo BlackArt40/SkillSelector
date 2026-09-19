@@ -106,8 +106,6 @@ struct RadioDot: View {
 /// `.btn` — 32 pt settings button: square, page-tone fill behind a 1 px
 /// ink stroke, lifting on hover and sinking on press.
 struct SettingsButtonStyle: ButtonStyle {
-    @State private var isHovering = false
-
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(AppTheme.body(12))
@@ -119,22 +117,13 @@ struct SettingsButtonStyle: ButtonStyle {
                 Rectangle().stroke(AppTheme.ink, lineWidth: 1)
             }
             .contentShape(Rectangle())
-            .hardShadow(.rest, isActive: !configuration.isPressed)
-            .offset(
-                x: configuration.isPressed ? 1 : (isHovering ? -1 : 0),
-                y: configuration.isPressed ? 1 : (isHovering ? -1 : 0)
-            )
-            .onHover { hovering in
-                isHovering = hovering
-            }
+            .pressLiftMotion(isPressed: configuration.isPressed)
     }
 }
 
 /// settings.html's 移除 button — the destructive action keeps a bordered
 /// 32 pt body with the red label and the trash icon the page shows.
 struct SettingsDangerButtonStyle: ButtonStyle {
-    @State private var isHovering = false
-
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(AppTheme.body(12))
@@ -146,14 +135,7 @@ struct SettingsDangerButtonStyle: ButtonStyle {
                 Rectangle().stroke(AppTheme.ink, lineWidth: 1)
             }
             .contentShape(Rectangle())
-            .hardShadow(.rest, isActive: !configuration.isPressed)
-            .offset(
-                x: configuration.isPressed ? 1 : (isHovering ? -1 : 0),
-                y: configuration.isPressed ? 1 : (isHovering ? -1 : 0)
-            )
-            .onHover { hovering in
-                isHovering = hovering
-            }
+            .pressLiftMotion(isPressed: configuration.isPressed)
     }
 }
 

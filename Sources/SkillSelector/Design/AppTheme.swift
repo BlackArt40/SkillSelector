@@ -314,4 +314,51 @@ extension View {
             self
         }
     }
+
+    /// The design's canonical button motion — `shadow-sm
+    /// hover:-translate-x-px hover:-translate-y-px hover:shadow-md
+    /// active:translate-x-px active:translate-y-px active:shadow-none`:
+    /// hover lifts the control (-1,-1) and raises its hard shadow, pressing
+    /// sinks it (+1,+1) and flattens the shadow. Chrome (fill, stroke,
+    /// font) stays with each `ButtonStyle`; compose this after it.
+    /// `shadow: nil` covers borderless controls that carry only the motion.
+    func pressLiftMotion(
+        isPressed: Bool,
+        shadow: AppTheme.ShadowLevel? = .rest,
+        isIdle: Bool = true
+    ) -> some View {
+        modifier(
+            PressLiftMotion(
+                isPressed: isPressed,
+                shadow: shadow,
+                isIdle: isIdle
+            )
+        )
+    }
+}
+
+/// The modifier behind `pressLiftMotion(isPressed:shadow:isIdle:)`.
+private struct PressLiftMotion: ViewModifier {
+    let isPressed: Bool
+    /// Shadow elevation shown at rest; `nil` renders no shadow.
+    let shadow: AppTheme.ShadowLevel?
+    /// Toggled-on controls sit flat — no lift, no shadow.
+    let isIdle: Bool
+
+    @State private var isHovering = false
+
+    func body(content: Content) -> some View {
+        Group {
+            if shadow != nil, isIdle, !isPressed {
+                content.hardShadow(isHovering ? .raised : .rest)
+            } else {
+                content
+            }
+        }
+        .offset(
+            x: isPressed ? 1 : (isHovering && isIdle ? -1 : 0),
+            y: isPressed ? 1 : (isHovering && isIdle ? -1 : 0)
+        )
+        .onHover { isHovering = $0 }
+    }
 }

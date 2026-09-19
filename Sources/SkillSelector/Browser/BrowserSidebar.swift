@@ -541,6 +541,8 @@ struct SidebarItem: View {
 /// Hover + press for `.side-item`: sidebar accent fill, hover lifts one
 /// pixel up-left, press sinks one pixel down-right.
 private struct SidebarButtonStyle: ButtonStyle {
+    // Owns its hover state for the tint; the lift motion lives in the
+    // shared `pressLiftMotion` modifier.
     @State private var isHovering = false
 
     func makeBody(configuration: Configuration) -> some View {
@@ -554,10 +556,7 @@ private struct SidebarButtonStyle: ButtonStyle {
             .onHover { hovering in
                 isHovering = hovering
             }
-            .offset(
-                x: configuration.isPressed ? 1 : (isHovering ? -1 : 0),
-                y: configuration.isPressed ? 1 : (isHovering ? -1 : 0)
-            )
+            .pressLiftMotion(isPressed: configuration.isPressed, shadow: nil)
     }
 }
 

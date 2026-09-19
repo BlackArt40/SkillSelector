@@ -223,8 +223,6 @@ struct CustomAgentSheet: View {
 /// The attached 选择… button: hover lift / press sink like the design's
 /// `transition-all` controls.
 private struct ModalBrowseButtonStyle: ButtonStyle {
-    @State private var isHovering = false
-
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .overlay(alignment: .leading) {
@@ -232,11 +230,6 @@ private struct ModalBrowseButtonStyle: ButtonStyle {
                     .fill(AppTheme.ink)
                     .frame(width: 1)
             }
-            .hardShadow(.rest, isActive: !configuration.isPressed)
-            .offset(
-                x: configuration.isPressed ? 1 : (isHovering ? -1 : 0),
-                y: configuration.isPressed ? 1 : (isHovering ? -1 : 0)
-            )
-            .onHover { isHovering = $0 }
+            .pressLiftMotion(isPressed: configuration.isPressed)
     }
 }

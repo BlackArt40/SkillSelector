@@ -15,8 +15,6 @@ import SwiftUI
 /// carrying the -0.05 em tracking themselves — View-level `.kerning` is
 /// macOS 13.3+ and the deployment target is macOS 12.
 private struct ToolButtonStyle: ButtonStyle {
-    @State private var isHovering = false
-
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(AppTheme.body(12, weight: .bold))
@@ -25,13 +23,8 @@ private struct ToolButtonStyle: ButtonStyle {
             .frame(height: 30)
             .background(AppTheme.surfaceMuted)
             .overlay(Rectangle().stroke(AppTheme.border, lineWidth: 1))
-            .hardShadow(.rest)
-            .offset(
-                x: configuration.isPressed ? 1 : (isHovering ? -1 : 0),
-                y: configuration.isPressed ? 1 : (isHovering ? -1 : 0)
-            )
             .contentShape(Rectangle())
-            .onHover { isHovering = $0 }
+            .pressLiftMotion(isPressed: configuration.isPressed)
     }
 }
 

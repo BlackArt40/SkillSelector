@@ -175,25 +175,14 @@ struct ActionButtonStyle: ButtonStyle {
             .foregroundStyle(foreground)
             .frame(height: 36)
             .padding(.horizontal, 16)
-            .background(
-                background(isPressed: configuration.isPressed)
-                    .hardShadow(.rest)
-            )
+            .background(background(isPressed: configuration.isPressed))
             .overlay {
                 if role == .secondary {
                     Rectangle().stroke(AppTheme.borderInteractive, lineWidth: 1)
                 }
             }
-            // `.btn` presses translate toward the shadow (+1,+1) and lift
-            // on hover (-1,-1), exactly like the CSS transform rules.
-            .offset(
-                x: configuration.isPressed ? 1 : (isHovering ? -1 : 0),
-                y: configuration.isPressed ? 1 : (isHovering ? -1 : 0)
-            )
-            .onHover { hovering in
-                isHovering = hovering
-            }
             .contentShape(Rectangle())
+            .pressLiftMotion(isPressed: configuration.isPressed)
     }
 
     private var foreground: Color {
@@ -265,10 +254,9 @@ struct InkButtonStyle: ButtonStyle {
     var horizontalPadding: CGFloat = 12
     /// `bg-primary text-primary-foreground` variant (导入市场/复制安装命令).
     var isPrimary = false
-    @State private var isHovering = false
 
     func makeBody(configuration: Configuration) -> some View {
-        let base = configuration.label
+        configuration.label
             .font(AppTheme.body(14, weight: .bold))
             .foregroundStyle(isPrimary ? AppTheme.primaryButtonForeground : AppTheme.foreground)
             .frame(height: height)
@@ -277,24 +265,24 @@ struct InkButtonStyle: ButtonStyle {
             .overlay {
                 Rectangle().stroke(AppTheme.ink, lineWidth: 2)
             }
-        return Group {
-            if configuration.isPressed {
-                // `active:shadow-none` — the button sinks flat into the surface.
-                base
-            } else {
-                base.hardShadow(isHovering ? .raised : .rest)
-            }
-        }
-        // `.btn` presses translate toward the shadow (+1,+1) and lift on
-        // hover (-1,-1), exactly like the CSS transform rules.
-        .offset(
-            x: configuration.isPressed ? 1 : (isHovering ? -1 : 0),
-            y: configuration.isPressed ? 1 : (isHovering ? -1 : 0)
-        )
-        .onHover { hovering in
-            isHovering = hovering
-        }
-        .contentShape(Rectangle())
+            .contentShape(Rectangle())
+            .pressLiftMotion(isPressed: configuration.isPressed)
+    }
+}
+
+/// A chrome-less button with the shared press-lift motion — for rows and
+/// icon buttons whose visuals live on the label itself.
+struct PressLiftButtonStyle: ButtonStyle {
+    var shadow: AppTheme.ShadowLevel? = .rest
+    var isIdle = true
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .pressLiftMotion(
+                isPressed: configuration.isPressed,
+                shadow: shadow,
+                isIdle: isIdle
+            )
     }
 }
 
@@ -383,7 +371,6 @@ struct ModalToolButtonStyle: ButtonStyle {
     }
 
     let kind: Kind
-    @State private var isHovering = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -402,12 +389,7 @@ struct ModalToolButtonStyle: ButtonStyle {
                 }
             }
             .contentShape(Rectangle())
-            .hardShadow(.rest, isActive: !configuration.isPressed)
-            .offset(
-                x: configuration.isPressed ? 1 : (isHovering ? -1 : 0),
-                y: configuration.isPressed ? 1 : (isHovering ? -1 : 0)
-            )
-            .onHover { isHovering = $0 }
+            .pressLiftMotion(isPressed: configuration.isPressed)
     }
 }
 

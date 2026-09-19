@@ -167,7 +167,7 @@ struct DuplicateGroupsView: View {
                 }
                 .contentShape(Rectangle())
         }
-        .buttonStyle(ModeButtonStyle(isActive: isActive))
+        .buttonStyle(PressLiftButtonStyle(isIdle: !isActive))
         .accessibilityLabel(title)
         .accessibilityAddTraits(isActive ? .isSelected : [])
     }
@@ -404,41 +404,9 @@ private struct GroupHeaderToolButton: View {
             .overlay(Rectangle().stroke(AppTheme.border, lineWidth: 1))
             .contentShape(Rectangle())
         }
-        .buttonStyle(ToolPressButtonStyle())
+        .buttonStyle(PressLiftButtonStyle())
         .help(help)
         .accessibilityLabel(help)
-    }
-}
-
-/// Hover lift / press sink shared by the duplicates page's bordered
-/// buttons (duplicates.html's shared transition rules).
-struct ToolPressButtonStyle: ButtonStyle {
-    @State private var isHovering = false
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .hardShadow(.rest, isActive: !configuration.isPressed)
-            .offset(
-                x: configuration.isPressed ? 1 : (isHovering ? -1 : 0),
-                y: configuration.isPressed ? 1 : (isHovering ? -1 : 0)
-            )
-            .onHover { isHovering = $0 }
-    }
-}
-
-/// The duplicates page's mode-switch buttons (30 pt; active one inverts).
-private struct ModeButtonStyle: ButtonStyle {
-    let isActive: Bool
-    @State private var isHovering = false
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .hardShadow(.rest, isActive: !isActive && !configuration.isPressed)
-            .offset(
-                x: configuration.isPressed ? 1 : (isHovering && !isActive ? -1 : 0),
-                y: configuration.isPressed ? 1 : (isHovering && !isActive ? -1 : 0)
-            )
-            .onHover { isHovering = $0 }
     }
 }
 
