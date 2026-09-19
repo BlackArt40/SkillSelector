@@ -82,11 +82,12 @@ jobs:
         run: |
           # Tag pushes (v*) package with the real version so the DMG name and
           # the bundle's CFBundleShortVersionString carry it; branch pushes
-          # stay at the 0.0.0-ci placeholder.
+          # stay at the 0.0 placeholder (both packaging scripts require the
+          # two-part numeric major.minor form).
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             echo "value=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
           else
-            echo "value=0.0.0-ci" >> "$GITHUB_OUTPUT"
+            echo "value=0.0" >> "$GITHUB_OUTPUT"
           fi
       - name: Package
         run: zsh Scripts/package-dmg.sh "${{ steps.version.outputs.value }}"
