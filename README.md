@@ -95,10 +95,6 @@ zsh Scripts/package-dmg.sh 1.02
 
 第三方依赖只有 Yams（frontmatter 解析）、GRDB（本地索引）和 MarkdownUI（Markdown 渲染）。测试用 `swift test`，CI 在每个 PR 和 push 上都会跑。
 
-## 版本
-
-`主版本.次版本`（如 1.0）：小幅更新 +0.01（1.0 → 1.01），较大的功能更新 +0.1（1.09 → 1.1），大面积变动 +1（1.1 → 2.0）。
-
 ## 许可证
 
 Apache 2.0，见 [LICENSE](LICENSE)。

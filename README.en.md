@@ -95,10 +95,6 @@ Produces `dist/SkillSelector.app` (Universal 2) plus `dist/SkillSelector-arm64.a
 
 The only third-party dependencies are Yams (frontmatter parsing), GRDB (local index), and MarkdownUI (Markdown rendering). Run the tests with `swift test`; CI runs them on every PR and push.
 
-## Versioning
-
-`MAJOR.MINOR` (e.g. 1.0): small updates bump +0.01 (1.0 → 1.01), substantial features bump +0.1 (1.09 → 1.1), sweeping changes bump +1 (1.1 → 2.0).
-
 ## License
 
 Apache 2.0. See [LICENSE](LICENSE).
