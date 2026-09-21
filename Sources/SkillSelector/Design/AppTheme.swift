@@ -21,11 +21,15 @@ enum AppTheme {
     nonisolated(unsafe) static let surfaceMuted = adaptive(light: 0xD8DADA, dark: 0x333333)
 
     // Text — --foreground / --muted-foreground (the design has a single
-    // secondary text tone shared by all three legacy roles).
+    // secondary text tone shared by all three legacy roles). Light diverges
+    // from the design's 0x888888: on the 0xD8DADA panel that gray sits at
+    // ~2.5:1 contrast and reads washed-out, so the light secondary tone is
+    // darkened to 0x555555 (~5.2:1, WCAG AA body text). Dark keeps the
+    // design value.
     nonisolated(unsafe) static let foreground = adaptive(light: 0x111111, dark: 0xFFFFFF)
-    nonisolated(unsafe) static let foregroundSecondary = adaptive(light: 0x888888, dark: 0xAAAAAA)
-    nonisolated(unsafe) static let muted = adaptive(light: 0x888888, dark: 0xAAAAAA)
-    nonisolated(unsafe) static let meta = adaptive(light: 0x888888, dark: 0xAAAAAA)
+    nonisolated(unsafe) static let foregroundSecondary = adaptive(light: 0x555555, dark: 0xAAAAAA)
+    nonisolated(unsafe) static let muted = adaptive(light: 0x555555, dark: 0xAAAAAA)
+    nonisolated(unsafe) static let meta = adaptive(light: 0x555555, dark: 0xAAAAAA)
 
     // Borders — `--border` (white strokes in light mode per the redesign);
     // hairlines share the same tone. `ink` is `--ring`, which the design
@@ -126,7 +130,7 @@ enum AppTheme {
 
     // Markdown element accents — neutral ink on muted code panels.
     nonisolated(unsafe) static let codeInline = adaptive(light: 0x111111, dark: 0xFFFFFF)
-    nonisolated(unsafe) static let blockquote = adaptive(light: 0x888888, dark: 0xAAAAAA)
+    nonisolated(unsafe) static let blockquote = adaptive(light: 0x555555, dark: 0xAAAAAA)
     nonisolated(unsafe) static let codeBlockBackground = adaptive(light: 0xC5C9C9, dark: 0x0A0A0A)
 
     /// Accent used as *ink* — links, markdown h1, action text, status icons,
