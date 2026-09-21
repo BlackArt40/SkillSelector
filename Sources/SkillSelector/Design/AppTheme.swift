@@ -359,12 +359,16 @@ extension View {
     }
 
     /// The design's canonical button motion — `shadow-sm
-    /// hover:-translate-x-px hover:-translate-y-px hover:shadow-md
-    /// active:translate-x-px active:translate-y-px active:shadow-none`:
-    /// hover lifts the control (-1,-1) and raises its hard shadow, pressing
-    /// sinks it (+1,+1) and flattens the shadow. Chrome (fill, stroke,
-    /// font) stays with each `ButtonStyle`; compose this after it.
-    /// `shadow: nil` covers borderless controls that carry only the motion.
+    /// hover:-translate-x-px hover:-translate-y-px
+    /// active:translate-x-px active:translate-y-px`: hover lifts the
+    /// control (-1,-1), pressing sinks it (+1,+1). The hard shadow stays
+    /// at one elevation: per-state shadow swaps churn the macOS 12
+    /// hosting view into an infinite relayout loop (see `PressLiftMotion`).
+    /// Chrome (fill, stroke, font) stays with each `ButtonStyle`; compose
+    /// this after it. `shadow: nil` covers borderless controls that carry
+    /// only the motion; a non-nil level is pinned to `.rest` on macOS 12
+    /// (passing `.raised` here is silently ignored — use `hardShadow`
+    /// directly for state-driven elevations like row selection).
     func pressLiftMotion(
         isPressed: Bool,
         shadow: AppTheme.ShadowLevel? = .rest,
@@ -392,8 +396,16 @@ private struct PressLiftMotion: ViewModifier {
 
     func body(content: Content) -> some View {
         Group {
-            if shadow != nil, isIdle, !isPressed {
-                content.hardShadow(isHovering ? .raised : .rest)
+            if shadow != nil, isIdle {
+                // The hard shadow stays attached at one level for the
+                // control's whole life. Swapping its level (or detaching it
+                // on press) per hover/press churns forever on macOS 12: the
+                // CALayer change re-invalidates the hosting view's SwiftUI
+                // graph, which re-renders the swap, at 100% main-thread CPU
+                // for as long as the pointer rests on the control (observed
+                // as the toolbar buttons' permanent beachball, 2026-09-19).
+                // The lift/sink motion below carries the interaction state.
+                content.hardShadow(.rest)
             } else {
                 content
             }
