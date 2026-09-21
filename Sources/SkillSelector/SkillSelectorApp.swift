@@ -93,7 +93,52 @@ struct SkillSelectorApp: App {
             instanceLock = nil
             return
         }
+        // Event-routing probe: SKILLSELECTOR_EVENT_PROBE=1 prints which
+        // NSView each mouse-down actually hits, to trace clicks that
+        // never reach the SwiftUI content. Not a feature — a harness.
+        if ProcessInfo.processInfo.environment["SKILLSELECTOR_EVENT_PROBE"] == "1" {
+            NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown]) { event in
+                guard let window = event.window else {
+                    print("probe: down window=nil")
+                    return event
+                }
+                guard let content = window.contentView else {
+                    print("probe: down win='\(window.title)' no contentView")
+                    return event
+                }
+                let local = content.convert(event.locationInWindow, from: nil)
+                let hit = content.hitTest(local)
+                let hitDesc = hit.map { "\((type(of: $0) as AnyClass).description()) frame=\($0.frame) bounds=\($0.bounds)" }
+                    ?? "nil"
+                print(
+                    "probe: down win='\(window.title)' frame=\(window.frame) "
+                        + "contentBounds=\(content.bounds) hit(\(local)) -> \(hitDesc)"
+                )
+                print("probe: subviews: "
+                    + content.subviews.map { "\((type(of: $0) as AnyClass).description()) \($0.frame)" }
+                        .joined(separator: " | "))
+                return event
+            }
+        }
         #endif
+        // The SwiftUI app lifecycle registers `NSApplicationCrashOnExceptions`,
+        // which turns AppKit guard exceptions into process death. On macOS
+        // 12 (Touch Bar hardware, 12.7.6 observed) any runtime color-scheme
+        // change makes the Touch Bar function-row controller post window
+        // layout from inside a display cycle — AppKit's re-entrancy guard
+        // throws, and without this override the app dies mid-theme-flip
+        // (crash reports 2026-09-19). The dropped layout post is re-posted
+        // by the next display cycle, so swallowing it is safe here.
+        //
+        // Registration domain only: an earlier build wrote the key into the
+        // persistent standard domain, which would silence AppKit exceptions
+        // forever (surviving even the removal of this code); clear that
+        // residue and keep the override transient. Remove both lines once
+        // the deployment target reaches macOS 13.
+        if #unavailable(macOS 13) {
+            UserDefaults.standard.register(defaults: ["NSApplicationCrashOnExceptions": false])
+        }
+        UserDefaults.standard.removeObject(forKey: "NSApplicationCrashOnExceptions")
         // Grab the single-instance lock *before* touching the store. When a
         // previous instance is still running (e.g. after restarting the
         // terminal app without quitting it), acquiring fails and we exit
