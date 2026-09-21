@@ -3,9 +3,10 @@ import SkillSelectorCore
 import SwiftUI
 
 /// The main browser window, laid out as the design's three columns
-/// (240 / 400-default / flexible). The middle list column is user-resizable
-/// via the drag handle, and a titlebar toolbar hosts back/forward, search
-/// and the appearance toggle.
+/// (240 / 400-default / flexible) under an in-window top bar — main.html's
+/// `#topbar` hosting back/forward and the primary actions (no NSToolbar;
+/// see `windowTopBar`). The middle list column is user-resizable via the
+/// drag handle, and each list column carries its own search field.
 struct RootView: View {
     @EnvironmentObject private var model: AppModel
     @AppStorage(ThemePreference.storageKey) private var themeMode = "system"
@@ -107,18 +108,6 @@ struct RootView: View {
             }
             .languageReloading()
             .themedAppearance()
-            .toolbar { windowToolbar }
-            // The refresh-history popover lives on the main view hierarchy,
-            // not on the toolbar's history button: a popover anchored inside
-            // a ToolbarItem does not present reliably on macOS 12 (the
-            // binding flips, nothing renders). Anchored here it drops from
-            // the top edge of the window for both entry points.
-            .popover(
-                isPresented: $isShowingRefreshHistory,
-                arrowEdge: .bottom
-            ) {
-                RefreshHistoryPopover(history: model.refreshHistory)
-            }
             .alert(
                 L10n.string("Unable to Open"),
                 isPresented: openErrorBinding
@@ -129,11 +118,12 @@ struct RootView: View {
             }
     }
 
-    /// The three-column layout: banners, sidebar, list column, resizer, and
-    /// detail pane. Kept separate from `body` so the root view's modifier
-    /// chain stays type-checkable.
+    /// The three-column layout: top bar, banners, sidebar, list column,
+    /// resizer, and detail pane. Kept separate from `body` so the root
+    /// view's modifier chain stays type-checkable.
     private func mainContent(detectedAgentIDs: Set<String>, title: String) -> some View {
         VStack(spacing: 0) {
+            windowTopBar
             if !model.unhealthyRootIDs.isEmpty {
                 RootAuthorizationBanner(onReauthorize: { reauthorizeUnhealthyRoots() })
             }
@@ -261,39 +251,53 @@ struct RootView: View {
         }
     }
 
-    /// The window toolbar: back/forward navigation group and the primary
-    /// action group (refresh, history, appearance, settings). The buttons
-    /// themselves live in RootToolbar.swift.
-    @ToolbarContentBuilder
-    private var windowToolbar: some ToolbarContent {
-        ToolbarItemGroup(placement: .navigation) {
-            Button(action: goBack) {
-                Image(systemName: "chevron.compact.left")
+    /// main.html's `#topbar`, rendered in-window: back/forward on the left,
+    /// the primary actions on the right. Replaces the native NSToolbar,
+    /// whose SwiftUI bridge re-builds its storage on every colorScheme
+    /// change — measured as the bulk of the ~5 s main-thread hang per theme
+    /// flip on macOS 12, and the nested NSHostingViews it hosts sit in the
+    /// re-entrancy chain of the theme-switch crash.
+    private var windowTopBar: some View {
+        HStack(spacing: 12) {
+            HStack(spacing: 4) {
+                Button(action: goBack) {
+                    Image(systemName: "chevron.compact.left")
+                }
+                .buttonStyle(ToolButtonStyle())
+                .disabled(!model.canGoBack)
+                .help(L10n.string("Go Back"))
+                .accessibilityLabel(L10n.string("Go Back"))
+                Button(action: goForward) {
+                    Image(systemName: "chevron.compact.right")
+                }
+                .buttonStyle(ToolButtonStyle())
+                .disabled(!model.canGoForward)
+                .help(L10n.string("Go Forward"))
+                .accessibilityLabel(L10n.string("Go Forward"))
             }
-            .disabled(!model.canGoBack)
-            .help(L10n.string("Go Back"))
-            .accessibilityLabel(L10n.string("Go Back"))
-            Button(action: goForward) {
-                Image(systemName: "chevron.compact.right")
-            }
-            .disabled(!model.canGoForward)
-            .help(L10n.string("Go Forward"))
-            .accessibilityLabel(L10n.string("Go Forward"))
-        }
-        ToolbarItemGroup(placement: .primaryAction) {
+            Spacer(minLength: 8)
             RootRefreshButton(
                 isRunning: model.refreshState == RefreshState.running,
                 onRefresh: { Task { await model.refresh() } }
             )
             RootHistoryButton(
                 unreadChangeCount: $unreadChangeCount,
-                isShowingRefreshHistory: $isShowingRefreshHistory
+                isShowingRefreshHistory: $isShowingRefreshHistory,
+                history: model.refreshHistory
             )
             RootThemeToggleButton(
                 isDark: ThemePreference.effectiveDark(mode: themeMode),
                 onToggle: toggleAppearance
             )
             RootSettingsButton()
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 48)
+        .background(AppTheme.surface)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(AppTheme.ink)
+                .frame(height: 2)
         }
     }
 

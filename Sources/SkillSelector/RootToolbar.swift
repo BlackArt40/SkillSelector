@@ -14,7 +14,7 @@ import SwiftUI
 /// with a 1 px border and the hard offset shadow. Button labels are `Text`s
 /// carrying the -0.05 em tracking themselves — View-level `.kerning` is
 /// macOS 13.3+ and the deployment target is macOS 12.
-private struct ToolButtonStyle: ButtonStyle {
+struct ToolButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(AppTheme.body(12, weight: .bold))
@@ -55,14 +55,13 @@ struct RootRefreshButton: View {
     }
 }
 
-/// The toolbar's history entry point. The popover itself is hosted by
-/// RootView's main content — a popover anchored inside a ToolbarItem does
-/// not present reliably on macOS 12 (binding flips, nothing renders), so
-/// both entry points (this button and the refresh banner) share the one
-/// presentation in the main view hierarchy.
+/// The top bar's history entry point, with the popover anchored to itself —
+/// in the window's content hierarchy the presentation is reliable (the
+/// original ToolbarItem anchoring was not).
 struct RootHistoryButton: View {
     @Binding var unreadChangeCount: Int
     @Binding var isShowingRefreshHistory: Bool
+    let history: [RefreshChangeEntry]
 
     var body: some View {
         Button {
@@ -91,6 +90,9 @@ struct RootHistoryButton: View {
                 ? L10n.string("Change History") + " \(unreadChangeCount)"
                 : L10n.string("Change History")
         )
+        .popover(isPresented: $isShowingRefreshHistory, arrowEdge: .bottom) {
+            RefreshHistoryPopover(history: history)
+        }
     }
 }
 
