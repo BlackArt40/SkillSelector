@@ -31,6 +31,11 @@ DerivedData/
 /docs/
 CONTEXT.md
 
+# UI redesign workspace and delivery artifacts (local working notes)
+/design-redesign/
+/deliverables/
+CLAUDE.md
+
 # Other
 .firecrawl/
 .brooks-lint-history.json
