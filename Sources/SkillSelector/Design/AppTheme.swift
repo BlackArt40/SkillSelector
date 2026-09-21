@@ -297,9 +297,14 @@ struct ThemeAppearance: ViewModifier {
     @AppStorage(ThemePreference.storageKey) private var mode = "system"
 
     func body(content: Content) -> some View {
+        #if DEBUG
         content
             .preferredColorScheme(preferredScheme)
             .onAppear(perform: scheduleSoakIfRequested)
+        #else
+        content
+            .preferredColorScheme(preferredScheme)
+        #endif
     }
 
     private var preferredScheme: ColorScheme? {
