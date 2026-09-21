@@ -99,10 +99,10 @@ SkillSelector 把散落在各个编码 Agent（Claude Code、Codex、Cursor 等�
 2. 校验完整性（两个文件放同一目录）：
 
    ```zsh
-   shasum -a 256 -c SkillSelector-1.03.dmg.sha256
+   shasum -a 256 -c SkillSelector-1.04.dmg.sha256
    ```
 
-   输出必须是 `SkillSelector-1.03.dmg: OK`，不是就别装。
+   输出必须是 `SkillSelector-1.04.dmg: OK`，不是就别装。
 
 3. 挂载 `.dmg`，把 `SkillSelector.app` 拖进「应用程序」
 4. 右键点击应用 → 打开 → 确认打开
@@ -121,10 +121,10 @@ SkillSelector 把散落在各个编码 Agent（Claude Code、Codex、Cursor 等�
 git clone https://github.com/BlackArt40/SkillSelector.git
 cd SkillSelector
 swift build
-zsh Scripts/package-dmg.sh 1.03
+zsh Scripts/package-dmg.sh 1.04
 ```
 
-产物：`dist/SkillSelector.app`（通用 2）与 `dist/SkillSelector-arm64.app`、`dist/SkillSelector-x86_64.app`，三个 DMG（`SkillSelector.dmg`、`SkillSelector-1.03.dmg` 及两份单架构）和对应的 `.sha256`。
+产物：`dist/SkillSelector.app`（通用 2）与 `dist/SkillSelector-arm64.app`、`dist/SkillSelector-x86_64.app`，三个 DMG（`SkillSelector.dmg`、`SkillSelector-1.04.dmg` 及两份单架构）和对应的 `.sha256`。
 
 - 测试：`swift test`，CI 在每个 PR 和 push 上都会跑；macOS 12 Intel 主机用 `zsh Scripts/local-build.sh`
 - 第三方依赖只有 Yams（frontmatter 解析）、GRDB（本地索引）和 MarkdownUI（Markdown 渲染）

@@ -99,10 +99,10 @@ Requires macOS 12 Monterey or newer, Universal 2 (Apple Silicon and Intel).
 2. Verify the checksum (keep both files in one directory):
 
    ```zsh
-   shasum -a 256 -c SkillSelector-1.03.dmg.sha256
+   shasum -a 256 -c SkillSelector-1.04.dmg.sha256
    ```
 
-   It must print `SkillSelector-1.03.dmg: OK`. If not, don't install it.
+   It must print `SkillSelector-1.04.dmg: OK`. If not, don't install it.
 
 3. Mount the `.dmg` and drag `SkillSelector.app` into Applications
 4. Right-click the app → Open → confirm
@@ -121,10 +121,10 @@ Description translation is an optional cloud feature: configure your own API key
 git clone https://github.com/BlackArt40/SkillSelector.git
 cd SkillSelector
 swift build
-zsh Scripts/package-dmg.sh 1.03
+zsh Scripts/package-dmg.sh 1.04
 ```
 
-Outputs `dist/SkillSelector.app` (Universal 2) plus `dist/SkillSelector-arm64.app` and `dist/SkillSelector-x86_64.app`, three DMGs (`SkillSelector.dmg`, `SkillSelector-1.03.dmg`, and the two single-arch ones), and matching `.sha256` files.
+Outputs `dist/SkillSelector.app` (Universal 2) plus `dist/SkillSelector-arm64.app` and `dist/SkillSelector-x86_64.app`, three DMGs (`SkillSelector.dmg`, `SkillSelector-1.04.dmg`, and the two single-arch ones), and matching `.sha256` files.
 
 - Tests: `swift test`; CI runs them on every PR and push. On macOS 12 Intel hosts use `zsh Scripts/local-build.sh`
 - The only third-party dependencies are Yams (frontmatter parsing), GRDB (local index), and MarkdownUI (Markdown rendering)
