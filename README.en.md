@@ -115,17 +115,6 @@ Requires macOS 12 Monterey or newer, Universal 2 (Apple Silicon and Intel).
 
 Description translation is an optional cloud feature: configure your own API key in Settings; without one the app never sends a translation request.
 
-## 🔏 About signing
-
-Releases are ad-hoc signed (`codesign --sign -`): no Apple developer certificate, no notarization.
-
-- App Sandbox is enabled; the declared entitlements live in [`Packaging/SkillSelector.entitlements`](Packaging/SkillSelector.entitlements)
-- The signature detects post-signing tampering of the bundle
-- It proves nothing about the publisher — anyone can ad-hoc sign. Download only from this repository's Releases and check the `.sha256`
-- Gatekeeper blocks the first launch; follow the steps above to allow it
-
-If that doesn't sit right, build from source — same packaging script.
-
 ## 🛠 Build from source
 
 ```zsh

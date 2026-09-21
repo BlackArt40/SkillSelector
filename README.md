@@ -115,17 +115,6 @@ SkillSelector 把散落在各个编码 Agent（Claude Code、Codex、Cursor 等�
 
 简介翻译为可选云端功能：在设置中配置你自己的 API 密钥后可用，未配置时应用不发起任何翻译请求。
 
-## 🔏 关于签名
-
-发布版是 ad-hoc 签名（`codesign --sign -`）：没有 Apple 开发者证书，也未公证。
-
-- App Sandbox 已启用，声明的权限都在 [`Packaging/SkillSelector.entitlements`](Packaging/SkillSelector.entitlements) 里
-- 签名可以发现应用包在签名之后被改动
-- 它证明不了发布者——任何人都能生成 ad-hoc 签名。只从本仓库的 Releases 下载，并核对 `.sha256`
-- Gatekeeper 首次启动会拦截，按上面的步骤手动放行
-
-不放心就从源码自建，走的是同一条打包脚本。
-
 ## 🛠 从源码构建
 
 ```zsh
