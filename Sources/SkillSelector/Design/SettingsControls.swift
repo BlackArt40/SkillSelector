@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// Building blocks behind the Settings panes' `.group` / `.group-row`
-/// language (design/screens/settings.html). Shared by SettingsView and
-/// the per-pane files so row/group styling lives in exactly one place.
+/// language (design-redesign/pages/settings.html). Shared by SettingsView
+/// and the per-pane files so row/group styling lives in exactly one place.
 
 /// `.group` — a surface card whose rows are separated by hairline borders
 /// (the design removes the border under the last row). settings.html's

@@ -9,7 +9,7 @@ A native macOS app for managing Agent Skills on your machine: browse, search, re
 
 ## What it does
 
-The main window is a three-column browser: a sidebar grouped by scope and Agent, a searchable, sortable list of Skills, and a detail pane showing the selected Skill's description, frontmatter, rendered Markdown document, associated Agents, and install locations. In search, a plain term matches the Skill name, description, or indexed body; prefix it with `name:`, `desc:`, `path:`, `agent:`, or `body:` to search one field only — for example `agent:cursor path:.agents`. Back/forward (⌘[ / ⌘]) sit in the title bar and in the menu bar's Go menu; ⌘F focuses the search field; sidebar switches, detail openings and each search session record one history step. The middle column's right edge is draggable to resize it, and the app is single-window (no "New Window" menu item).
+The main window is a three-column browser: a sidebar grouped by scope and Agent, a searchable, sortable list of Skills, and a detail pane showing the selected Skill's description, frontmatter, rendered Markdown document, associated Agents, and install locations. In search, a plain term matches the Skill name, description, or indexed body; prefix it with `name:`, `desc:`, `path:`, `agent:`, or `body:` to search one field only — for example `agent:cursor path:.agents`. Back/forward (⌘[ / ⌘]) sit at the left of the top bar and in the menu bar's Go menu; ⌘F focuses the search field; sidebar switches, detail openings and each search session record one history step. The middle column's right edge is draggable to resize it, and the app is single-window (no "New Window" menu item).
 
 Also:
 
@@ -26,7 +26,7 @@ Also:
 - Importing a folder scans that folder only — the Skill list appears right away instead of after a wait; the Duplicates, MCP, Rules and Symbolic Links pages each have their own in-column search bar
 - The diagnostics report can be viewed in-app (redacted exactly like the export) or exported as JSON
 - SKILL.md files stay read-only — reveal in Finder or open in your default editor; the app performs no copy, move, delete, or link operations
-- Light/dark toggle in the title bar, or follow the system
+- Light/dark toggle in the top bar, or follow the system
 - English and Simplified Chinese, following the system language
 
 ![Duplicate Skills (English)](screenshots/duplicates-en.png)

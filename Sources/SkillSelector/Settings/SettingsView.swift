@@ -17,7 +17,7 @@ extension Notification.Name {
     static let openSettingsTab = Notification.Name("SkillSelector.openSettingsTab")
 }
 
-/// The settings window from design/screens/settings.html: a tab bar with
+/// The settings window from design-redesign/pages/settings.html: a tab bar with
 /// 通用 / 目录授权 / 关于 panes built from `.group` cards. The pane bodies
 /// live in their own files (`GeneralSettingsPane`,
 /// `DirectoriesSettingsPane`, `AboutSettingsPane`); this shell owns the

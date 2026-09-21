@@ -2,8 +2,9 @@ import AppKit
 import SkillSelectorCore
 import SwiftUI
 
-/// Shared controls styled from design/screens/browser.html and settings.html:
-/// pill badges, agent chips, action-bar buttons, and a wrapping chip row.
+/// Shared controls styled from design-redesign/pages/main.html and
+/// settings.html: pill badges, agent chips, action-bar buttons, and a
+/// wrapping chip row.
 
 /// Search-match text: renders `text` with every hit of `query` emphasized
 /// (accent blue + semibold, no background fill). Blank query or no hits
