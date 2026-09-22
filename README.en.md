@@ -139,10 +139,6 @@ Scripts/                       Packaging scripts (app & DMG)
 Packaging/                     Sandbox entitlements
 ```
 
-## 🤝 Contributing
-
-Issues and PRs are welcome. Commit messages follow Conventional Commits; new user-facing strings must land in both the English and Simplified Chinese resource files (identical key sets).
-
 ## 📄 License
 
 Apache 2.0. See [LICENSE](LICENSE).

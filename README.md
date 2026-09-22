@@ -139,10 +139,6 @@ Scripts/                       打包脚本（App 与 DMG）
 Packaging/                     沙箱 entitlements
 ```
 
-## 🤝 参与贡献
-
-欢迎 Issue 与 PR。提交信息遵循 Conventional Commits；新增用户可见文案需同时补齐英文与简体中文资源文件（两侧 key 集合必须一致）。
-
 ## 📄 许可证
 
 Apache 2.0，见 [LICENSE](LICENSE)。
